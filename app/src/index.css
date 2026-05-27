@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-heebo: 'Heebo', sans-serif;
+    --background: 40 20% 98%;
+    --foreground: 235 12% 72%;
+    --card: 0 0% 100%;
+    --card-foreground: 160 30% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 30% 10%;
+    --primary: 226 45% 28%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 28 75% 55%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 40 15% 94%;
+    --muted-foreground: 160 10% 45%;
+    --accent: 174 75% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 155 45% 28%;
+    --chart-1: 245 45% 28%;
+    --chart-2: 28 75% 55%;
+    --chart-3: 200 60% 45%;
+    --chart-4: 45 85% 55%;
+    --chart-5: 340 65% 50%;
+    --radius: 0.75rem;
+    --sidebar-background: 155 35% 15%;
+    --sidebar-foreground: 40 20% 95%;
+    --sidebar-primary: 28 75% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 155 30% 22%;
+    --sidebar-accent-foreground: 40 20% 95%;
+    --sidebar-border: 155 25% 25%;
+    --sidebar-ring: 28 75% 55%;
+  }
+
+  .dark {
+    --background: 160 20% 6%;
+    --foreground: 40 20% 95%;
+    --card: 160 20% 8%;
+    --card-foreground: 40 20% 95%;
+    --popover: 160 20% 8%;
+    --popover-foreground: 40 20% 95%;
+    --primary: 155 45% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 28 75% 55%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 160 15% 14%;
+    --muted-foreground: 40 10% 55%;
+    --accent: 28 75% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 160 15% 18%;
+    --input: 160 15% 18%;
+    --ring: 155 45% 40%;
+    --chart-1: 155 45% 40%;
+    --chart-2: 28 75% 55%;
+    --chart-3: 200 60% 50%;
+    --chart-4: 45 85% 55%;
+    --chart-5: 340 65% 55%;
+    --sidebar-background: 160 25% 8%;
+    --sidebar-foreground: 40 20% 95%;
+    --sidebar-primary: 28 75% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 160 20% 14%;
+    --sidebar-accent-foreground: 40 20% 95%;
+    --sidebar-border: 160 15% 15%;
+    --sidebar-ring: 28 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-heebo;
+  }
+}

@@ -1,0 +1,131 @@
+-- ============================================================
+-- Migration 005: Optional Normalization Improvements
+--
+-- These are OPTIONAL upgrades from the current JSONB-heavy schema.
+-- Apply only if you need filtering/querying inside these structures.
+-- The base schema in 001_schema.sql works correctly without these.
+-- ============================================================
+
+-- ============================================================
+-- OPTION A: Normalize quote_activities
+--
+-- Current: quotes.selected_activities JSONB []
+-- Problem: Cannot filter orders by activity across quotes,
+--          or get revenue per activity type.
+--
+-- CREATE TABLE public.quote_activities (
+--   id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--   quote_id         UUID NOT NULL REFERENCES public.quotes(id) ON DELETE CASCADE,
+--   activity_id      UUID REFERENCES public.activities(id) ON DELETE SET NULL,
+--   activity_name    TEXT NOT NULL,  -- denormalized snapshot at quote time
+--   price_per_person NUMERIC(10,2),
+--   duration_hours   NUMERIC(4,2),
+--   image_url        TEXT,
+--   sort_order       INTEGER DEFAULT 0
+-- );
+-- CREATE INDEX idx_quote_activities_quote_id ON public.quote_activities(quote_id);
+-- CREATE INDEX idx_quote_activities_activity_id ON public.quote_activities(activity_id);
+-- ============================================================
+
+-- ============================================================
+-- OPTION B: Normalize sale_items
+--
+-- Current: sales.items JSONB []
+-- Problem: Cannot query "total revenue from activity X via cash register",
+--          no stock tracking.
+--
+-- CREATE TABLE public.sale_items (
+--   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--   sale_id      UUID NOT NULL REFERENCES public.sales(id) ON DELETE CASCADE,
+--   activity_id  UUID REFERENCES public.activities(id) ON DELETE SET NULL,
+--   name         TEXT NOT NULL,   -- snapshot at sale time
+--   qty          INTEGER NOT NULL DEFAULT 1,
+--   unit_price   NUMERIC(10,2) NOT NULL,
+--   total_price  NUMERIC(10,2) GENERATED ALWAYS AS (qty * unit_price) STORED
+-- );
+-- CREATE INDEX idx_sale_items_sale_id ON public.sale_items(sale_id);
+-- ============================================================
+
+-- ============================================================
+-- OPTION C: Normalize pricing_sheet rows
+--
+-- Current: pricing_sheets.categories JSONB (deeply nested)
+-- Problem: Cannot run aggregate reports on cost/margin by category.
+--
+-- CREATE TABLE public.pricing_categories (
+--   id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--   pricing_sheet_id UUID NOT NULL REFERENCES public.pricing_sheets(id) ON DELETE CASCADE,
+--   name             TEXT NOT NULL,
+--   sort_order       INTEGER DEFAULT 0
+-- );
+--
+-- CREATE TABLE public.pricing_rows (
+--   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--   category_id         UUID NOT NULL REFERENCES public.pricing_categories(id) ON DELETE CASCADE,
+--   description         TEXT,
+--   cost                NUMERIC(10,2),
+--   quantity            NUMERIC(10,2) DEFAULT 1,
+--   total_cost          NUMERIC(10,2) GENERATED ALWAYS AS (cost * quantity) STORED,
+--   sell_price          NUMERIC(10,2),
+--   total_sell          NUMERIC(10,2) GENERATED ALWAYS AS (sell_price * quantity) STORED,
+--   profit              NUMERIC(10,2) GENERATED ALWAYS AS ((sell_price - cost) * quantity) STORED,
+--   margin_pct          NUMERIC(5,2),
+--   notes               TEXT
+-- );
+-- ============================================================
+
+-- ============================================================
+-- OPTION D: Normalize instructor specialties
+--
+-- Current: instructors.specialties TEXT[]
+-- Problem: Cannot do join queries "instructors who can do X activity".
+--
+-- CREATE TABLE public.instructor_specialties (
+--   instructor_id UUID NOT NULL REFERENCES public.instructors(id) ON DELETE CASCADE,
+--   specialty     TEXT NOT NULL CHECK (
+--     specialty IN ('הפעלת פארק', 'יום גיבוש', 'חוג טיפוס', 'סדנת שטח')
+--   ),
+--   PRIMARY KEY (instructor_id, specialty)
+-- );
+-- ============================================================
+
+-- ============================================================
+-- OPTION E: Extract billing_* from orders
+--
+-- Current: 7 billing_ columns on orders (sparse — only institutional clients)
+-- Problem: Clutters the orders table for ~30% of records.
+--
+-- CREATE TABLE public.order_billing (
+--   order_id              UUID PRIMARY KEY REFERENCES public.orders(id) ON DELETE CASCADE,
+--   institution_name      TEXT,
+--   signer_name           TEXT,
+--   signer_id             TEXT,
+--   signer_role           TEXT,
+--   signer_phone          TEXT,
+--   company_id            TEXT,
+--   accounting_email      TEXT,
+--   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );
+-- Then DROP columns from orders:
+--   ALTER TABLE public.orders
+--     DROP COLUMN billing_institution_name,
+--     DROP COLUMN billing_signer_name,
+--     ... etc;
+-- ============================================================
+
+-- ============================================================
+-- RECOMMENDATION SUMMARY
+--
+-- Keep as JSONB (low query need, structure varies):
+--   - pricing_sheets.categories  → too nested, rarely filtered
+--   - leads.source_text          → raw text blob
+--
+-- Worth normalizing (high query value):
+--   - quote_activities            → enables revenue-by-activity reports
+--   - sale_items                  → enables product sales analytics
+--   - instructor_specialties      → enables smart instructor matching
+--
+-- Worth normalizing if scale grows:
+--   - order_billing               → cleaner schema, same query patterns
+--   - pricing_rows                → only if finance team needs reports
+-- ============================================================

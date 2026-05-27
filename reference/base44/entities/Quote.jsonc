@@ -1,0 +1,105 @@
+{
+  "name": "Quote",
+  "type": "object",
+  "properties": {
+    "quote_number": {
+      "type": "string",
+      "title": "\u05de\u05e1\u05e4\u05e8 \u05d4\u05e6\u05e2\u05d4"
+    },
+    "client_name": {
+      "type": "string",
+      "title": "\u05e9\u05dd \u05d4\u05dc\u05e7\u05d5\u05d7"
+    },
+    "client_phone": {
+      "type": "string",
+      "title": "\u05d8\u05dc\u05e4\u05d5\u05df"
+    },
+    "client_email": {
+      "type": "string",
+      "title": "\u05d0\u05d9\u05de\u05d9\u05d9\u05dc"
+    },
+    "organization": {
+      "type": "string",
+      "title": "\u05d0\u05e8\u05d2\u05d5\u05df / \u05d7\u05d1\u05e8\u05d4"
+    },
+    "event_date": {
+      "type": "string",
+      "format": "date",
+      "title": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d0\u05d9\u05e8\u05d5\u05e2 \u05de\u05d5\u05e6\u05e2"
+    },
+    "site": {
+      "type": "string",
+      "title": "\u05d0\u05ea\u05e8",
+      "enum": [
+        "\u05e2\u05db\u05d5",
+        "\u05d8\u05d1\u05e8\u05d9\u05d4",
+        "\u05e0\u05d5\u05e3 \u05d4\u05d2\u05dc\u05d9\u05dc",
+        "\u05e9\u05d8\u05d7"
+      ]
+    },
+    "num_participants": {
+      "type": "number",
+      "title": "\u05de\u05e1\u05e4\u05e8 \u05de\u05e9\u05ea\u05ea\u05e4\u05d9\u05dd"
+    },
+    "selected_activities": {
+      "type": "array",
+      "title": "\u05e4\u05e2\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05e0\u05d1\u05d7\u05e8\u05d5\u05ea",
+      "items": {
+        "type": "object",
+        "properties": {
+          "activity_id": {
+            "type": "string"
+          },
+          "activity_name": {
+            "type": "string"
+          },
+          "price_per_person": {
+            "type": "number"
+          },
+          "duration_hours": {
+            "type": "number"
+          },
+          "image_url": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "total_price": {
+      "type": "number",
+      "title": "\u05e1\u05d4\"\u05db \u05de\u05d7\u05d9\u05e8"
+    },
+    "discount": {
+      "type": "number",
+      "title": "\u05d4\u05e0\u05d7\u05d4 (\u20aa)"
+    },
+    "final_price": {
+      "type": "number",
+      "title": "\u05de\u05d7\u05d9\u05e8 \u05e1\u05d5\u05e4\u05d9"
+    },
+    "notes": {
+      "type": "string",
+      "title": "\u05d4\u05e2\u05e8\u05d5\u05ea"
+    },
+    "status": {
+      "type": "string",
+      "title": "\u05e1\u05d8\u05d8\u05d5\u05e1",
+      "enum": [
+        "\u05d8\u05d9\u05d5\u05d8\u05d4",
+        "\u05e0\u05e9\u05dc\u05d7\u05d4",
+        "\u05de\u05de\u05ea\u05d9\u05e0\u05d4 \u05dc\u05d0\u05d9\u05e9\u05d5\u05e8",
+        "\u05d0\u05d5\u05e9\u05e8\u05d4",
+        "\u05d1\u05d5\u05d8\u05dc\u05d4"
+      ],
+      "default": "\u05d8\u05d9\u05d5\u05d8\u05d4"
+    },
+    "converted_to_order_id": {
+      "type": "string",
+      "title": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05d6\u05de\u05e0\u05d4"
+    }
+  },
+  "required": [
+    "client_name",
+    "client_phone"
+  ]
+}

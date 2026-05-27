@@ -1,0 +1,139 @@
+{
+  "name": "Order",
+  "type": "object",
+  "properties": {
+    "order_number": {
+      "type": "string",
+      "title": "\u05de\u05e1\u05e4\u05e8 \u05d4\u05d6\u05de\u05e0\u05d4"
+    },
+    "client_name": {
+      "type": "string",
+      "title": "\u05e9\u05dd \u05d4\u05dc\u05e7\u05d5\u05d7"
+    },
+    "client_phone": {
+      "type": "string",
+      "title": "\u05d8\u05dc\u05e4\u05d5\u05df"
+    },
+    "client_email": {
+      "type": "string",
+      "title": "\u05d0\u05d9\u05de\u05d9\u05d9\u05dc"
+    },
+    "organization": {
+      "type": "string",
+      "title": "\u05d0\u05e8\u05d2\u05d5\u05df / \u05d7\u05d1\u05e8\u05d4"
+    },
+    "activity": {
+      "type": "string",
+      "title": "\u05e4\u05e2\u05d9\u05dc\u05d5\u05ea",
+      "relatedEntity": "Activity"
+    },
+    "instructor": {
+      "type": "string",
+      "title": "\u05de\u05d3\u05e8\u05d9\u05da",
+      "relatedEntity": "Instructor"
+    },
+    "activity_date": {
+      "type": "string",
+      "format": "date",
+      "title": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d4\u05e4\u05e2\u05d9\u05dc\u05d5\u05ea"
+    },
+    "start_time": {
+      "type": "string",
+      "title": "\u05e9\u05e2\u05ea \u05d4\u05ea\u05d7\u05dc\u05d4"
+    },
+    "end_time": {
+      "type": "string",
+      "title": "\u05e9\u05e2\u05ea \u05e1\u05d9\u05d5\u05dd"
+    },
+    "site": {
+      "type": "string",
+      "title": "\u05d0\u05ea\u05e8",
+      "enum": [
+        "\u05e2\u05db\u05d5",
+        "\u05d8\u05d1\u05e8\u05d9\u05d4",
+        "\u05e0\u05d5\u05e3 \u05d4\u05d2\u05dc\u05d9\u05dc",
+        "\u05e9\u05d8\u05d7"
+      ]
+    },
+    "num_participants": {
+      "type": "number",
+      "title": "\u05de\u05e1\u05e4\u05e8 \u05de\u05e9\u05ea\u05ea\u05e4\u05d9\u05dd"
+    },
+    "price_per_person": {
+      "type": "number",
+      "title": "\u05de\u05d7\u05d9\u05e8 \u05dc\u05de\u05e9\u05ea\u05ea\u05e3"
+    },
+    "total_price": {
+      "type": "number",
+      "title": "\u05e1\u05d4\"\u05db \u05de\u05d7\u05d9\u05e8"
+    },
+    "status": {
+      "type": "string",
+      "title": "\u05e1\u05d8\u05d8\u05d5\u05e1",
+      "enum": [
+        "\u05de\u05de\u05ea\u05d9\u05df \u05dc\u05d0\u05d9\u05e9\u05d5\u05e8",
+        "\u05de\u05d0\u05d5\u05e9\u05e8",
+        "\u05e9\u05d5\u05dc\u05dd",
+        "\u05d1\u05d5\u05e6\u05e2",
+        "\u05d1\u05d5\u05d8\u05dc"
+      ],
+      "default": "\u05de\u05de\u05ea\u05d9\u05df \u05dc\u05d0\u05d9\u05e9\u05d5\u05e8"
+    },
+    "payment_status": {
+      "type": "string",
+      "title": "\u05e1\u05d8\u05d8\u05d5\u05e1 \u05ea\u05e9\u05dc\u05d5\u05dd",
+      "enum": [
+        "\u05dc\u05d0 \u05e9\u05d5\u05dc\u05dd",
+        "\u05e9\u05d5\u05d1\u05e8",
+        "\u05d0\u05e9\u05e8\u05d0\u05d9",
+        "\u05e6'\u05e7",
+        "\u05de\u05d6\u05d5\u05de\u05df"
+      ],
+      "default": "\u05dc\u05d0 \u05e9\u05d5\u05dc\u05dd"
+    },
+    "notes": {
+      "type": "string",
+      "title": "\u05d4\u05e2\u05e8\u05d5\u05ea"
+    },
+    "instructor_notified": {
+      "type": "boolean",
+      "title": "\u05de\u05d3\u05e8\u05d9\u05da \u05e7\u05d9\u05d1\u05dc \u05d0\u05d9\u05e9\u05d5\u05e8",
+      "default": false
+    },
+    "billing_institution_name": {
+      "type": "string",
+      "title": "\u05e9\u05dd \u05d4\u05de\u05d5\u05e1\u05d3/\u05d0\u05e8\u05d2\u05d5\u05df (\u05d7\u05e9\u05d1\u05d5\u05e0\u05d9\u05ea)"
+    },
+    "billing_signer_name": {
+      "type": "string",
+      "title": "\u05e9\u05dd \u05d4\u05d7\u05d5\u05ea\u05dd"
+    },
+    "billing_signer_id": {
+      "type": "string",
+      "title": "\u05ea.\u05d6 \u05e9\u05dc \u05d4\u05d7\u05d5\u05ea\u05dd"
+    },
+    "billing_signer_role": {
+      "type": "string",
+      "title": "\u05ea\u05e4\u05e7\u05d9\u05d3"
+    },
+    "billing_signer_phone": {
+      "type": "string",
+      "title": "\u05e0\u05d9\u05d9\u05d3 \u05d4\u05d7\u05d5\u05ea\u05dd"
+    },
+    "billing_company_id": {
+      "type": "string",
+      "title": "\u05d7.\u05e4"
+    },
+    "billing_accounting_email": {
+      "type": "string",
+      "title": "\u05de\u05d9\u05d9\u05dc \u05d4\u05e0\u05d4\u05d7"
+    }
+  },
+  "required": [
+    "client_name",
+    "client_phone",
+    "activity",
+    "activity_date",
+    "num_participants"
+  ]
+}

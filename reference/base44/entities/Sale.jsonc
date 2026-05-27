@@ -1,0 +1,49 @@
+{
+  "name": "Sale",
+  "type": "object",
+  "properties": {
+    "receipt_number": {
+      "type": "string",
+      "title": "\u05de\u05e1\u05e4\u05e8 \u05e7\u05d1\u05dc\u05d4"
+    },
+    "items": {
+      "type": "array",
+      "title": "\u05e4\u05e8\u05d9\u05d8\u05d9\u05dd",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "qty": {
+            "type": "number"
+          },
+          "customPrice": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "total": {
+      "type": "number",
+      "title": "\u05e1\u05db\u05d5\u05dd \u05db\u05d5\u05dc\u05dc"
+    },
+    "method": {
+      "type": "string",
+      "title": "\u05d0\u05de\u05e6\u05e2\u05d9 \u05ea\u05e9\u05dc\u05d5\u05dd"
+    },
+    "sale_date": {
+      "type": "string",
+      "format": "date",
+      "title": "\u05ea\u05d0\u05e8\u05d9\u05da \u05de\u05db\u05d9\u05e8\u05d4"
+    }
+  },
+  "required": [
+    "total",
+    "method",
+    "sale_date"
+  ]
+}
