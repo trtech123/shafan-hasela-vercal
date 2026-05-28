@@ -384,7 +384,7 @@ export default function Schedule() {
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     {task.due_time && <span>🕐 {task.due_time}</span>}
-                    {task.assigned_to && <span>👤 {getProfileName(task.assigned_to)}</span>}
+                    {task.assigned_to ? <span>👤 {getProfileName(task.assigned_to)}</span> : task.legacy_assigned_to ? <span>👤 {task.legacy_assigned_to} <span className="opacity-60">(לא משויך)</span></span> : null}
                     {task.category && <span>🏷️ {task.category}</span>}
                   </div>
                 </div>
@@ -413,7 +413,7 @@ export default function Schedule() {
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     {m.site && <span>📍 {m.site}</span>}
                     {m.category && <span>🏷️ {m.category}</span>}
-                    {m.assigned_to && <span>👤 {getProfileName(m.assigned_to)}</span>}
+                    {m.assigned_to ? <span>👤 {getProfileName(m.assigned_to)}</span> : m.legacy_assigned_to ? <span>👤 {m.legacy_assigned_to} <span className="opacity-60">(לא משויך)</span></span> : null}
                   </div>
                 </div>
               ))}

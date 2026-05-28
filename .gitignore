@@ -44,3 +44,9 @@ desktop.ini
 # Misc
 *.local
 .tmp/
+
+# Real client data — NEVER commit
+# (.env.local is already matched by .env.* above; listed here as a reminder)
+.env.local
+backups/
+**/*_export.csv

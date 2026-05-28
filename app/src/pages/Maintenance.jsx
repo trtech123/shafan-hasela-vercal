@@ -222,7 +222,7 @@ export default function Maintenance() {
                     {task.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{task.description}</p>}
                     <div className="flex flex-wrap gap-2 mt-1.5">
                       {task.category && <span className="text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{task.category}</span>}
-                      {task.assigned_to && <span className="text-[11px] text-muted-foreground">👤 {getProfileName(task.assigned_to)}</span>}
+                      {task.assigned_to ? <span className="text-[11px] text-muted-foreground">👤 {getProfileName(task.assigned_to)}</span> : task.legacy_assigned_to ? <span className="text-[11px] text-muted-foreground">👤 {task.legacy_assigned_to} <span className="opacity-60">(לא משויך)</span></span> : null}
                       {task.due_date && <span className="text-[11px] text-muted-foreground">📅 {moment(task.due_date).format("DD/MM/YY")}</span>}
                     </div>
                   </div>

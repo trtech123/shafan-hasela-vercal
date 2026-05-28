@@ -26,7 +26,7 @@ function formatMB(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1);
 }
 
-const categories = ["הפעלת פארק", "יום גיבוש", "חוג טיפוס", "סדנת שטח"];
+const categories = ["הפעלת פארק", "יום גיבוש", "חוג טיפוס", "סדנת שטח", "מזון"];
 
 const emptyForm = {
   name: "", category: "", description: "", duration_hours: "",

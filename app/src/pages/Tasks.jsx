@@ -61,7 +61,7 @@ export default function Tasks() {
   const getProfileName = (id) => profileById[id]?.full_name || profileById[id]?.email || "—";
 
   const filtered = tasks.filter(t => {
-    const assignedName = (profileById[t.assigned_to]?.full_name || "").toLowerCase();
+    const assignedName = (profileById[t.assigned_to]?.full_name || t.legacy_assigned_to || "").toLowerCase();
     const matchSearch = !search || t.title?.toLowerCase().includes(search.toLowerCase()) || assignedName.includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || t.status === statusFilter;
     return matchSearch && matchStatus;
@@ -158,7 +158,7 @@ export default function Tasks() {
                 </div>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
                   {task.due_date && <span>📅 {moment(task.due_date).format("DD/MM/YY")}{task.due_time ? ` ${task.due_time}` : ""}</span>}
-                  {task.assigned_to && <span>👤 {getProfileName(task.assigned_to)}</span>}
+                  {task.assigned_to ? <span>👤 {getProfileName(task.assigned_to)}</span> : task.legacy_assigned_to ? <span>👤 {task.legacy_assigned_to} <span className="opacity-60">(לא משויך)</span></span> : null}
                   {task.category && <span>🏷️ {task.category}</span>}
                 </div>
               </div>
