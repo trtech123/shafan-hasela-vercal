@@ -4,8 +4,8 @@
 > Update at the **end of every phase** before reporting to the user.
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
-Last updated: 2026-05-27
-Active phase: **Phase 7 — Folder restructure** — ✅ done. `adventure-ops-pro/` → `app/`, `base44/` → `reference/base44/`. Dev server boots from `app/`. **All 7 phases complete; the local MVP recovery is done.** Phases 4–6 verified in browser; Phase 6 + 7 pending your final smoke test.
+Last updated: 2026-05-28
+Active phase: **Post-MVP — Base44 data cutover** ✅ done **+ browser-verified** (2026-05-28). All 9 business tables now hold the real Base44 data (78 rows imported); seed cleared; `profiles`/`auth` untouched; deployed app on Vercel renders the real data correctly. See [`docs/base44-import-run.md`](docs/base44-import-run.md). All 7 recovery phases also complete.
 
 > ⚠️ **Path change for future sessions:** the frontend now lives in **`app/`**, not `adventure-ops-pro/`. Boot with `npm run dev --prefix app`. Reference schemas are at `reference/base44/`. `CLAUDE.md` + older completion-log links below still say `adventure-ops-pro/` (historical) — read them as `app/`.
 
@@ -107,6 +107,34 @@ Active phase: **Phase 7 — Folder restructure** — ✅ done. `adventure-ops-pr
 - **Rule B — Validate migrations against three sources.** Base44 entity schema + current frontend field usage + known mismatches (e.g. `activity` vs `activity_id`).
 - **Rule C — Stop after each phase and report.** Never chain phases without user approval.
 - **Rule D — MVP done means** all sidebar screens open, all core screens show realistic data, CRUD + cross-screen sync work, zero Base44 imports remain.
+
+---
+
+## Base44 → Supabase data cutover (post-MVP, 2026-05-28)
+
+**Outcome:** ✅ successful **+ browser-verified** on the deployed Vercel app (2026-05-28). Real Base44 records replace seed data in all 9 business tables. Auth + `profiles` untouched. Main screens render the real data correctly.
+
+**Files applied / created**
+- Migrations (user-applied via Supabase SQL Editor): `007_add_legacy_ids.sql` (additive — `legacy_id` columns + unique indexes; `legacy_assigned_to` on tasks/maintenance), `008_add_activity_category_mazon.sql` (widens `activities.category` CHECK to include `מזון`).
+- Scripts: `scripts/backup-tables.mjs`, `scripts/import-base44.mjs`, `scripts/verify-import.mjs`.
+- Doc with full run report: [`docs/base44-import-run.md`](docs/base44-import-run.md).
+- Backup snapshot: `backups/2026-05-28T05-55-36-107Z/` (10 JSON files, 67 pre-cutover rows).
+
+**Row counts after import** (per `verify-import`, read-only)
+| profiles | activities | instructors | leads | quotes | orders | tasks | maintenance | sales | pricing |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3 (unchanged) | 15 | 2 | 35 | 14 | 4 | 6 | 1 | 6 | 0 |
+
+**Relation remap (legacy_id → UUID) — all resolve**
+- orders → activities: 4/4 · orders → instructors: 3/4 (1 source had empty instructor → NULL) · quotes.selected_activities nested: 18/18 · legacy_id coverage: 100% on every imported table.
+
+**Decisions applied (per user approval 2026-05-28)**
+- Preserve original numbers (ORD-…/Q…/R…) · `created_by` = null · free-text `assigned_to` staged in `legacy_assigned_to` (FK NULL) · `מזון` added to CHECK · lead empty-name fallback = `company || phone || 'ליד ללא שם'` (6 leads; 5 → company/phone, 1 → literal placeholder) · skipped 1 `"ליד חדש"` placeholder lead + 3 empty pricing templates.
+
+**Open follow-ups (not done in this cutover)**
+- Frontend: add `מזון` to `ActivityFormDialog` category dropdown + color map so the 3 catering activities are editable in the UI.
+- Storage: `images`/`image_url` still hotlink to `base44.app` (works while hosted; optional re-upload to `activity-images` removes the dependency).
+- Lineage: lead→quote→order links remain NULL (no explicit IDs in source).
 
 ---
 
