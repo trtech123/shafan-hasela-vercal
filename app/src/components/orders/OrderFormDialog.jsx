@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
+import moment from "moment";
 
 const timeSlots = [
   "07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30",
@@ -24,10 +25,11 @@ const TASK_CATEGORIES = ["סדנת שטח"];
 // Use this sentinel for "no instructor selected" and convert it to null when
 // persisting to Supabase (instructor_id is a nullable UUID FK).
 const NO_INSTRUCTOR = "__none__";
+const NO_QUOTE = "__none__";
 
 const emptyForm = {
   client_name: "", client_phone: "", client_email: "", organization: "",
-  activity_id: "", instructor_id: NO_INSTRUCTOR,
+  activity_id: "", instructor_id: NO_INSTRUCTOR, quote_id: NO_QUOTE,
   activity_date: "", start_time: "", end_time: "",
   site: "", num_participants: "", price_per_person: "", total_price: "",
   status: "ממתין לאישור", payment_status: "לא שולם", notes: "",
@@ -40,6 +42,7 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [instructors, setInstructors] = useState([]);
+  const [quotes, setQuotes] = useState([]);
 
   const selectedActivity = activities.find(a => a.id === form.activity_id);
   const isTaskMode = selectedActivity && TASK_CATEGORIES.includes(selectedActivity.category);
@@ -57,6 +60,19 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
   }, []);
 
   useEffect(() => {
+    const fetchQuotes = async () => {
+      const { data, error } = await supabase
+        .from('quotes')
+        .select('id, quote_number, client_name, event_date')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) console.error('quotes fetch error:', error);
+      else setQuotes(data ?? []);
+    };
+    fetchQuotes();
+  }, []);
+
+  useEffect(() => {
     if (order) {
       setForm({
         client_name: order.client_name || "",
@@ -66,6 +82,8 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         activity_id: order.activity_id || "",
         // null instructor_id in DB → sentinel so the picker displays "ללא מדריך"
         instructor_id: order.instructor_id ?? NO_INSTRUCTOR,
+        // null quote_id in DB → sentinel so the picker displays "ללא הצעה מקושרת"
+        quote_id: order.quote_id ?? NO_QUOTE,
         activity_date: order.activity_date || "",
         start_time: order.start_time || "",
         end_time: order.end_time || "",
@@ -123,6 +141,11 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         instructor_id:
           form.instructor_id && form.instructor_id !== NO_INSTRUCTOR
             ? form.instructor_id
+            : null,
+        // UUID FK to quotes; null when "ללא הצעה" sentinel chosen. Same empty-string-rejected pattern as instructor_id.
+        quote_id:
+          form.quote_id && form.quote_id !== NO_QUOTE
+            ? form.quote_id
             : null,
         // TIME / DATE columns: Postgres rejects empty string for these types.
         // start_time / end_time are nullable; activity_date is NOT NULL and
@@ -229,6 +252,23 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
               </Select>
             </div>
           </div>
+
+          {!isTaskMode && (
+            <div>
+              <Label>הצעת מחיר מקושרת</Label>
+              <Select value={form.quote_id} onValueChange={v => handleChange("quote_id", v)}>
+                <SelectTrigger><SelectValue placeholder="בחר הצעת מחיר" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_QUOTE}>ללא הצעה מקושרת</SelectItem>
+                  {quotes.map(q => (
+                    <SelectItem key={q.id} value={q.id}>
+                      {q.quote_number} — {q.client_name}{q.event_date ? ` (${moment(q.event_date).format("DD/MM/YY")})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {!isTaskMode && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
