@@ -4,8 +4,8 @@
 > Update at the **end of every phase** before reporting to the user.
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
-Last updated: 2026-05-28
-Active phase: **Post-MVP — Base44 data cutover** ✅ done **+ browser-verified** (2026-05-28). All 9 business tables now hold the real Base44 data (78 rows imported); seed cleared; `profiles`/`auth` untouched; deployed app on Vercel renders the real data correctly. See [`docs/base44-import-run.md`](docs/base44-import-run.md). All 7 recovery phases also complete.
+Last updated: 2026-06-02
+Active phase: **Post-MVP — Quick-win UI batch** ✅ shipped & production-verified (2026-06-02) in commit `def6fcb`. Mobile Orders card layout + sticky bottom order button, Orders/Activities filters, WhatsApp lite message to assigned guide, quote/proposal link on orders via existing `orders.quote_id`. See the new completion-log section below. Previous post-MVP: **Base44 data cutover** ✅ done + browser-verified (2026-05-28); all 9 business tables hold the real Base44 data (78 rows imported); seed cleared; `profiles`/`auth` untouched. See [`docs/base44-import-run.md`](docs/base44-import-run.md). All 7 recovery phases also complete.
 
 > ⚠️ **Path change for future sessions:** the frontend now lives in **`app/`**, not `adventure-ops-pro/`. Boot with `npm run dev --prefix app`. Reference schemas are at `reference/base44/`. `CLAUDE.md` + older completion-log links below still say `adventure-ops-pro/` (historical) — read them as `app/`.
 
@@ -107,6 +107,42 @@ Active phase: **Post-MVP — Base44 data cutover** ✅ done **+ browser-verified
 - **Rule B — Validate migrations against three sources.** Base44 entity schema + current frontend field usage + known mismatches (e.g. `activity` vs `activity_id`).
 - **Rule C — Stop after each phase and report.** Never chain phases without user approval.
 - **Rule D — MVP done means** all sidebar screens open, all core screens show realistic data, CRUD + cross-screen sync work, zero Base44 imports remain.
+
+---
+
+## Post-MVP — Quick-win UI batch (2026-06-02)
+
+**Outcome:** ✅ shipped to production in commit `def6fcb` (push from `main`, Vercel auto-deploy). Browser-verified on the deployed app on 2026-06-02. No schema changes, no migrations, no new dependencies, no external service integration.
+
+**Scope (user-approved quick wins, 4 features):**
+
+- **F2.A — WhatsApp lite to assigned guide.** [InstructorEmailDialog.jsx](app/src/components/orders/InstructorEmailDialog.jsx) gained a green `wa.me` button that opens WhatsApp with a prefilled Hebrew message containing activity name, date, start–end times, site, client/org, participants, and notes. Phone normalization strips non-digits and prepends `972` to `05X...` (matches the convention used in [OrderDocumentDialog.jsx](app/src/components/orders/OrderDocumentDialog.jsx)). On WhatsApp click, an `onNotified` callback passed from [Orders.jsx](app/src/pages/Orders.jsx) flips `orders.instructor_notified = TRUE` with optimistic local state update. A small emerald `CheckCircle2` ✓ now appears next to the client name on the Orders row/card whenever `instructor_notified === true`. Removed stale Base44 "Builder+ upgrade" amber notice that was no longer relevant.
+- **F3 — Orders + Activities filters (client-side).** [Orders.jsx](app/src/pages/Orders.jsx): new site chip-row (4 sites + `הכל`) + activity-category chip-row (derived from loaded activities); search input extended to also match `orders.notes`. [Activities.jsx](app/src/pages/Activities.jsx): new search input (matches `name` + `description`), category chip-row (5 known incl. `מזון`), status chip-row (`פעיל / לא פעיל / הכל`); distinct "no matching filter" empty state added alongside the existing "no data yet" empty state. No new Supabase queries — pure client-side filtering.
+- **F6 — Mobile UX on Orders.** Inline header button hidden below `sm`; new `fixed bottom-0 sm:hidden` action bar with `paddingBottom: max(env(safe-area-inset-bottom), 0.75rem)` so the iOS home indicator can't cover it. Page wrapper got `pb-24 sm:pb-0` so the table tail clears the sticky bar. The existing `<table>` was clipping action icons on phone widths, so a new mobile card list (`md:hidden`) replaces it under `md` with stacked rows surfacing all the same data (order number, quote chip, status badge, client name + ✓, organization, activity, date, participants, total, payment badge, action buttons with larger 8px hit targets). Tablet/desktop table preserved (`hidden md:block`).
+- **F9 — Link existing quote to order (link-only).** Used the **existing** `orders.quote_id UUID FK → quotes(id)` column from [supabase/migrations/001_schema.sql](supabase/migrations/001_schema.sql) — **no migration**. [OrderFormDialog.jsx](app/src/components/orders/OrderFormDialog.jsx) gained a quote picker visible in non-task mode, lists up to 200 quotes (DESC `created_at`), labelled `quote_number — client_name (DD/MM/YY)`. New `NO_QUOTE = "__none__"` sentinel guards the Radix-empty-string + UUID-FK empty-string rejection class (same pattern as `NO_INSTRUCTOR`). [Orders.jsx](app/src/pages/Orders.jsx) loads quotes alongside orders/activities/instructors, builds a `quoteById` map, and renders a primary-tone `Link2` chip with the linked `quote_number` under the order number column on desktop and at the top of each mobile card.
+
+**Files touched: 4**
+
+| File | Change |
+|---|---|
+| [app/src/pages/Orders.jsx](app/src/pages/Orders.jsx) | filters + mobile sticky button + mobile card list + quote chip + notified ✓ + `onNotified`/`markNotified` plumbing |
+| [app/src/pages/Activities.jsx](app/src/pages/Activities.jsx) | search + category + status filters |
+| [app/src/components/orders/OrderFormDialog.jsx](app/src/components/orders/OrderFormDialog.jsx) | quote picker, `NO_QUOTE` sentinel, `moment` import |
+| [app/src/components/orders/InstructorEmailDialog.jsx](app/src/components/orders/InstructorEmailDialog.jsx) | `wa.me` button, Hebrew message body, Israeli phone normalization, `onNotified` prop; removed stale Builder+ notice |
+
+**Decisions applied (per user approval 2026-06-02):**
+- (a) Phone normalization: Israeli `05X...` → strip leading `0`, prepend `972`, matches existing `OrderDocumentDialog` rule.
+- (b) Include a small emerald ✓ on Orders row/card when `instructor_notified === true`.
+- (c) Inline quote PDF preview from Orders row deferred — chip text only for this phase.
+
+**Not done (out of approved quick-win scope, explicitly deferred):**
+- Full WhatsApp PDF send via provider API (Meta Cloud API / Twilio / 360dialog) — needs business: WABA, verified phone, approved Hebrew templates.
+- Calendar with Israeli holidays (Hebcal) + flexible day/hour blocking (`blocked_slots` table).
+- Safety questionnaires per site — needs clarifications (who fills, where stored, PDF export?), actual question content, and likely a `ויה פרטה` site-enum migration for orders/quotes/maintenance.
+- Clubs/courses module + iCredit/Rivhit payment-status sync — needs sample files and provider API access. Attendance Excel example from the current Google Drive workflow was received 2026-06-02 and filed for future planning; attendance is **not** payment-source data.
+- File-upload path for ad-hoc proposal PDFs on orders (F9 full scope) — link-only shipped; arbitrary PDF attach deferred.
+
+**Open follow-ups from the Base44 cutover are unchanged:** storage migration (re-upload activity images), real Supabase auth accounts for `legacy_assigned_to`, lead→quote→order lineage backfill, `@base44/sdk` + `@base44/vite-plugin` prune from `app/package.json`, dead-code delete of `app/src/lib/app-params.js`.
 
 ---
 
