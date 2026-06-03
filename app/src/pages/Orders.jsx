@@ -3,7 +3,7 @@ import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Pencil, Trash2, Mail, FileText, CheckCircle2, Link2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Mail, FileText, CheckCircle2, Link2, Lock } from "lucide-react";
 import InstructorEmailDialog from "../components/orders/InstructorEmailDialog";
 import OrderDocumentDialog from "../components/orders/OrderDocumentDialog";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
@@ -14,10 +14,17 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAuth } from "@/lib/AuthContext";
+import { toast } from "sonner";
 
 const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח"];
 
 export default function Orders() {
+  const { user } = useAuth();
+  // Hebrew-mapped role strings from AuthContext: 'admin' / 'אחמ"ש' / 'מדריך'.
+  // Lock-this-slot is admin/ops only (RLS blocks anyone else server-side too).
+  const isAdminOrOps = user?.role === "admin" || user?.role === 'אחמ"ש';
+
   const [orders, setOrders] = useState([]);
   const [activities, setActivities] = useState([]);
   const [instructors, setInstructors] = useState([]);
@@ -32,6 +39,8 @@ export default function Orders() {
   const [deleteId, setDeleteId] = useState(null);
   const [emailOrder, setEmailOrder] = useState(null);
   const [docOrder, setDocOrder] = useState(null);
+  // Order being prepared for "lock this slot" — null when no confirm dialog open.
+  const [lockingOrder, setLockingOrder] = useState(null);
 
   const loadData = async () => {
     try {
@@ -116,6 +125,38 @@ export default function Orders() {
       return;
     }
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, instructor_notified: true } : o));
+  };
+
+  // Lock action is only meaningful when the order has a precise slot:
+  // a date, a site, and a start/end time pair. Without these, the resulting
+  // block would either fail the table's CHECK constraint or be too vague to
+  // be useful.
+  const canLockOrder = (order) =>
+    !!order?.activity_date && !!order?.site &&
+    !!order?.start_time && !!order?.end_time &&
+    order.start_time < order.end_time;
+
+  const handleLockOrder = async () => {
+    if (!lockingOrder) return;
+    const reason = `חסום עבור הזמנה ${lockingOrder.order_number || lockingOrder.id.slice(0, 8)}`;
+    const { error } = await supabase
+      .from('blocked_slots')
+      .insert({
+        source: 'order_lock',
+        source_order_id: lockingOrder.id,
+        block_date: lockingOrder.activity_date,
+        site: lockingOrder.site,
+        start_time: lockingOrder.start_time,
+        end_time: lockingOrder.end_time,
+        reason,
+      });
+    setLockingOrder(null);
+    if (error) {
+      console.error('lock order error:', error);
+      toast.error('שגיאה ביצירת החסימה');
+      return;
+    }
+    toast.success('הזמנה נחסמה — לוח הזמנים יציג את החסימה');
   };
 
   if (loading) {
@@ -259,6 +300,11 @@ export default function Orders() {
                       <Mail className="w-4 h-4 text-blue-400" />
                     </button>
                   )}
+                  {isAdminOrOps && canLockOrder(order) && (
+                    <button onClick={() => setLockingOrder(order)} className="p-2 hover:bg-red-50 rounded-lg transition-colors" title="חסום שעות אלו לאחרים">
+                      <Lock className="w-4 h-4 text-red-500" />
+                    </button>
+                  )}
                   <button onClick={() => setDeleteId(order.id)} className="p-2 hover:bg-red-50 rounded-lg transition-colors">
                     <Trash2 className="w-4 h-4 text-red-400" />
                   </button>
@@ -333,6 +379,11 @@ export default function Orders() {
                             <Mail className="w-4 h-4 text-blue-400" />
                           </button>
                         )}
+                        {isAdminOrOps && canLockOrder(order) && (
+                          <button onClick={() => setLockingOrder(order)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" title="חסום שעות אלו לאחרים">
+                            <Lock className="w-4 h-4 text-red-500" />
+                          </button>
+                        )}
                         <button onClick={() => setDeleteId(order.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
                           <Trash2 className="w-4 h-4 text-red-400" />
                         </button>
@@ -373,6 +424,26 @@ export default function Orders() {
           <AlertDialogFooter className="flex-row-reverse gap-2">
             <AlertDialogCancel>ביטול</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">מחק</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!lockingOrder} onOpenChange={() => setLockingOrder(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>חסימת הזמנה</AlertDialogTitle>
+            <AlertDialogDescription>
+              {lockingOrder
+                ? `ליצור חסימה ל-${moment(lockingOrder.activity_date).format("DD/MM/YYYY")} ${lockingOrder.start_time?.slice(0,5)}–${lockingOrder.end_time?.slice(0,5)} באתר ${lockingOrder.site}? לא ניתן יהיה להוסיף הזמנות נוספות בחלון זה ללא אישור.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleLockOrder}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >חסום</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
