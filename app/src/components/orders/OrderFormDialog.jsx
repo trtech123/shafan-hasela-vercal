@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import moment from "moment";
+import { findConflictingBlocks } from "@/lib/blocking";
 
 const timeSlots = [
   "07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30",
@@ -43,6 +44,11 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
   const [saving, setSaving] = useState(false);
   const [instructors, setInstructors] = useState([]);
   const [quotes, setQuotes] = useState([]);
+  // Same-day blocked_slots for the picked activity_date; used for conflict warning.
+  const [blocks, setBlocks] = useState([]);
+  // User must explicitly acknowledge before save proceeds over a conflict.
+  // Resets whenever the relevant slot fields change (see effect below).
+  const [overrideAck, setOverrideAck] = useState(false);
 
   const selectedActivity = activities.find(a => a.id === form.activity_id);
   const isTaskMode = selectedActivity && TASK_CATEGORIES.includes(selectedActivity.category);
@@ -71,6 +77,47 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
     };
     fetchQuotes();
   }, []);
+
+  // Fetch same-day blocked_slots when the picked date changes.
+  // Task-mode orders skip the check entirely — internal task workflows
+  // aren't customer bookings.
+  useEffect(() => {
+    if (!form.activity_date || isTaskMode) {
+      setBlocks([]);
+      return;
+    }
+    const fetchBlocks = async () => {
+      const { data, error } = await supabase
+        .from('blocked_slots')
+        .select('*')
+        .eq('block_date', form.activity_date);
+      if (error) {
+        console.error('blocks fetch error:', error);
+        return;
+      }
+      setBlocks(data ?? []);
+    };
+    fetchBlocks();
+  }, [form.activity_date, isTaskMode]);
+
+  // Compute conflicting blocks for the current slot. Exclude any order_lock
+  // that originated from THIS order (avoids self-conflict on edit).
+  const conflicts = useMemo(() => {
+    if (isTaskMode) return [];
+    const filtered = blocks.filter(b => !(b.source === 'order_lock' && b.source_order_id === order?.id));
+    return findConflictingBlocks(filtered, {
+      site: form.site || null,
+      date: form.activity_date,
+      start_time: form.start_time || null,
+      end_time:   form.end_time   || null,
+    });
+  }, [blocks, form.site, form.activity_date, form.start_time, form.end_time, isTaskMode, order?.id]);
+
+  // Reset override acknowledgement whenever any slot input changes — if the
+  // user tweaks the slot after acknowledging, they must re-confirm.
+  useEffect(() => {
+    setOverrideAck(false);
+  }, [form.activity_date, form.site, form.start_time, form.end_time]);
 
   useEffect(() => {
     if (order) {
@@ -448,9 +495,40 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
 
           </Tabs>
 
+          {conflicts.length > 0 && (
+            <div className="p-3 rounded-xl border border-red-300 bg-red-50 space-y-2">
+              <p className="text-sm font-semibold text-red-800 flex items-center gap-1">
+                🔒 התאריך/השעה חסומים
+              </p>
+              <ul className="space-y-1">
+                {conflicts.map(b => (
+                  <li key={b.id} className="text-xs text-red-700">
+                    <span className="font-medium">{b.reason}</span>
+                    {" · "}
+                    {b.start_time && b.end_time
+                      ? `${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)}`
+                      : "כל היום"}
+                    {" · "}
+                    {b.site || "כל האתרים"}
+                    {b.source === 'order_lock' && " · נעילת הזמנה"}
+                  </li>
+                ))}
+              </ul>
+              <label className="flex items-start gap-2 text-xs text-red-800 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={overrideAck}
+                  onChange={e => setOverrideAck(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>אני יודע/ת שיש חסימה ומאשר/ת יצירה בכל זאת</span>
+              </label>
+            </div>
+          )}
+
           <div className="flex gap-3 justify-end pt-2">
             <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || (conflicts.length > 0 && !overrideAck)}>
               {saving ? "שומר..." : order ? "עדכון" : isTaskMode ? "צור משימה" : "צור הזמנה"}
             </Button>
           </div>
