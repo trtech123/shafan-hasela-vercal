@@ -60,6 +60,9 @@ export default function Schedule() {
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState(null);
   const [deletingBlock, setDeletingBlock] = useState(null);
+  // Prefilled reason when "block this day" is launched from a holiday card.
+  // Cleared on every dialog open so plain "חסום זמן" doesn't inherit stale text.
+  const [blockPrefillReason, setBlockPrefillReason] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -135,11 +138,19 @@ export default function Schedule() {
 
   const openCreateBlock = () => {
     setEditingBlock(null);
+    setBlockPrefillReason("");
+    setBlockDialogOpen(true);
+  };
+
+  const openCreateBlockFromHoliday = (holiday) => {
+    setEditingBlock(null);
+    setBlockPrefillReason(holiday.title || "");
     setBlockDialogOpen(true);
   };
 
   const openEditBlock = (block) => {
     setEditingBlock(block);
+    setBlockPrefillReason("");
     setBlockDialogOpen(true);
   };
 
@@ -469,7 +480,19 @@ export default function Schedule() {
                     const s = holidayStyle(h.subcat);
                     return (
                       <div key={`${h.date}-${idx}`} className={cn("p-3 rounded-xl border space-y-1", s.cardBorder)}>
-                        <p className={cn("text-sm font-semibold", s.sectionText)}>{h.title}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={cn("text-sm font-semibold", s.sectionText)}>{h.title}</p>
+                          {isAdminOrOps && (
+                            <button
+                              type="button"
+                              onClick={() => openCreateBlockFromHoliday(h)}
+                              className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 transition-colors"
+                              title="חסום את היום הזה"
+                            >
+                              <Lock className="w-3 h-3" /> חסום יום
+                            </button>
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                           <span className={cn("inline-flex px-2 py-0.5 rounded-full border text-[11px] font-medium", s.badge)}>
                             {subcatLabel(h.subcat)}
@@ -638,6 +661,7 @@ export default function Schedule() {
         onClose={() => setBlockDialogOpen(false)}
         block={editingBlock}
         defaultDate={selectedDate || moment().format("YYYY-MM-DD")}
+        defaultReason={blockPrefillReason}
         onSaved={loadBlocks}
       />
 

@@ -37,7 +37,7 @@ const emptyForm = {
   reason: "",
 };
 
-export default function BlockSlotDialog({ open, onClose, block, defaultDate, onSaved }) {
+export default function BlockSlotDialog({ open, onClose, block, defaultDate, defaultReason, onSaved }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
@@ -57,9 +57,12 @@ export default function BlockSlotDialog({ open, onClose, block, defaultDate, onS
         reason: block.reason || "",
       });
     } else {
-      setForm({ ...emptyForm, block_date: defaultDate || "" });
+      // Create mode: prefill date and (optionally) reason. site + mode use
+      // emptyForm defaults (ALL_SITES + all_day) — matches the holiday
+      // "block this day" flow.
+      setForm({ ...emptyForm, block_date: defaultDate || "", reason: defaultReason || "" });
     }
-  }, [open, block, defaultDate]);
+  }, [open, block, defaultDate, defaultReason]);
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
