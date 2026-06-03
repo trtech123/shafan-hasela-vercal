@@ -4,8 +4,8 @@
 > Update at the **end of every phase** before reporting to the user.
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
-Last updated: 2026-06-02
-Active phase: **Post-MVP — Quick-win UI batch** ✅ shipped & production-verified (2026-06-02) in commit `def6fcb`. Mobile Orders card layout + sticky bottom order button, Orders/Activities filters, WhatsApp lite message to assigned guide, quote/proposal link on orders via existing `orders.quote_id`. See the new completion-log section below. Previous post-MVP: **Base44 data cutover** ✅ done + browser-verified (2026-05-28); all 9 business tables hold the real Base44 data (78 rows imported); seed cleared; `profiles`/`auth` untouched. See [`docs/base44-import-run.md`](docs/base44-import-run.md). All 7 recovery phases also complete.
+Last updated: 2026-06-03
+Active phase: **Post-MVP — Availability blocking MVP** ✅ code complete + locally browser-verified (2026-06-03). Migration `009_blocked_slots.sql` applied to Supabase. Schedule shows manual + order-lock blocks; admin/ops can create/edit/delete; `OrderFormDialog` warns on conflicts with an explicit-override checkbox; Orders has a "lock this slot" action. Commits/push deferred — awaiting user approval. No automatic blocking, no DB-level hard-block. See the new completion-log section below. Previous post-MVP: **Quick-win UI batch** ✅ shipped & production-verified (2026-06-02) in commit `def6fcb` — mobile Orders card layout + sticky bottom order button, Orders/Activities filters, WhatsApp lite message to assigned guide, quote/proposal link on orders via existing `orders.quote_id`. **Base44 data cutover** ✅ done + browser-verified (2026-05-28); all 9 business tables hold the real Base44 data (78 rows imported); seed cleared; `profiles`/`auth` untouched. See [`docs/base44-import-run.md`](docs/base44-import-run.md). All 7 recovery phases also complete.
 
 > ⚠️ **Path change for future sessions:** the frontend now lives in **`app/`**, not `adventure-ops-pro/`. Boot with `npm run dev --prefix app`. Reference schemas are at `reference/base44/`. `CLAUDE.md` + older completion-log links below still say `adventure-ops-pro/` (historical) — read them as `app/`.
 
@@ -107,6 +107,67 @@ Active phase: **Post-MVP — Quick-win UI batch** ✅ shipped & production-verif
 - **Rule B — Validate migrations against three sources.** Base44 entity schema + current frontend field usage + known mismatches (e.g. `activity` vs `activity_id`).
 - **Rule C — Stop after each phase and report.** Never chain phases without user approval.
 - **Rule D — MVP done means** all sidebar screens open, all core screens show realistic data, CRUD + cross-screen sync work, zero Base44 imports remain.
+
+---
+
+## Post-MVP — Availability blocking MVP (2026-06-03)
+
+**Outcome:** ✅ code complete + locally browser-verified (2026-06-03). Migration `009_blocked_slots.sql` applied to Supabase by the user (verified via `SELECT COUNT(*)`). Schedule shows manual + order-lock blocks; admin/ops can create/edit/delete blocks; `OrderFormDialog` warns on conflicts with an explicit-override checkbox; Orders has a "lock this slot" action that creates an `order_lock` row. **No automatic blocking** on order save. **No DB-level hard-block** — UI gate only. Commits + push deferred — awaiting user approval.
+
+**Scope (user-approved, 5 stages):**
+
+- **Stage 0 — migration.** [supabase/migrations/009_blocked_slots.sql](supabase/migrations/009_blocked_slots.sql) — new `public.blocked_slots` table. Columns: `id`, `site TEXT NULL` (no CHECK enum — null = all sites; deliberately decoupled from the orders/quotes/maintenance vs leads enum drift), `block_date DATE NOT NULL`, `start_time TIME NULL`, `end_time TIME NULL`, `reason TEXT NOT NULL`, `source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','order_lock'))`, `source_order_id UUID REFERENCES orders(id) ON DELETE CASCADE`, `created_by UUID REFERENCES profiles(id) ON DELETE SET NULL`, `created_at`, `updated_at`. CHECK constraint `(start, end both NULL) OR (both set AND start < end)`. Indexes on `(block_date)` and `(site, block_date)`. RLS policies: all authenticated staff read (so instructors see why a day is blocked); admin/ops insert/update/delete (mirrors the existing pattern from `003_rls.sql`). Purely additive — no changes to existing tables, no data migration. Applied by the user in Supabase SQL Editor; verified empty via `SELECT COUNT(*)`.
+
+- **Stage 1 — Schedule read path.** [app/src/pages/Schedule.jsx](app/src/pages/Schedule.jsx) gained a month-scoped fetch (`.gte('block_date', monthStart).lte('block_date', monthEnd)`) keyed to `currentMonth` so payload stays small as the table grows; a `blocksByDate` memo with the agreed site filter rule (`site=null` shows in every filter; `site=X` shows only when filter is `all` or matches; visibility is independent of `typeFilter` because blocks are calendar metadata, not bookings); a `🔒` corner indicator with `bg-red-50 ring-1 ring-red-200` cell tint on blocked days (skipped when `isSelected` so primary selection stays clear); a read-only "🔒 חסימות" section at the top of the day-detail panel listing each block's `reason` · time range or `כל היום` · `site` or `כל האתרים` · `(נעילת הזמנה)` suffix when `source='order_lock'`.
+
+- **Stage 2 — block CRUD UI.** New [app/src/components/schedule/BlockSlotDialog.jsx](app/src/components/schedule/BlockSlotDialog.jsx) — single dialog handles create + edit. Fields: date (defaults to selected calendar day or today), site Select with `ALL_SITES = "__all__"` sentinel → null on save (Radix forbids empty-string `SelectItem` value; same pattern as `NO_INSTRUCTOR`/`NO_QUOTE`), mode toggle "כל היום" / "שעות מסוימות", 30-min time slots (07:00–20:00; same array duplicated locally from `OrderFormDialog` rather than prematurely extracted to a shared module), `reason` text input plus 5 suggested chips (חג / תחזוקה / מנוחה / אירוע פרטי / אחר; "אחר" clears the input for free text, clicking the active chip toggles it off). Past-date soft warning "החסימה בעבר" when `block_date < today` but does NOT block save (per decision 7). Explicit-payload null normalization on save to satisfy nullable columns + the CHECK constraint. Order-lock blocks display an amber notice explaining the auto-cleanup behavior; editing them is permitted but flagged. Schedule day-detail panel gained an admin/ops-only "🔒 חסום זמן" outlined button in the panel header (opens dialog with date prefilled) plus per-block pencil + trash icons. Pencil is hidden on `source='order_lock'` blocks to avoid silent desync from the source order; trash is allowed on both so admins can unlock manually. Delete confirmation uses an `AlertDialog`. Role gate: `user?.role === "admin" || user?.role === 'אחמ"ש'` (matches Hebrew-mapped values from [AuthContext.jsx](app/src/lib/AuthContext.jsx)).
+
+- **Stage 3 — order conflict warning.** New pure utility [app/src/lib/blocking.js](app/src/lib/blocking.js) — no Supabase imports, exports `timeOverlaps`, `siteMatches`, `findConflictingBlocks` with null-aware half-open interval logic and a `tnorm` slicer so `'HH:MM:SS'` from Postgres TIME and `'HH:MM'` from the time picker compare correctly. [app/src/components/orders/OrderFormDialog.jsx](app/src/components/orders/OrderFormDialog.jsx) fetches same-day `blocked_slots` when `activity_date` changes (skipped in task mode — internal tasks aren't customer bookings); computes a `conflicts` memo that **filters out `order_lock` rows belonging to THIS order** (self-conflict guard for edit mode); renders a red banner above the action buttons when `conflicts.length > 0` listing each conflict (reason · time range or `כל היום` · site or `כל האתרים` · `נעילת הזמנה` suffix when applicable); gates the submit button behind an `overrideAck` checkbox ("אני יודע/ת שיש חסימה ומאשר/ת יצירה בכל זאת"). Checkbox resets whenever `activity_date / site / start_time / end_time` change — tweaking the slot after acknowledging forces re-confirm. **No DB-level hard-block. No new column on `orders`.**
+
+- **Stage 4 — lock-this-slot from existing order.** [app/src/pages/Orders.jsx](app/src/pages/Orders.jsx) gained a red `Lock` icon on the desktop table row and mobile card (between Mail and Trash), visible only when `isAdminOrOps && canLockOrder(order)` — the latter requires non-null `activity_date / site / start_time / end_time` with `start_time < end_time` (guards the table CHECK and avoids vague locks). Click opens an `AlertDialog` confirming the exact date/time/site; confirm inserts a `blocked_slots` row with `source='order_lock'`, `source_order_id=order.id`, slot fields copied verbatim, and auto-generated reason `חסום עבור הזמנה <order_number>` (falls back to first 8 chars of UUID if number is missing). Toast on result. **No automatic block on every order save** — manual button only (decision 3).
+
+**Files touched / created:**
+
+| Path | Status |
+|---|---|
+| [supabase/migrations/009_blocked_slots.sql](supabase/migrations/009_blocked_slots.sql) | **new** (migration; applied to Supabase by user) |
+| [app/src/components/schedule/BlockSlotDialog.jsx](app/src/components/schedule/BlockSlotDialog.jsx) | **new** |
+| [app/src/lib/blocking.js](app/src/lib/blocking.js) | **new** (pure utility, no Supabase imports) |
+| [app/src/pages/Schedule.jsx](app/src/pages/Schedule.jsx) | edit (Stages 1 + 2 — read path, CRUD UI, role gate) |
+| [app/src/components/orders/OrderFormDialog.jsx](app/src/components/orders/OrderFormDialog.jsx) | edit (Stage 3 — conflict banner + override gate) |
+| [app/src/pages/Orders.jsx](app/src/pages/Orders.jsx) | edit (Stage 4 — `Lock` action + confirmation `AlertDialog`) |
+
+**Decisions applied (user-approved across this MVP):**
+
+1. **Who can create/edit/delete blocks:** admin + ops only. Enforced both client-side (role gate on every action surface) and server-side (RLS policies in migration 009).
+2. **Who can override a conflict warning:** admin + ops only — same role gate guards `OrderFormDialog`. Instructors don't create orders by design.
+3. **Order lock behavior:** manual button only. No automatic blocking on order save.
+4. **Reason field:** free text + 5 suggested chips (חג / תחזוקה / מנוחה / אירוע פרטי / אחר).
+5. **Time granularity:** 30-min slots (07:00–20:00), reused from `OrderFormDialog` semantics.
+6. **Multi-day blocks:** out of scope — multiple separate rows handle multi-day cases.
+7. **Past dates:** allowed; soft amber warning in the dialog; no save block.
+8. **Quote conflicts:** ignored — `QuoteFormDialog.jsx` untouched. Quotes are estimates, not confirmed bookings.
+9. **Holidays:** not implemented; no Hebcal integration; no auto-block. Future phase.
+
+**Risks / notes for future sessions:**
+
+- `ON DELETE CASCADE` on `source_order_id` means deleting an order auto-removes its `order_lock` block. **Not tested on a real customer order this session** — only on disposable test orders. Verify on a disposable order before bulk-deleting any production orders.
+- Instructor read-only behavior on Schedule (`+ חסום זמן`, pencil, trash all hidden) was implemented per spec but **not browser-verified** — no instructor profile available locally. RLS will still enforce it server-side regardless.
+- `blocked_slots.site` is free TEXT (no CHECK enum) by design — sidesteps the `שטח` vs `ויה פרטה` enum drift across existing tables. UI is the source of truth for valid values; direct SQL/Edge function inserts could write arbitrary strings.
+- No `UNIQUE` constraint on the table. Clicking the "lock this slot" button twice on the same order creates two identical `order_lock` rows. Admin can clean from Schedule. No dedup guard added in MVP.
+
+**Deferred / explicitly out of scope:**
+
+- DB-level hard-block via trigger (UI override is the source of truth for MVP; can escalate to DB later via a `severity` column).
+- Israeli holidays via Hebcal + visual annotation + per-holiday "block this day" button.
+- Per-instructor blocks (`assigned_to` column not modeled).
+- Recurring / multi-day spans.
+- `QuoteFormDialog` conflict checks.
+- "Has active lock" badge on Orders rows (would require loading order_lock state into Orders.jsx).
+- File-upload path for ad-hoc proposal PDFs on orders (carried over from quick-win F9 deferral).
+- Full WhatsApp PDF send via provider API; safety questionnaires per site; clubs/courses module + iCredit/Rivhit sync (all unchanged from earlier multi-feature plan).
+
+**Open follow-ups from the Base44 cutover unchanged:** storage migration (re-upload activity images), real Supabase auth accounts for `legacy_assigned_to`, lead→quote→order lineage backfill, `@base44/sdk` + `@base44/vite-plugin` prune from `app/package.json`, dead-code delete of `app/src/lib/app-params.js`.
 
 ---
 
