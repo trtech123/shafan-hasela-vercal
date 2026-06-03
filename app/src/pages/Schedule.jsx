@@ -6,6 +6,7 @@ import moment from "moment";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import { fetchHebcalYear, groupByDate, holidayStyle, subcatLabel } from "@/lib/holidays";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
 import BlockSlotDialog from "../components/schedule/BlockSlotDialog";
 import {
@@ -46,6 +47,9 @@ export default function Schedule() {
   const [maintenanceTasks, setMaintenanceTasks] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [blockedSlots, setBlockedSlots] = useState([]);
+  // Hebcal events indexed by year. In-memory only; refetched if the user
+  // navigates to a year we haven't seen this session.
+  const [holidaysByYear, setHolidaysByYear] = useState({});
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(moment().startOf("month"));
   const [selectedDate, setSelectedDate] = useState(null);
@@ -112,6 +116,22 @@ export default function Schedule() {
   }, [currentMonth]);
 
   useEffect(() => { loadBlocks(); }, [loadBlocks]);
+
+  // Lazy-fetch the current calendar year from Hebcal. Cached in memory.
+  // Silent failure: helper returns [] on any error so the calendar still renders.
+  const currentYear = currentMonth.year();
+  useEffect(() => {
+    if (holidaysByYear[currentYear] !== undefined) return;
+    let cancelled = false;
+    fetchHebcalYear(currentYear).then(events => {
+      if (cancelled) return;
+      setHolidaysByYear(prev => ({ ...prev, [currentYear]: events }));
+    });
+    return () => { cancelled = true; };
+    // holidaysByYear intentionally omitted: the inline guard prevents the
+    // re-entry that the lint rule worries about.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentYear]);
 
   const openCreateBlock = () => {
     setEditingBlock(null);
@@ -208,6 +228,13 @@ export default function Schedule() {
     return map;
   }, [blockedSlots, siteFilter]);
 
+  // Holidays for the visible year, indexed by date. Independent of any
+  // filter — they're calendar annotations, not bookings.
+  const holidaysByDate = useMemo(() => {
+    const events = holidaysByYear[currentYear] || [];
+    return groupByDate(events);
+  }, [holidaysByYear, currentYear]);
+
   const calendarDays = useMemo(() => {
     const start = currentMonth.clone().startOf("month");
     const end = currentMonth.clone().endOf("month");
@@ -236,6 +263,7 @@ export default function Schedule() {
   const selectedTasks = selectedDate ? (tasksByDate[selectedDate] || []) : [];
   const selectedMaintenance = selectedDate ? (maintenanceByDate[selectedDate] || []) : [];
   const selectedBlocks = selectedDate ? (blocksByDate[selectedDate] || []) : [];
+  const selectedHolidays = selectedDate ? (holidaysByDate[selectedDate] || []) : [];
 
   if (loading) {
     return (
@@ -333,8 +361,12 @@ export default function Schedule() {
               const dayTasks = tasksByDate[key] || [];
               const dayMaintenance = maintenanceByDate[key] || [];
               const dayBlocks = blocksByDate[key] || [];
+              const dayHolidays = holidaysByDate[key] || [];
               const hasItems = dayOrders.length > 0 || dayTasks.length > 0 || dayMaintenance.length > 0;
               const isBlocked = dayBlocks.length > 0;
+              const isHoliday = dayHolidays.length > 0;
+              // Pick the first event's style for the cell tint (rare to have mixed-category days).
+              const holidayCellStyle = isHoliday ? holidayStyle(dayHolidays[0].subcat) : null;
               const isToday = day.date.isSame(moment(), "day");
               const isSelected = selectedDate === key;
 
@@ -346,6 +378,8 @@ export default function Schedule() {
                     "relative aspect-square p-1 rounded-xl text-sm transition-all duration-200 flex flex-col items-center justify-start",
                     !day.isCurrentMonth && "text-muted-foreground/30",
                     day.isCurrentMonth && "hover:bg-muted",
+                    // Block tint outranks holiday tint — actionable state wins.
+                    isHoliday && !isBlocked && !isSelected && holidayCellStyle.cellTint,
                     isBlocked && !isSelected && "bg-red-50 ring-1 ring-red-200",
                     isToday && "ring-2 ring-primary/30",
                     isSelected && "bg-primary text-primary-foreground hover:bg-primary"
@@ -359,6 +393,15 @@ export default function Schedule() {
                       )}
                       title={dayBlocks.map(b => b.reason).join(' · ')}
                     >🔒</span>
+                  )}
+                  {isHoliday && (
+                    <span
+                      className={cn(
+                        "absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full",
+                        isSelected ? "bg-primary-foreground/80" : holidayCellStyle.dot
+                      )}
+                      title={dayHolidays.map(h => h.title).join(' · ')}
+                    />
                   )}
                   <span className={cn("text-xs font-medium mt-1", isToday && !isSelected && "text-primary font-bold")}>
                     {day.date.format("D")}
@@ -415,10 +458,29 @@ export default function Schedule() {
 
           {!selectedDate ? (
             <p className="text-sm text-muted-foreground text-center py-8">לחצי על תאריך בלוח כדי לראות את הפעילויות</p>
-          ) : (selectedOrders.length === 0 && selectedTasks.length === 0 && selectedMaintenance.length === 0 && selectedBlocks.length === 0) ? (
+          ) : (selectedOrders.length === 0 && selectedTasks.length === 0 && selectedMaintenance.length === 0 && selectedBlocks.length === 0 && selectedHolidays.length === 0) ? (
             <p className="text-sm text-muted-foreground text-center py-8">אין פעילויות או משימות ביום זה</p>
           ) : (
             <div className="space-y-3">
+              {selectedHolidays.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">✡ חגים ותאריכים מיוחדים</p>
+                  {selectedHolidays.map((h, idx) => {
+                    const s = holidayStyle(h.subcat);
+                    return (
+                      <div key={`${h.date}-${idx}`} className={cn("p-3 rounded-xl border space-y-1", s.cardBorder)}>
+                        <p className={cn("text-sm font-semibold", s.sectionText)}>{h.title}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                          <span className={cn("inline-flex px-2 py-0.5 rounded-full border text-[11px] font-medium", s.badge)}>
+                            {subcatLabel(h.subcat)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {selectedBlocks.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-red-700 flex items-center gap-1">🔒 חסימות</p>
