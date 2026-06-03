@@ -1,11 +1,18 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, CreditCard } from "lucide-react";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, CreditCard, Pencil, Trash2, Lock } from "lucide-react";
 import moment from "moment";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
+import BlockSlotDialog from "../components/schedule/BlockSlotDialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח"];
 const FILTER_BUTTONS = [
@@ -28,16 +35,27 @@ const TASK_STYLE = { dot: "bg-pink-400", card: "border-pink-300 bg-pink-50", bad
 
 export default function Schedule() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // Hebrew-mapped role strings from AuthContext: 'admin' / 'אחמ"ש' / 'מדריך'.
+  // Only the first two get block CRUD; instructors are read-only per Stage 1+2 spec.
+  const isAdminOrOps = user?.role === "admin" || user?.role === 'אחמ"ש';
+
   const [orders, setOrders] = useState([]);
   const [activities, setActivities] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [maintenanceTasks, setMaintenanceTasks] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [blockedSlots, setBlockedSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(moment().startOf("month"));
   const [selectedDate, setSelectedDate] = useState(null);
   const [typeFilter, setTypeFilter] = useState("all");
   const [siteFilter, setSiteFilter] = useState("all");
+
+  // Block CRUD dialog state.
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
+  const [editingBlock, setEditingBlock] = useState(null);
+  const [deletingBlock, setDeletingBlock] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -75,6 +93,51 @@ export default function Schedule() {
     };
     load();
   }, []);
+
+  // Month-scoped fetch for blocked_slots — keeps payload small as the table grows.
+  // Refetch whenever the calendar month changes OR after a block CRUD action.
+  const loadBlocks = useCallback(async () => {
+    const monthStart = currentMonth.clone().startOf("month").format("YYYY-MM-DD");
+    const monthEnd   = currentMonth.clone().endOf("month").format("YYYY-MM-DD");
+    const { data, error } = await supabase
+      .from('blocked_slots')
+      .select('*')
+      .gte('block_date', monthStart)
+      .lte('block_date', monthEnd);
+    if (error) {
+      console.error('blocked_slots fetch error:', error);
+      return;
+    }
+    setBlockedSlots(data ?? []);
+  }, [currentMonth]);
+
+  useEffect(() => { loadBlocks(); }, [loadBlocks]);
+
+  const openCreateBlock = () => {
+    setEditingBlock(null);
+    setBlockDialogOpen(true);
+  };
+
+  const openEditBlock = (block) => {
+    setEditingBlock(block);
+    setBlockDialogOpen(true);
+  };
+
+  const confirmDeleteBlock = async () => {
+    if (!deletingBlock) return;
+    const { error } = await supabase
+      .from('blocked_slots')
+      .delete()
+      .eq('id', deletingBlock.id);
+    if (error) {
+      console.error('delete block error:', error);
+      toast.error('שגיאה במחיקת החסימה');
+    } else {
+      toast.success('החסימה נמחקה');
+      loadBlocks();
+    }
+    setDeletingBlock(null);
+  };
 
   const getActivityName = (activityId) => {
     return activities.find(a => a.id === activityId)?.name || "—";
@@ -129,6 +192,22 @@ export default function Schedule() {
     return map;
   }, [maintenanceTasks, typeFilter, siteFilter]);
 
+  // Site filter rule for blocks:
+  // - site = null (company-wide) always shows
+  // - site = X shows only when filter is 'all' or matches X
+  // Block visibility is independent of typeFilter — blocks are calendar
+  // metadata, not bookings, so we always surface them.
+  const blocksByDate = useMemo(() => {
+    const map = {};
+    blockedSlots.forEach(b => {
+      if (b.site != null && siteFilter !== "all" && b.site !== siteFilter) return;
+      const key = b.block_date; // already 'YYYY-MM-DD' from Postgres DATE
+      if (!map[key]) map[key] = [];
+      map[key].push(b);
+    });
+    return map;
+  }, [blockedSlots, siteFilter]);
+
   const calendarDays = useMemo(() => {
     const start = currentMonth.clone().startOf("month");
     const end = currentMonth.clone().endOf("month");
@@ -156,6 +235,7 @@ export default function Schedule() {
   const selectedOrders = selectedDate ? (ordersByDate[selectedDate] || []) : [];
   const selectedTasks = selectedDate ? (tasksByDate[selectedDate] || []) : [];
   const selectedMaintenance = selectedDate ? (maintenanceByDate[selectedDate] || []) : [];
+  const selectedBlocks = selectedDate ? (blocksByDate[selectedDate] || []) : [];
 
   if (loading) {
     return (
@@ -252,7 +332,9 @@ export default function Schedule() {
               const dayOrders = ordersByDate[key] || [];
               const dayTasks = tasksByDate[key] || [];
               const dayMaintenance = maintenanceByDate[key] || [];
+              const dayBlocks = blocksByDate[key] || [];
               const hasItems = dayOrders.length > 0 || dayTasks.length > 0 || dayMaintenance.length > 0;
+              const isBlocked = dayBlocks.length > 0;
               const isToday = day.date.isSame(moment(), "day");
               const isSelected = selectedDate === key;
 
@@ -264,10 +346,20 @@ export default function Schedule() {
                     "relative aspect-square p-1 rounded-xl text-sm transition-all duration-200 flex flex-col items-center justify-start",
                     !day.isCurrentMonth && "text-muted-foreground/30",
                     day.isCurrentMonth && "hover:bg-muted",
+                    isBlocked && !isSelected && "bg-red-50 ring-1 ring-red-200",
                     isToday && "ring-2 ring-primary/30",
                     isSelected && "bg-primary text-primary-foreground hover:bg-primary"
                   )}
                 >
+                  {isBlocked && (
+                    <span
+                      className={cn(
+                        "absolute top-0.5 left-0.5 text-[10px] leading-none",
+                        isSelected ? "text-primary-foreground/80" : "text-red-600"
+                      )}
+                      title={dayBlocks.map(b => b.reason).join(' · ')}
+                    >🔒</span>
+                  )}
                   <span className={cn("text-xs font-medium mt-1", isToday && !isSelected && "text-primary font-bold")}>
                     {day.date.format("D")}
                   </span>
@@ -302,19 +394,76 @@ export default function Schedule() {
 
         {/* Day details */}
         <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <CalendarDays className="w-5 h-5 text-primary" />
-            <h3 className="font-bold text-lg">
-              {selectedDate ? moment(selectedDate).format("DD/MM/YYYY") : "בחרי תאריך"}
-            </h3>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-primary" />
+              <h3 className="font-bold text-lg">
+                {selectedDate ? moment(selectedDate).format("DD/MM/YYYY") : "בחרי תאריך"}
+              </h3>
+            </div>
+            {selectedDate && isAdminOrOps && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1 text-red-700 border-red-200 hover:bg-red-50"
+                onClick={openCreateBlock}
+              >
+                <Lock className="w-3.5 h-3.5" /> חסום זמן
+              </Button>
+            )}
           </div>
 
           {!selectedDate ? (
             <p className="text-sm text-muted-foreground text-center py-8">לחצי על תאריך בלוח כדי לראות את הפעילויות</p>
-          ) : (selectedOrders.length === 0 && selectedTasks.length === 0 && selectedMaintenance.length === 0) ? (
+          ) : (selectedOrders.length === 0 && selectedTasks.length === 0 && selectedMaintenance.length === 0 && selectedBlocks.length === 0) ? (
             <p className="text-sm text-muted-foreground text-center py-8">אין פעילויות או משימות ביום זה</p>
           ) : (
             <div className="space-y-3">
+              {selectedBlocks.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-red-700 flex items-center gap-1">🔒 חסימות</p>
+                  {selectedBlocks.map(b => (
+                    <div key={b.id} className="p-3 rounded-xl border border-red-200 bg-red-50 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-red-800">{b.reason}</p>
+                        {isAdminOrOps && (
+                          <div className="flex gap-0.5 shrink-0">
+                            {/* order_lock blocks: hide pencil to avoid silent desync from the source order */}
+                            {b.source !== 'order_lock' && (
+                              <button
+                                onClick={() => openEditBlock(b)}
+                                className="p-1 hover:bg-red-100 rounded-md transition-colors"
+                                title="ערוך חסימה"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-red-700" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setDeletingBlock(b)}
+                              className="p-1 hover:bg-red-100 rounded-md transition-colors"
+                              title="מחק חסימה"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-700" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-red-700">
+                        <span>
+                          {b.start_time && b.end_time
+                            ? `🕐 ${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)}`
+                            : "כל היום"}
+                        </span>
+                        <span>📍 {b.site || "כל האתרים"}</span>
+                        {b.source === 'order_lock' && (
+                          <span className="text-red-600/70">(נעילת הזמנה)</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {selectedOrders.map(order => {
                 const siteStyle = SITE_COLORS[order.site];
                 const activityName = getActivityName(order.activity_id);
@@ -421,6 +570,34 @@ export default function Schedule() {
           )}
         </div>
       </div>
+
+      <BlockSlotDialog
+        open={blockDialogOpen}
+        onClose={() => setBlockDialogOpen(false)}
+        block={editingBlock}
+        defaultDate={selectedDate || moment().format("YYYY-MM-DD")}
+        onSaved={loadBlocks}
+      />
+
+      <AlertDialog open={!!deletingBlock} onOpenChange={() => setDeletingBlock(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת חסימה</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingBlock
+                ? `למחוק את החסימה "${deletingBlock.reason}" בתאריך ${moment(deletingBlock.block_date).format("DD/MM/YYYY")}? פעולה זו בלתי הפיכה.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteBlock}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >מחק</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
