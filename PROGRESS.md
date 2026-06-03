@@ -5,7 +5,7 @@
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
 Last updated: 2026-06-03
-Active phase: **Post-MVP — Availability blocking MVP** ✅ code complete + locally browser-verified (2026-06-03). Migration `009_blocked_slots.sql` applied to Supabase. Schedule shows manual + order-lock blocks; admin/ops can create/edit/delete; `OrderFormDialog` warns on conflicts with an explicit-override checkbox; Orders has a "lock this slot" action. Commits/push deferred — awaiting user approval. No automatic blocking, no DB-level hard-block. See the new completion-log section below. Previous post-MVP: **Quick-win UI batch** ✅ shipped & production-verified (2026-06-02) in commit `def6fcb` — mobile Orders card layout + sticky bottom order button, Orders/Activities filters, WhatsApp lite message to assigned guide, quote/proposal link on orders via existing `orders.quote_id`. **Base44 data cutover** ✅ done + browser-verified (2026-05-28); all 9 business tables hold the real Base44 data (78 rows imported); seed cleared; `profiles`/`auth` untouched. See [`docs/base44-import-run.md`](docs/base44-import-run.md). All 7 recovery phases also complete.
+Active phase: **Post-MVP — Israeli holidays / special dates MVP** ✅ code complete + locally browser-verified (2026-06-03). Hebcal live JSON API (Israeli mode) renders holidays/eves/national days/memorial days/fasts as small colored dots on Schedule cells with full details in the day-detail panel. No schema change, no migration, no caching table — in-memory year cache only. Admin/ops can launch "🔒 חסום יום" from a holiday entry → opens existing `BlockSlotDialog` with date + reason prefilled → creates a normal `blocked_slots` row (`source='manual'`). **No automatic blocking.** Commits/push deferred — awaiting user approval. Previous post-MVP: **Availability blocking MVP** ✅ shipped & production-verified (2026-06-03) in commits `3b9f89b`/`404bebc`/`ca39be1`/`80e5df2` — migration 009 + Schedule read/CRUD path + OrderFormDialog conflict warning with override checkbox + Orders "lock this slot" action. **Quick-win UI batch** ✅ shipped (2026-06-02) in commit `def6fcb` — mobile Orders card layout + sticky bottom order button, Orders/Activities filters, WhatsApp lite message to assigned guide, quote/proposal link on orders via existing `orders.quote_id`. **Base44 data cutover** ✅ done + browser-verified (2026-05-28); all 9 business tables hold the real Base44 data (78 rows imported); seed cleared; `profiles`/`auth` untouched. See [`docs/base44-import-run.md`](docs/base44-import-run.md). All 7 recovery phases also complete.
 
 > ⚠️ **Path change for future sessions:** the frontend now lives in **`app/`**, not `adventure-ops-pro/`. Boot with `npm run dev --prefix app`. Reference schemas are at `reference/base44/`. `CLAUDE.md` + older completion-log links below still say `adventure-ops-pro/` (historical) — read them as `app/`.
 
@@ -107,6 +107,62 @@ Active phase: **Post-MVP — Availability blocking MVP** ✅ code complete + loc
 - **Rule B — Validate migrations against three sources.** Base44 entity schema + current frontend field usage + known mismatches (e.g. `activity` vs `activity_id`).
 - **Rule C — Stop after each phase and report.** Never chain phases without user approval.
 - **Rule D — MVP done means** all sidebar screens open, all core screens show realistic data, CRUD + cross-screen sync work, zero Base44 imports remain.
+
+---
+
+## Post-MVP — Israeli holidays / special dates MVP (2026-06-03)
+
+**Outcome:** ✅ code complete + locally browser-verified (2026-06-03). Hebcal live JSON API renders Jewish holidays + holiday eves + Israeli national/memorial days + minor fasts as small colored dots on Schedule cells, with full Hebrew titles + category badges in the day-detail panel. Admin/ops can launch the existing `BlockSlotDialog` from any holiday entry with date + reason prefilled, creating a normal `blocked_slots` row (`source='manual'`). **No schema change. No migration. No caching table. No automatic blocking.** Commits + push deferred — awaiting user approval.
+
+**Scope (user-approved, 3 stages):**
+
+- **Stage 1 — read path.** New [app/src/lib/holidays.js](app/src/lib/holidays.js) is pure JS (no React, no Supabase) with `fetchHebcalYear(year)`, `groupByDate(events)`, `holidayStyle(subcat)`, `subcatLabel(subcat)`. Hebcal URL params chosen per business decisions: `maj=on min=on mod=on mf=on` (Jewish holidays + minor + Israeli national/memorial + minor fasts), `ss=off nx=off c=off s=off` (no special Shabbatot, no Rosh Chodesh, no candle-lighting, no parashat — keeps calendar uncluttered), `lg=he` (Hebrew titles), `i=on` (Israeli observance, no 2nd-day yom tov). On any network / non-2xx / parse error the helper returns `[]` — calendar still renders, console error logged, no user-facing message. [app/src/pages/Schedule.jsx](app/src/pages/Schedule.jsx) gained a `holidaysByYear` state (in-memory only — no localStorage, no DB cache), a lazy fetch effect keyed on `currentMonth.year()` with cancellation guard for rapid year nav, a `holidaysByDate` memo, a `selectedHolidays` parallel to the existing per-day arrays, a tiny `1.5×1.5` colored dot in the top-right corner of each holiday day (mirroring 🔒 top-left for blocks), and a `bg-amber-50/60 ring-1 ring-amber-200`-style cell tint (amber for major/minor, blue for modern, slate for fasts). **Block tint outranks holiday tint** so actionable state wins; primary selection always wins. Holiday dot stays visible even when the day is blocked so info isn't lost. New "✡ חגים ותאריכים מיוחדים" section in the day-detail panel renders **above** the blocks section: per-event card with Hebrew title + category badge (חג / מועד / יום לאומי / יום צום).
+
+- **Stage 2 — "block this day" from holiday.** [app/src/components/schedule/BlockSlotDialog.jsx](app/src/components/schedule/BlockSlotDialog.jsx) gained an optional `defaultReason` prop, applied in the create-mode init `useEffect`. [app/src/pages/Schedule.jsx](app/src/pages/Schedule.jsx) gained a `blockPrefillReason` state (cleared on every dialog open so the plain "🔒 חסום זמן" header button never inherits stale text), a new `openCreateBlockFromHoliday(holiday)` helper, and a small red-outlined "🔒 חסום יום" button on each holiday card (admin/ops only). Click → dialog opens with `defaultDate = selectedDate`, `defaultReason = holiday.title` (Hebrew), `site = ALL_SITES`, `mode = all_day` (matches business decision 9). User can edit any field before save. Save → INSERT to `blocked_slots` with `source='manual'` (schema default — no `source` in payload, no schema CHECK changes needed). New block appears immediately under "🔒 חסימות" on the same day with the 🔒 indicator + red tint; holiday dot remains visible at the opposite corner.
+
+- **Stage 3 — docs (this section).** No app code.
+
+**Files touched / created:**
+
+| Path | Status |
+|---|---|
+| [app/src/lib/holidays.js](app/src/lib/holidays.js) | **new** (pure JS, no React, no Supabase) |
+| [app/src/pages/Schedule.jsx](app/src/pages/Schedule.jsx) | edit (Stages 1 + 2 — holiday fetch, render, "block this day" wiring) |
+| [app/src/components/schedule/BlockSlotDialog.jsx](app/src/components/schedule/BlockSlotDialog.jsx) | edit (Stage 2 — `defaultReason` prop) |
+
+**Decisions applied (user-approved 2026-06-03):**
+
+1. **Data source:** Hebcal live JSON API (`hebcal.com/hebcal`). Free, public, no auth, CORS-enabled, MIT-licensed metadata.
+2. **Special Shabbatot:** `ss=off` — keep calendar clean.
+3. **Rosh Chodesh:** `nx=off` — too noisy monthly.
+4. **Coverage:** Jewish holidays + holiday eves + modern Israeli national/memorial days + minor fasts via `maj=on min=on mod=on mf=on`.
+5. **Palette:** amber (major/minor + eves), blue (modern), slate (fasts).
+6. **Glyph:** tiny corner dot, no inline label; full Hebrew name shown only in the day-detail panel.
+7. **Cache:** in-memory `holidaysByYear` map only. No localStorage, no DB table, no annual maintenance burden.
+8. **Failure mode:** silent. Console error + empty list → calendar still renders without holiday annotations.
+9. **Block-this-day:** manual admin/ops-only button on each holiday card. Opens existing `BlockSlotDialog` with date + reason prefilled, all-day + all-sites defaults. Creates a normal `blocked_slots` row with `source='manual'`. No automatic blocking ever.
+
+**Deferred / explicitly out of scope:**
+
+- Hebcal Supabase cache table — defer unless Hebcal proves flaky in production.
+- Static JSON bundle / hardcoded fallback list — defer; live fetch + silent fallback is good enough.
+- localStorage cache with TTL — defer; in-memory is enough for the typical session.
+- Special Shabbatot, Rosh Chodesh, candle-lighting, parashat — disabled by design; can be toggled later via the helper's `PARAMS` constant if the business changes its mind.
+- Cross-year prefetch when user is in December and the trailing days from January show — bleed-over days are muted (`isCurrentMonth: false`) so the gap is acceptable.
+- New `source='holiday'` value in the `blocked_slots.source` CHECK — kept simple at `'manual'` / `'order_lock'`. Holiday-derived blocks are indistinguishable from any other manual block at the DB level. If analytics ever needs "which holidays were blocked vs treated as workdays", that's a future migration.
+- Visual cue on the calendar for days where the holiday HAS been manually blocked (vs holiday not yet decided) — block tint already conveys this; no additional badge.
+
+**Risks / notes for future sessions:**
+
+- Hebcal up-time was not tested under simulated network failure in this session beyond logical-fallback verification. The helper swallows errors and returns `[]`; calendar still renders. If Hebcal becomes unreliable, switch to Option B (Supabase cache table) without changing the helper API.
+- Hebcal's category mapping for new event types isn't pinned; the helper's loose filter (`it.date && (it.title || it.hebrew)`) is resilient to new `subcat` values appearing.
+- `holidayStyle()` falls back to amber for any unknown subcat — safe default.
+- Multiple holidays on one day (e.g. Yom Kippur + its eve technically on different dates, but rare same-day overlap) — cell tint uses the first event's style; all events listed individually in the day-detail panel.
+- Cross-year navigation lazily fetches new years; first paint of a new year shows no holidays for ~one tick until the response arrives. Acceptable; user typically doesn't notice.
+
+**Open follow-ups from earlier phases unchanged:**
+- Storage migration (re-upload activity images), real Supabase auth accounts for `legacy_assigned_to`, lead→quote→order lineage backfill, `@base44/sdk` + `@base44/vite-plugin` prune from `app/package.json`, dead-code delete of `app/src/lib/app-params.js`.
+- Future post-MVP candidates from the earlier multi-feature plan: full WhatsApp PDF send via provider API, safety questionnaires per site, clubs/courses module + iCredit/Rivhit sync, file-upload path for ad-hoc proposal PDFs on orders (carryover from quick-win F9 deferral).
 
 ---
 
