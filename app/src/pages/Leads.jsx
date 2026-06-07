@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Wand2, Trash2, Pencil, Check, X, Plus, Copy, FileText } from "lucide-react";
+import { Loader2, Wand2, Trash2, Pencil, Check, X, Plus, Copy, FileText, Download } from "lucide-react";
 import QuoteFormDialog from "@/components/quotes/QuoteFormDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,21 @@ const STATUS_STYLES = {
 };
 
 const STATUS_OPTIONS = ["פתוח", "נשלח", "נסגר", "לא רלוונטי"];
-const SITE_OPTIONS = ["עכו", "טבריה", "שטח", "ויה פרטה"];
+const SITE_OPTIONS = ["עכו", "טבריה", "נוף הגליל", "שטח", "ויה פרטה"];
+const CUSTOMER_TYPE_OPTIONS = ["סוכן", "מפיק", "חינוכית", "חברה"];
+const DATE_OPTIONS = ["הכל", "היום", "השבוע", "החודש", "טווח תאריכים"];
+
+// Local date → "YYYY-MM-DD" (matches the format event_date is stored/returned as).
+function toYMD(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const CUSTOMER_TYPE_STYLES = {
+  "סוכן":    "bg-purple-100 text-purple-800 border-purple-200",
+  "מפיק":    "bg-orange-100 text-orange-800 border-orange-200",
+  "חינוכית": "bg-teal-100 text-teal-800 border-teal-200",
+  "חברה":    "bg-indigo-100 text-indigo-800 border-indigo-200",
+};
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -94,6 +108,11 @@ export default function Leads() {
   const [editData, setEditData] = useState({});
   const [filterStatus, setFilterStatus] = useState("הכל");
   const [filterSite, setFilterSite] = useState("הכל");
+  const [filterCustomerType, setFilterCustomerType] = useState("הכל");
+  const [searchText, setSearchText] = useState("");
+  const [filterDate, setFilterDate] = useState("הכל");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [quoteLeadData, setQuoteLeadData] = useState(null);
 
   useEffect(() => { loadLeads(); }, []);
@@ -148,6 +167,7 @@ export default function Leads() {
       full_name: lead.full_name, phone: lead.phone, email: lead.email,
       company: lead.company, notes: lead.notes, status: lead.status,
       site: lead.site || "", event_date: lead.event_date || "",
+      customer_type: lead.customer_type || "",
     });
   };
 
@@ -158,6 +178,15 @@ export default function Leads() {
     const { error } = await supabase.from('leads').update({ site: value }).eq('id', id);
     if (error) { console.error('updateSite error:', error); return; }
     setLeads(prev => prev.map(l => l.id === id ? { ...l, site: value } : l));
+  };
+
+  const updateCustomerType = async (id, customer_type) => {
+    // "" from the "ללא סיווג" option violates leads_customer_type_check.
+    // Column is nullable; null passes the check.
+    const value = customer_type || null;
+    const { error } = await supabase.from('leads').update({ customer_type: value }).eq('id', id);
+    if (error) { console.error('updateCustomerType error:', error); return; }
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, customer_type: value } : l));
   };
 
   const updateDate = async (id, event_date) => {
@@ -183,6 +212,7 @@ export default function Leads() {
       ...editData,
       site: editData.site || null,
       event_date: editData.event_date || null,
+      customer_type: editData.customer_type || null,
     };
     const { error } = await supabase.from('leads').update(payload).eq('id', id);
     if (error) { console.error('saveEdit error:', error); toast.error('שגיאה בשמירה'); return; }
@@ -220,9 +250,67 @@ export default function Leads() {
     toast.success("הועתק!");
   };
 
+  const handleExportCsv = () => {
+    if (filtered.length === 0) return;
+    const headers = ["מספר", "שם מלא", "טלפון", "אימייל", "חברה", "סוג לקוח", "אתר", "סטטוס", "תאריך אירוע", "מקור", "הערות"];
+    // Quote every field; double embedded quotes. Handles commas/newlines (e.g. source_text).
+    const esc = (v) => `"${(v == null ? "" : String(v)).replace(/"/g, '""')}"`;
+    const rows = filtered.map((l, i) =>
+      [i + 1, l.full_name, l.phone, l.email, l.company, l.customer_type, l.site, l.status, l.event_date, l.source_text, l.notes]
+        .map(esc).join(",")
+    );
+    // ﻿ BOM so Excel reads UTF-8 Hebrew correctly. CRLF line endings.
+    const csv = "﻿" + [headers.map(esc).join(","), ...rows].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `leads_${toYMD(new Date())}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const q = searchText.trim().toLowerCase();
+  const matchesSearch = (l) => {
+    if (!q) return true;
+    return [l.full_name, l.phone, l.email, l.company, l.notes, l.source_text]
+      .some(v => (v || "").toLowerCase().includes(q));
+  };
+  const matchesCustomerType = (l) =>
+    filterCustomerType === "הכל" ||
+    (filterCustomerType === "ללא סיווג" ? !l.customer_type : l.customer_type === filterCustomerType);
+
+  // Date boundaries (local). event_date is "YYYY-MM-DD" so lexical compare is safe.
+  const _now = new Date();
+  const todayStr = toYMD(_now);
+  const monthStr = todayStr.slice(0, 7); // "YYYY-MM"
+  const _weekStart = new Date(_now); _weekStart.setDate(_now.getDate() - _now.getDay()); // Sunday
+  const _weekEnd = new Date(_weekStart); _weekEnd.setDate(_weekStart.getDate() + 6);     // Saturday
+  const weekStartStr = toYMD(_weekStart);
+  const weekEndStr = toYMD(_weekEnd);
+  const matchesDate = (l) => {
+    if (filterDate === "הכל") return true;
+    if (!l.event_date) return false; // null event_date appears only under "הכל"
+    const d = l.event_date;
+    if (filterDate === "היום") return d === todayStr;
+    if (filterDate === "השבוע") return d >= weekStartStr && d <= weekEndStr;
+    if (filterDate === "החודש") return d.startsWith(monthStr);
+    if (filterDate === "טווח תאריכים") {
+      if (dateFrom && d < dateFrom) return false;
+      if (dateTo && d > dateTo) return false;
+      return true;
+    }
+    return true;
+  };
+
   const filtered = leads.filter(l =>
     (filterStatus === "הכל" || l.status === filterStatus) &&
-    (filterSite === "הכל" || l.site === filterSite)
+    (filterSite === "הכל" || l.site === filterSite) &&
+    matchesCustomerType(l) &&
+    matchesDate(l) &&
+    matchesSearch(l)
   );
 
   if (loading) {
@@ -263,6 +351,44 @@ export default function Leads() {
       {/* Filters */}
       <div className="space-y-2">
         <div className="flex gap-2 flex-wrap items-center">
+          <Input
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder="חיפוש לפי שם, טלפון, אימייל, חברה, הערות..."
+            className="h-9 text-sm max-w-sm"
+          />
+          {searchText && (
+            <Button variant="ghost" size="sm" className="h-9 gap-1" onClick={() => setSearchText("")}>
+              <X className="w-3.5 h-3.5" /> נקה
+            </Button>
+          )}
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-xs font-semibold text-muted-foreground">סוג לקוח:</span>
+          {["הכל", ...CUSTOMER_TYPE_OPTIONS, "ללא סיווג"].map(s => (
+            <button
+              key={s}
+              onClick={() => setFilterCustomerType(s)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-sm font-medium border transition-all",
+                filterCustomerType === s
+                  ? s === "הכל"
+                    ? "bg-slate-800 text-white border-slate-800"
+                    : s === "ללא סיווג"
+                      ? "bg-slate-200 text-slate-700 border-slate-300 shadow-sm"
+                      : cn(CUSTOMER_TYPE_STYLES[s], "shadow-sm")
+                  : "bg-background text-muted-foreground border-border hover:bg-muted"
+              )}
+            >
+              {s} ({s === "הכל"
+                ? leads.length
+                : s === "ללא סיווג"
+                  ? leads.filter(l => !l.customer_type).length
+                  : leads.filter(l => l.customer_type === s).length})
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
           <span className="text-xs font-semibold text-muted-foreground">סטטוס:</span>
           {["הכל", ...STATUS_OPTIONS].map(s => (
             <button
@@ -296,11 +422,49 @@ export default function Leads() {
             </button>
           ))}
         </div>
-        <span className="text-sm text-muted-foreground">{filtered.length} לידים</span>
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-xs font-semibold text-muted-foreground">תאריך אירוע:</span>
+          {DATE_OPTIONS.map(s => (
+            <button
+              key={s}
+              onClick={() => setFilterDate(s)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-sm font-medium border transition-all",
+                filterDate === s
+                  ? s === "הכל"
+                    ? "bg-slate-800 text-white border-slate-800"
+                    : "bg-primary text-primary-foreground border-primary shadow-sm"
+                  : "bg-background text-muted-foreground border-border hover:bg-muted"
+              )}
+            >
+              {s}
+            </button>
+          ))}
+          {filterDate === "טווח תאריכים" && (
+            <div className="flex gap-2 items-center">
+              <span className="text-xs text-muted-foreground">מ־</span>
+              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9 text-sm w-auto" />
+              <span className="text-xs text-muted-foreground">עד</span>
+              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9 text-sm w-auto" />
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">{filtered.length} לידים</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleExportCsv}
+            disabled={filtered.length === 0}
+          >
+            <Download className="w-4 h-4" /> ייצוא ל-CSV
+          </Button>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+      {/* Table (desktop / md+) */}
+      <div className="hidden md:block bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -309,6 +473,7 @@ export default function Leads() {
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">טלפון</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">אימייל</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">חברה</th>
+                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">סוג לקוח</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">אתר</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">תאריך</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">סטטוס</th>
@@ -319,7 +484,7 @@ export default function Leads() {
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-muted-foreground">אין לידים להצגה</td>
+                  <td colSpan={10} className="text-center py-12 text-muted-foreground">אין לידים להצגה</td>
                 </tr>
               )}
               {filtered.map(lead => (
@@ -330,6 +495,16 @@ export default function Leads() {
                       <td className="px-4 py-2"><Input value={editData.phone || ""} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} className="h-8 text-sm" /></td>
                       <td className="px-4 py-2"><Input value={editData.email || ""} onChange={e => setEditData(p => ({ ...p, email: e.target.value }))} className="h-8 text-sm" /></td>
                       <td className="px-4 py-2"><Input value={editData.company || ""} onChange={e => setEditData(p => ({ ...p, company: e.target.value }))} className="h-8 text-sm" /></td>
+                      <td className="px-4 py-2">
+                        <select
+                          value={editData.customer_type || ""}
+                          onChange={e => setEditData(p => ({ ...p, customer_type: e.target.value }))}
+                          className="h-8 text-sm rounded-md border border-input bg-background px-2"
+                        >
+                          <option value="">ללא סיווג</option>
+                          {CUSTOMER_TYPE_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                        </select>
+                      </td>
                       <td className="px-4 py-2">
                         <select
                           value={editData.site || ""}
@@ -386,6 +561,21 @@ export default function Leads() {
                       </td>
                       <td className="px-4 py-3">
                         <select
+                          value={lead.customer_type || ""}
+                          onChange={e => updateCustomerType(lead.id, e.target.value)}
+                          className={cn(
+                            "text-xs font-medium rounded-full px-2 py-1 border cursor-pointer",
+                            lead.customer_type
+                              ? CUSTOMER_TYPE_STYLES[lead.customer_type]
+                              : "bg-slate-100 text-slate-500 border-slate-200"
+                          )}
+                        >
+                          <option value="">ללא סיווג</option>
+                          {CUSTOMER_TYPE_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <select
                           value={lead.site || ""}
                           onChange={e => updateSite(lead.id, e.target.value)}
                           className="text-xs rounded-md border border-input bg-background px-2 py-1 cursor-pointer text-muted-foreground"
@@ -429,6 +619,95 @@ export default function Leads() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Cards (mobile / below md) */}
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 && (
+          <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground">
+            אין לידים להצגה
+          </div>
+        )}
+        {filtered.map(lead => (
+          <div key={lead.id} className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
+            {editingId === lead.id ? (
+              <div className="space-y-2">
+                <Input value={editData.full_name || ""} onChange={e => setEditData(p => ({ ...p, full_name: e.target.value }))} placeholder="שם מלא" className="text-sm" />
+                <Input value={editData.phone || ""} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} placeholder="טלפון" className="text-sm" />
+                <Input value={editData.email || ""} onChange={e => setEditData(p => ({ ...p, email: e.target.value }))} placeholder="אימייל" className="text-sm" />
+                <Input value={editData.company || ""} onChange={e => setEditData(p => ({ ...p, company: e.target.value }))} placeholder="חברה" className="text-sm" />
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={editData.customer_type || ""}
+                    onChange={e => setEditData(p => ({ ...p, customer_type: e.target.value }))}
+                    className="h-9 text-sm rounded-md border border-input bg-background px-2"
+                  >
+                    <option value="">ללא סיווג</option>
+                    {CUSTOMER_TYPE_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <select
+                    value={editData.site || ""}
+                    onChange={e => setEditData(p => ({ ...p, site: e.target.value }))}
+                    className="h-9 text-sm rounded-md border border-input bg-background px-2"
+                  >
+                    <option value="">— אתר —</option>
+                    {SITE_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <Input type="date" value={editData.event_date || ""} onChange={e => setEditData(p => ({ ...p, event_date: e.target.value }))} className="text-sm" />
+                  <select
+                    value={editData.status}
+                    onChange={e => setEditData(p => ({ ...p, status: e.target.value }))}
+                    className="h-9 text-sm rounded-md border border-input bg-background px-2"
+                  >
+                    {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <Input value={editData.notes || ""} onChange={e => setEditData(p => ({ ...p, notes: e.target.value }))} placeholder="הערות" className="text-sm" />
+                <div className="flex gap-2">
+                  <Button className="flex-1 gap-2" onClick={() => saveEdit(lead.id)}><Check className="w-4 h-4" /> שמור</Button>
+                  <Button variant="outline" className="flex-1 gap-2" onClick={cancelEdit}><X className="w-4 h-4" /> ביטול</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold text-base">{lead.full_name || "—"}</div>
+                  <div className="flex flex-wrap gap-1 justify-end shrink-0">
+                    <span className={cn(
+                      "text-xs font-medium rounded-full px-2 py-0.5 border",
+                      lead.customer_type ? CUSTOMER_TYPE_STYLES[lead.customer_type] : "bg-slate-100 text-slate-500 border-slate-200"
+                    )}>
+                      {lead.customer_type || "ללא סיווג"}
+                    </span>
+                    <span className={cn(
+                      "text-xs font-medium rounded-full px-2 py-0.5 border",
+                      STATUS_STYLES[lead.status] || "bg-slate-100 text-slate-600 border-slate-200"
+                    )}>
+                      {lead.status}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  {lead.phone && <div className="flex justify-between gap-2"><span>טלפון</span><a href={`tel:${lead.phone}`} className="text-foreground">{lead.phone}</a></div>}
+                  {lead.email && <div className="flex justify-between gap-2"><span>אימייל</span><span className="text-foreground truncate max-w-[60%]">{lead.email}</span></div>}
+                  {lead.company && <div className="flex justify-between gap-2"><span>חברה</span><span className="text-foreground">{lead.company}</span></div>}
+                  {lead.site && <div className="flex justify-between gap-2"><span>אתר</span><span className="text-foreground">{lead.site}</span></div>}
+                  {lead.event_date && <div className="flex justify-between gap-2"><span>תאריך אירוע</span><span className="text-foreground">{lead.event_date}</span></div>}
+                </div>
+                {(lead.notes || lead.source_text) && (
+                  <div className="text-xs text-muted-foreground border-t border-border/50 pt-2 line-clamp-3">
+                    {lead.notes || lead.source_text}
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" className="flex-1 gap-2 h-10 text-blue-600" onClick={() => openQuoteFromLead(lead)}><FileText className="w-4 h-4" /> הצעה</Button>
+                  <Button variant="outline" className="flex-1 gap-2 h-10" onClick={() => startEdit(lead)}><Pencil className="w-4 h-4" /> ערוך</Button>
+                  <Button variant="outline" className="gap-2 h-10 text-destructive" onClick={() => handleDelete(lead.id)}><Trash2 className="w-4 h-4" /></Button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
       </div>
 
       {quoteLeadData && (
