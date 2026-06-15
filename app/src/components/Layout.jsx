@@ -3,6 +3,7 @@ import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, X,
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
+import SiteOpeningPrompt from "@/components/SiteOpeningPrompt";
 
 const allNavItems = [
 { path: "/", label: "דשבורד", icon: LayoutDashboard, roles: ["admin"] },
@@ -35,6 +36,9 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex" dir="rtl">
+      {/* One-time site-opening form prompt (field roles only, once per session) */}
+      <SiteOpeningPrompt />
+
       {/* Mobile overlay */}
       {mobileOpen &&
       <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />
