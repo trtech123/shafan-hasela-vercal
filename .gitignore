@@ -50,3 +50,6 @@ desktop.ini
 .env.local
 backups/
 **/*_export.csv
+
+# Supabase CLI local cache (project metadata, pooler host) — never commit
+supabase/.temp/

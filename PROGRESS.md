@@ -4,8 +4,8 @@
 > Update at the **end of every phase** before reporting to the user.
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
-Last updated: 2026-06-07
-Active phase: **Post-MVP — Phase A: Leads enhancements** ✅ code complete + locally browser-verified (2026-06-07). New `customer_type` field (migration 010) with display/edit + filter chips (`סוכן`/`מפיק`/`חינוכית`/`חברה` + `ללא סיווג`); free-text search across name/phone/email/company/notes/source; `event_date` date filter (היום/השבוע/החודש/טווח תאריכים); CSV export of currently-filtered leads (UTF-8 BOM); mobile card layout (table on `md+`). Leads `site` widened to the full current business-site set `עכו`/`טבריה`/`נוף הגליל`/`שטח`/`ויה פרטה` (migration 011: added missing `נוף הגליל`; `ויה פרטה` is a real site and is kept). Both migrations applied in Supabase. Commits/push deferred — awaiting user approval. Previous post-MVP: **Israeli holidays / special dates MVP** ✅ code complete + locally browser-verified (2026-06-03). Hebcal live JSON API (Israeli mode) renders holidays/eves/national days/memorial days/fasts as small colored dots on Schedule cells with full details in the day-detail panel. No schema change, no migration, no caching table — in-memory year cache only. Admin/ops can launch "🔒 חסום יום" from a holiday entry → opens existing `BlockSlotDialog` with date + reason prefilled → creates a normal `blocked_slots` row (`source='manual'`). **No automatic blocking.** Commits/push deferred — awaiting user approval. Previous post-MVP: **Availability blocking MVP** ✅ shipped & production-verified (2026-06-03) in commits `3b9f89b`/`404bebc`/`ca39be1`/`80e5df2` — migration 009 + Schedule read/CRUD path + OrderFormDialog conflict warning with override checkbox + Orders "lock this slot" action. **Quick-win UI batch** ✅ shipped (2026-06-02) in commit `def6fcb` — mobile Orders card layout + sticky bottom order button, Orders/Activities filters, WhatsApp lite message to assigned guide, quote/proposal link on orders via existing `orders.quote_id`. **Base44 data cutover** ✅ done + browser-verified (2026-05-28); all 9 business tables hold the real Base44 data (78 rows imported); seed cleared; `profiles`/`auth` untouched. See [`docs/base44-import-run.md`](docs/base44-import-run.md). All 7 recovery phases also complete.
+Last updated: 2026-06-15
+Active phase: **Post-MVP — Phase C: Automatic order-confirmation email (Gmail SMTP)** ✅ **working in production + verified end-to-end** (2026-06-15). A `שלח במייל` button in the order-confirmation dialog generates the real combined PDF, base64-encodes it, and invokes a **JWT-secured Supabase Edge Function `send-order-doc`** that emails it as a real **PDF attachment** via **Gmail SMTP** (`npm:nodemailer`, sender **`שפן הסלע <Info.shafan@gmail.com>`**, App Password). Delivery to real customer addresses confirmed — PDF attachment arrives and opens. Recipient = `order.client_email` (validated; button disabled + Hebrew tooltip when missing/invalid). Subject `אישור הזמנה {orderNumber} - שפן הסלע`, real Hebrew body. (Resend served Stages 1–4 as the proving pipeline but is **no longer used** — it could only send to the sandbox account owner; replaced by Gmail SMTP. See the Phase C section for the full migration + denomailer→nodemailer fix.) Previous post-MVP: **Phase B: Combined order-confirmation PDF** ✅ code complete + locally browser-verified (2026-06-11). One combined customer-facing PDF reachable from any order's `FileText` action: **Section A** order confirmation (real local logo, itemized activity line — name / duration / price-per-person / participants / line total / description, total summary with `כולל מע"מ`, mobile contact `0503504478`, exact fixed order terms, signature fields) then **Section B** safety/health declaration — in one download. Delivery = **Download PDF + WhatsApp *text* helper only**; real email/WhatsApp PDF **attachment** sending is **deferred** (no provider/Edge Function exists). No schema change, no migration, no DB tracking. Commits/push deferred — awaiting user approval. Previous post-MVP: **Phase A: Leads enhancements** ✅ code complete + locally browser-verified (2026-06-07). New `customer_type` field (migration 010) with display/edit + filter chips (`סוכן`/`מפיק`/`חינוכית`/`חברה` + `ללא סיווג`); free-text search across name/phone/email/company/notes/source; `event_date` date filter (היום/השבוע/החודש/טווח תאריכים); CSV export of currently-filtered leads (UTF-8 BOM); mobile card layout (table on `md+`). Leads `site` widened to the full current business-site set `עכו`/`טבריה`/`נוף הגליל`/`שטח`/`ויה פרטה` (migration 011: added missing `נוף הגליל`; `ויה פרטה` is a real site and is kept). Both migrations applied in Supabase. Commits/push deferred — awaiting user approval. Previous post-MVP: **Israeli holidays / special dates MVP** ✅ code complete + locally browser-verified (2026-06-03). Hebcal live JSON API (Israeli mode) renders holidays/eves/national days/memorial days/fasts as small colored dots on Schedule cells with full details in the day-detail panel. No schema change, no migration, no caching table — in-memory year cache only. Admin/ops can launch "🔒 חסום יום" from a holiday entry → opens existing `BlockSlotDialog` with date + reason prefilled → creates a normal `blocked_slots` row (`source='manual'`). **No automatic blocking.** Commits/push deferred — awaiting user approval. Previous post-MVP: **Availability blocking MVP** ✅ shipped & production-verified (2026-06-03) in commits `3b9f89b`/`404bebc`/`ca39be1`/`80e5df2` — migration 009 + Schedule read/CRUD path + OrderFormDialog conflict warning with override checkbox + Orders "lock this slot" action. **Quick-win UI batch** ✅ shipped (2026-06-02) in commit `def6fcb` — mobile Orders card layout + sticky bottom order button, Orders/Activities filters, WhatsApp lite message to assigned guide, quote/proposal link on orders via existing `orders.quote_id`. **Base44 data cutover** ✅ done + browser-verified (2026-05-28); all 9 business tables hold the real Base44 data (78 rows imported); seed cleared; `profiles`/`auth` untouched. See [`docs/base44-import-run.md`](docs/base44-import-run.md). All 7 recovery phases also complete.
 
 > ⚠️ **Path change for future sessions:** the frontend now lives in **`app/`**, not `adventure-ops-pro/`. Boot with `npm run dev --prefix app`. Reference schemas are at `reference/base44/`. `CLAUDE.md` + older completion-log links below still say `adventure-ops-pro/` (historical) — read them as `app/`.
 
@@ -107,6 +107,98 @@ Active phase: **Post-MVP — Phase A: Leads enhancements** ✅ code complete + l
 - **Rule B — Validate migrations against three sources.** Base44 entity schema + current frontend field usage + known mismatches (e.g. `activity` vs `activity_id`).
 - **Rule C — Stop after each phase and report.** Never chain phases without user approval.
 - **Rule D — MVP done means** all sidebar screens open, all core screens show realistic data, CRUD + cross-screen sync work, zero Base44 imports remain.
+
+---
+
+## Post-MVP — Phase C: Automatic order-confirmation email via Gmail SMTP (2026-06-15)
+
+**Outcome:** ✅ **working in production + verified end-to-end** (2026-06-15). The combined order-confirmation PDF is **emailed to the customer as a real PDF attachment** at the click of a button, sent **as `שפן הסלע <Info.shafan@gmail.com>`** via Gmail SMTP. Full chain proven: browser PDF generation → base64 → JWT-secured Supabase Edge Function → Gmail SMTP (`npm:nodemailer`) → email with PDF attachment delivered to a real customer inbox, attachment opens correctly. Commits/push deferred — awaiting user approval.
+
+**Architecture (decided after a read-only review):**
+- **Frontend** generates the PDF (the existing `OrderConfirmationPDF` html2canvas→jsPDF path), base64-encodes it, and calls `supabase.functions.invoke('send-order-doc', …)`.
+- **Edge Function** `send-order-doc` (Deno) holds the Gmail credentials server-side and sends via Gmail SMTP with the base64 PDF as an attachment.
+- **PDF flow chosen: generate-in-browser + send base64** (not Storage upload, not backend regeneration). Reason: the PDF is a DOM snapshot (RTL, Heebo font, exact component) only the browser reproduces faithfully; the SMTP client accepts a base64 attachment directly; fewest moving parts; no Chromium-in-Deno.
+
+**Implementation:**
+- **Edge Function** [supabase/functions/send-order-doc/index.ts](supabase/functions/send-order-doc/index.ts) — **new**. Reads `GMAIL_USER` + `GMAIL_APP_PASSWORD` secrets; parses `{ to, orderNumber, clientName, activityName, activityDate, pdfBase64, fileName }`; returns 400 if `to` missing; builds subject `אישור הזמנה {orderNumber} - שפן הסלע` and a real Hebrew customer body (HTML-escaped fields); attaches the base64 PDF; sends via `nodemailer` over `smtp.gmail.com:465` (implicit TLS) from `שפן הסלע <${GMAIL_USER}>`; CORS + `OPTIONS` handled. Deployed with **`verify_jwt = true`** (JWT enforced — unauthenticated curl returns 401).
+- **Frontend** [app/src/components/orders/OrderConfirmationPDF.jsx](app/src/components/orders/OrderConfirmationPDF.jsx) — added a `שלח במייל` button (`buildPdf` extracted, shared with download). Recipient = `order.client_email`; `isValidEmail` guard disables the button + shows a Hebrew tooltip (`אין כתובת אימייל תקינה ללקוח`) when missing/invalid; loading (`שולח...`), success (`נשלח ✓` + toast `המייל נשלח ✓`), error (toast `שליחת המייל נכשלה`). No DB write, no sent-tracking.
+- No change to PDF layout/text, Orders page wiring, or DB.
+
+**Production sender (final):** **Gmail SMTP**, `from: שפן הסלע <Info.shafan@gmail.com>` (the real mailbox, App Password). Sends to **`order.client_email`** — any real customer address (Gmail consumer limit ≈ 500 recipients/day). No sandbox / domain-verification constraint. Recipient logic validated client-side, required server-side; **no hardcoded test recipient** in the code path.
+
+**Supabase Edge Functions — first use in this project:**
+- Project linked via `npx supabase link --project-ref divzxsynczeifkpnpupl` (CLI auth via `SUPABASE_ACCESS_TOKEN` in the deploy shell; the bundled CLI version has no `functions logs` subcommand — read function logs in the Dashboard).
+- **Secrets `GMAIL_USER` + `GMAIL_APP_PASSWORD` are set via the Dashboard** (never in the repo, never inline on a CLI command).
+- Deploy: `npx supabase functions deploy send-order-doc` (omit `--no-verify-jwt` to keep JWT on).
+
+**Build path & the denomailer → nodemailer fix (the email library saga):**
+- Stages 1–4 used **Resend** purely as the *proving pipeline* (deploy → secret → attachment → JWT). Resend was then **dropped** — its sandbox sender only delivers to the Resend account owner, so it can't reach real customers without a verified domain, and it can never send *from* a gmail.com address.
+- First Gmail attempt used **`denomailer`**: port 465 implicit-TLS → **HTTP 546** (isolate crash / "Memory limit exceeded" from buffering the base64 attachment over its TLS path); switching to 587 STARTTLS got further but failed with **`invalid cmd at SMTPConnection.assertCode`** — denomailer's socket reader (`readCmd` returns null) is **incompatible with the Supabase Edge runtime**, not a Gmail/JWT/credential issue.
+- **Fix:** replaced denomailer with **`npm:nodemailer@6.9.14`** (Supabase Edge supports `npm:` specifiers; nodemailer's SMTP client is robust on edge), back on 465 implicit TLS. Works.
+- **Why Resend can't send from gmail:** can't DNS-verify a domain you don't own; spoofing fails gmail's DMARC. Gmail SMTP + App Password is the only way to send *as* `Info.shafan@gmail.com`.
+- **Sender spelling resolved:** confirmed `Info.shafan@gmail.com` (the safety-PDF footer's `info.shafhan@gmail.com` was a typo).
+
+**Verification:** `npm run build --prefix app` → EXIT 0. End-to-end: `שלח במייל` sends; email arrives **from `Info.shafan@gmail.com`** with the real combined PDF attached; attachment opens correctly; JWT enforced (public curl → 401); missing-email orders disable the button.
+
+**Out of scope / deferred:**
+- Optional long-term deliverability upgrade: a verified sending domain on an ESP (e.g. Resend from `info@shafhan-hasela.com`, `Reply-To: Info.shafan@gmail.com`) — better bounce tracking + no per-account daily cap. Not needed now; Gmail SMTP works.
+- WhatsApp **document** (file) sending — still text-only `wa.me`; needs a provider (Green API). Unchanged from Phase B.
+- DB sent/unsent tracking (`orders.confirmation_email_sent_at`) — duplicate-send guard is client-side only (button disabled during/after send).
+- `supabase/.temp/` — local CLI cache, git-ignored (added to `.gitignore`).
+
+---
+
+## Post-MVP — Phase B: Combined order-confirmation PDF (2026-06-11)
+
+**Outcome:** ✅ code complete + locally browser-verified (2026-06-11). One combined, customer-facing **order-confirmation PDF**, reachable from any order via the existing `FileText` action on the Orders table/cards. **One button → one PDF file** containing both an order-confirmation section and the safety/health declaration. No schema change, no migration, no DB tracking, no new dependency (`jspdf` + `html2canvas` already present). Commits/push deferred — awaiting user approval.
+
+**Document structure (one combined PDF, two sections):**
+
+- **Section A — order confirmation** (modeled on the quote PDF design):
+  - **Real local logo** — `app/public/shafan-logo.jpg` (the genuine שפן הסלע mark, served same-origin at `/shafan-logo.jpg`). Replaces an earlier CSS text-wordmark that was rejected. No Base44 runtime logo dependency.
+  - **Itemized activity line** — name, duration (`⏱ X שעות`), price per person, participants count, line total (`qty × unit`), and the activity **description** when available. All real columns (`activities.description` / `duration_hours` / `price_per_person`, loaded via `select('*')`); render conditionally, null-safe — no faked text.
+  - **Total summary** — full calculated total + payment status, with **`כולל מע"מ`** note.
+  - **Order notes** — amber box, shown only when `orders.notes` present (matches quote PDF).
+  - **Mobile contact line** — `נייד ליצירת קשר: 0503504478`.
+  - **Fixed order terms** — exact customer-supplied text (intro `מודים לך על הזמנתך!` + 10 numbered terms + fax/email return line). Clean manual RTL numbering.
+  - **Signature fields** — exact customer text: `אני מאשר/ת את כל החתום לעיל:` + תאריך / שם מלא מלווה / חתימה (blank lines) + closing blessing. The `נציג: ___` line was **removed** per customer markup. Blank fields only — print/sign/return by hand.
+- **Section B — safety / health declaration** — the customer's approved safety text (17 rules + health/waiver paragraphs + group-name + orderer signature/ת.ז + under-18 clause + contact footer), transcribed from the approved safety PDF. A leaked editorial annotation (`כאן מחקתי את המשפט האחרון`) was omitted. Same declaration for all sites (worded for `פארק אקסטרים עכו`). Always starts on its own page after Section A.
+
+**Delivery (MVP):**
+- **Download PDF** — `html2canvas` → `jsPDF`, one section per A4 page (B always begins fresh; over-length section scales-to-fit, never sliced into a broken/empty page).
+- **WhatsApp — *text* helper only** — `wa.me` opens a Hebrew summary message (Israeli `05X→972` phone normalization). **This does NOT attach the PDF** — `wa.me` cannot send files. Customer downloads the PDF and sends it out-of-band.
+- **No email action** in this flow (the old `mailto`-only path is gone from the PDF flow).
+
+**Real attachment sending — DEFERRED (no infra exists):**
+- **Email with PDF attachment** and **WhatsApp document send** both require provider integration that does **not** exist yet. Investigation (2026-06-11) found: **no** Supabase Edge Functions deployed, **no** WhatsApp provider (Green API / Twilio / 360dialog / Meta Cloud), **no** email provider (Resend / SendGrid / SMTP); only `mailto:` + `wa.me` text links. The private **`documents`** storage bucket (migration 004) exists, currently unused, intended for exactly this.
+- **Fastest real path when credentials are available:** one Edge Function `send-order-doc({ orderId, pdfBase64, channel, to })` → upload `pdfBase64` to `documents` bucket → signed URL → branch: **Resend** (email, base64 attachment) / **Green API** `sendFileByUrl` (WhatsApp document). Secrets: `RESEND_API_KEY`, `GREENAPI_ID`, `GREENAPI_TOKEN`. Blocked on: provider accounts, a verified email sending domain, and a registered WhatsApp number — all user-provisioned.
+
+**Files touched / created:**
+
+| Path | Status |
+|---|---|
+| `app/public/shafan-logo.jpg` | **new** (real local logo asset) |
+| [app/src/lib/orderDocText.js](app/src/lib/orderDocText.js) | **new** (fixed terms, signature fields, VAT/mobile constants, full safety text) |
+| [app/src/components/orders/OrderConfirmationPDF.jsx](app/src/components/orders/OrderConfirmationPDF.jsx) | **new** (combined two-section PDF component; Download + WhatsApp-text) |
+| [app/src/pages/Orders.jsx](app/src/pages/Orders.jsx) | edit (`FileText` action → new PDF; legacy `OrderDocumentDialog` kept as undeleted fallback, no UI trigger) |
+
+**Verification:** `npm run build --prefix app` → EXIT 0 after every change. Browser-verified by the user: item details + description + price/participants/line total render, total + `כולל מע"מ` + mobile contact present, safety section in the same combined PDF, downloaded PDF matches preview, no clipping or broken/empty pages.
+
+**Decisions applied (user-approved across this phase):**
+1. **One combined PDF**, not two downloads — order confirmation + safety in a single file, sections logically separated (B starts a new page).
+2. **Route B** — dedicated `OrderConfirmationPDF` component; did **not** overload `QuotePDFDocument`.
+3. **Single-activity per order** (MVP) — line item from `order.activity_id` joined to the loaded activity.
+4. **Real local logo**, not a CSS wordmark.
+5. **Exact** fixed order terms + signature text; `נציג:` line removed per markup; `כולל מע"מ` + mobile `0503504478` added.
+6. Delivery = **Download + WhatsApp text** only. **No email** action, **no** digital signature, **no** DB signed/unsigned tracking.
+7. Real email/WhatsApp **attachment** sending deferred to a future provider-integration phase.
+
+**Deferred / explicitly out of scope:**
+- Email-with-attachment + WhatsApp-document sending (needs Edge Function + Resend + Green API + provider credentials).
+- Multi-activity / multi-line orders (line-item layout already structured to extend if/when introduced).
+- Digital signature capture; DB tracking of signed vs unsigned documents.
+- Per-site safety text variants (single approved declaration used for all sites for now).
+- Pruning the legacy `OrderDocumentDialog` (kept as fallback until the PDF is production-verified).
 
 ---
 

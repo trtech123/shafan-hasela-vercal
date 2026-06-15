@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Search, Pencil, Trash2, Mail, FileText, CheckCircle2, Link2, Lock } from "lucide-react";
 import InstructorEmailDialog from "../components/orders/InstructorEmailDialog";
 import OrderDocumentDialog from "../components/orders/OrderDocumentDialog";
+import OrderConfirmationPDF from "../components/orders/OrderConfirmationPDF";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
 import PaymentBadge from "../components/orders/PaymentBadge";
 import OrderFormDialog from "../components/orders/OrderFormDialog";
@@ -38,7 +39,8 @@ export default function Orders() {
   const [editingOrder, setEditingOrder] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [emailOrder, setEmailOrder] = useState(null);
-  const [docOrder, setDocOrder] = useState(null);
+  const [docOrder, setDocOrder] = useState(null); // legacy text doc — kept as fallback
+  const [pdfOrder, setPdfOrder] = useState(null); // combined order-confirmation PDF
   // Order being prepared for "lock this slot" — null when no confirm dialog open.
   const [lockingOrder, setLockingOrder] = useState(null);
 
@@ -292,7 +294,7 @@ export default function Orders() {
                   <button onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     <Pencil className="w-4 h-4 text-muted-foreground" />
                   </button>
-                  <button onClick={() => setDocOrder(order)} className="p-2 hover:bg-primary/10 rounded-lg transition-colors" title="מסמך ללקוח">
+                  <button onClick={() => setPdfOrder(order)} className="p-2 hover:bg-primary/10 rounded-lg transition-colors" title="אישור הזמנה ללקוח">
                     <FileText className="w-4 h-4 text-primary" />
                   </button>
                   {order.instructor_id && (
@@ -371,7 +373,7 @@ export default function Orders() {
                         <button onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                           <Pencil className="w-4 h-4 text-muted-foreground" />
                         </button>
-                        <button onClick={() => setDocOrder(order)} className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors" title="מסמך ללקוח">
+                        <button onClick={() => setPdfOrder(order)} className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors" title="אישור הזמנה ללקוח">
                           <FileText className="w-4 h-4 text-primary" />
                         </button>
                         {order.instructor_id && (
@@ -408,6 +410,16 @@ export default function Orders() {
         onNotified={() => emailOrder && markNotified(emailOrder.id)}
       />
 
+      {/* Combined order-confirmation PDF (Section A: confirmation + terms + signature, Section B: safety). */}
+      {pdfOrder && (
+        <OrderConfirmationPDF
+          order={pdfOrder}
+          activity={activities.find(a => a.id === pdfOrder.activity_id)}
+          onClose={() => setPdfOrder(null)}
+        />
+      )}
+
+      {/* Legacy plain-text customer doc — kept as fallback until the PDF is verified; no UI trigger now. */}
       <OrderDocumentDialog
         open={!!docOrder}
         onClose={() => setDocOrder(null)}
