@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
-import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, X, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator } from "lucide-react";
+import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, X, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -17,7 +17,8 @@ const allNavItems = [
 { path: "/sales-report", label: "דוח קופה", icon: BarChart2, roles: ["admin"] },
 { path: "/pricing", label: "תמחור", icon: Calculator, roles: ["admin"] },
 { path: "/tasks", label: "משימות", icon: ListTodo, roles: ["admin"] },
-{ path: "/maintenance", label: "תחזוקה", icon: Wrench, roles: ["admin", "אחמ\"ש"] }];
+{ path: "/maintenance", label: "תחזוקה", icon: Wrench, roles: ["admin", "אחמ\"ש"] },
+{ path: "/users", label: "ניהול משתמשים", icon: UserCog, roles: ["admin"] }];
 
 
 export default function Layout() {

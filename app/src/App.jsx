@@ -18,6 +18,7 @@ import Leads from './pages/Leads';
 import CashRegister from './pages/CashRegister';
 import DailySalesReport from './pages/DailySalesReport';
 import Pricing from './pages/Pricing';
+import Users from './pages/Users';
 import Login from './pages/Login';
 
 const AuthenticatedApp = () => {
@@ -54,6 +55,7 @@ const AuthenticatedApp = () => {
         <Route path="/cashregister" element={<CashRegister />} />
         <Route path="/sales-report" element={<DailySalesReport />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/users" element={<Users />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>
