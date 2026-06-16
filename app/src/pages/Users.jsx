@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
-import { UserPlus, Loader2, ShieldAlert } from "lucide-react";
+import { UserPlus, Loader2, ShieldAlert, Trash2 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,10 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 
 // DB enum → Hebrew label. instructor shown for visibility only (legacy users).
 const ROLE_LABELS = {
@@ -31,6 +35,8 @@ export default function Users() {
   const [form, setForm] = useState(emptyForm);
   const [creating, setCreating] = useState(false);
   const [savingId, setSavingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Page-level guard — non-admins never reach the data.
   if (user && user.role !== "admin") {
@@ -115,6 +121,41 @@ export default function Users() {
       );
     }
     setSavingId(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    // Defense-in-depth: never delete self (also blocked in the function).
+    if (deleteTarget.id === user?.id) {
+      setDeleteTarget(null);
+      return;
+    }
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId: deleteTarget.id },
+      });
+      if (error) {
+        let msg = "מחיקת המשתמש נכשלה";
+        try {
+          const body = await error.context?.json?.();
+          if (body?.error) msg = body.error;
+        } catch { /* keep generic */ }
+        toast.error(msg);
+        return;
+      }
+      if (!data?.ok) {
+        toast.error(data?.error || "מחיקת המשתמש נכשלה");
+        return;
+      }
+      toast.success("המשתמש נמחק ✓");
+      setDeleteTarget(null);
+      await loadUsers();
+    } catch (err) {
+      toast.error("מחיקת המשתמש נכשלה");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const fmtDate = (d) => {
@@ -212,6 +253,7 @@ export default function Users() {
                   <th className="py-2 px-2 font-medium">אימייל</th>
                   <th className="py-2 px-2 font-medium">תפקיד</th>
                   <th className="py-2 px-2 font-medium">נוצר</th>
+                  <th className="py-2 px-2 font-medium">פעולות</th>
                 </tr>
               </thead>
               <tbody>
@@ -254,6 +296,21 @@ export default function Users() {
                         )}
                       </td>
                       <td className="py-2.5 px-2 text-muted-foreground">{fmtDate(row.created_at)}</td>
+                      <td className="py-2.5 px-2">
+                        {isSelf ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => setDeleteTarget(row)}
+                            title="מחק משתמש"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -262,6 +319,41 @@ export default function Users() {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+      >
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת משתמש</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-right">
+                <p>
+                  למחוק את <strong>{deleteTarget?.full_name || deleteTarget?.email}</strong>
+                  {deleteTarget?.email ? <span dir="ltr"> ({deleteTarget.email})</span> : null}?
+                </p>
+                <ul className="list-disc pr-5 space-y-1 text-sm">
+                  <li>המשתמש לא יוכל להתחבר יותר.</li>
+                  <li>רשומות עבר כמו הזמנות/קופה לא יימחקו.</li>
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 gap-2"
+            >
+              {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+              מחק
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
