@@ -23,7 +23,7 @@ Hebrew RTL operations app for an Israeli adventure-activities business (sites: �
 Base44→Supabase recovery (all 7 phases) → data cutover → quick-win UI → availability blocking → Israeli holidays → leads enhancements → order-confirmation PDF (Phase B) → Gmail SMTP email (Phase C) → permissions/cashier + internal notes (Phase D). All in `PROGRESS.md`.
 
 ## Pending / next
-- **NEXT: Stage 3 — admin user-management screen** (not started): service-role Edge Function `create-user` (admin-gated) + `app/src/pages/Users.jsx` (email/password/full_name/role) + `/users` route + admin nav. Until then, create users via Dashboard (trigger seeds `instructor`; promote via SQL).
+- ✅ **DONE (Phase E, 2026-06-17): admin user management.** `/users` (`app/src/pages/Users.jsx`, admin-only) + service-role Edge Function `create-user` (JWT-secured, admin-gated, `SUPABASE_SERVICE_ROLE_KEY` server-side only). List + create + inline role edit; UI roles admin/operations/cashier (instructor hidden); self-demotion blocked; no delete. Deploy: `npx supabase functions deploy create-user`. Follow-ups: user delete/disable, password reset.
 - **Deferred bugfix:** PDF/email client-machine non-determinism (html2canvas fonts/canvas/DPI) — see memory `pdf-email-reliability-bug`. Owner commit `b791ad9` may already address part of it — review first.
 - WhatsApp document send (Green API); verified Resend domain (optional); DB sent-tracking.
 
