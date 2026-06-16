@@ -95,14 +95,19 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
       imgW = pageW * s;
     }
     const x = (pageW - imgW) / 2;
-    const imgData = canvas.toDataURL("image/png");
+    // JPEG (q≈0.9) instead of uncompressed PNG — drastically smaller output, so
+    // the base64 email attachment stays under the Edge/SMTP payload limits.
+    const imgData = canvas.toDataURL("image/jpeg", 0.9);
     if (!isFirst) pdf.addPage();
-    pdf.addImage(imgData, "PNG", x, 0, imgW, imgH);
+    pdf.addImage(imgData, "JPEG", x, 0, imgW, imgH);
   };
 
   // Build the combined two-section PDF (shared by download + email).
   const buildPdf = async () => {
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    // Wait for web fonts (Heebo) before rasterizing — html2canvas snapshots the
+    // live DOM, and capturing mid font-swap produces broken/misaligned Hebrew.
+    if (document.fonts?.ready) await document.fonts.ready;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
     await addSection(pdf, sectionARef.current, true);
     await addSection(pdf, sectionBRef.current, false);
     return pdf;
@@ -131,9 +136,18 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
       return;
     }
     setEmailBusy(true);
+    // Track which stage we're in so a failure points at the real culprit
+    // (PDF generation vs. Supabase invoke vs. Edge function) instead of a
+    // single opaque message. Diagnostics go to console; the toast surfaces
+    // the real error text to the user.
+    let step = "יצירת PDF";
     try {
       const pdf = await buildPdf();
       const pdfBase64 = pdf.output("datauristring").split(",")[1];
+      const kb = Math.round((pdfBase64.length * 3) / 4 / 1024);
+      console.info(`OrderConfirmationPDF: PDF built — base64 ${pdfBase64.length} chars (~${kb} KB)`);
+
+      step = "שליחה לשרת";
       const { data, error } = await supabase.functions.invoke("send-order-doc", {
         body: {
           to: recipientEmail,
@@ -146,12 +160,19 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
         },
       });
       if (error) throw error;
+
+      step = "שרת המייל";
       if (data && data.ok === false) throw new Error(JSON.stringify(data.error));
+
       setEmailSent(true);
       toast.success("המייל נשלח ✓");
     } catch (err) {
-      console.error("OrderConfirmationPDF email error:", err);
-      toast.error("שליחת המייל נכשלה");
+      const detail =
+        err?.message ||
+        (err?.context ? JSON.stringify(err.context) : "") ||
+        String(err);
+      console.error(`OrderConfirmationPDF email error [שלב: ${step}]:`, err);
+      toast.error(`שליחת המייל נכשלה (${step}): ${detail}`);
     } finally {
       setEmailBusy(false);
     }
