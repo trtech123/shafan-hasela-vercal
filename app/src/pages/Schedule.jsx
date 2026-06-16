@@ -584,6 +584,11 @@ export default function Schedule() {
                       {order.start_time && <span>🕐 {order.start_time}{order.end_time ? `–${order.end_time}` : ""}</span>}
                       <span>👥 {order.num_participants} משתתפים</span>
                     </div>
+                    {order.internal_notes && (
+                      <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 text-amber-800">
+                        🔒 הערה פנימית: {order.internal_notes}
+                      </div>
+                    )}
                     <button
                       onClick={handleCollect}
                       className="w-full flex items-center justify-center gap-1.5 mt-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors"

@@ -33,7 +33,7 @@ const emptyForm = {
   activity_id: "", instructor_id: NO_INSTRUCTOR, quote_id: NO_QUOTE,
   activity_date: "", start_time: "", end_time: "",
   site: "", num_participants: "", price_per_person: "", total_price: "",
-  status: "ממתין לאישור", payment_status: "לא שולם", notes: "",
+  status: "ממתין לאישור", payment_status: "לא שולם", notes: "", internal_notes: "",
   billing_institution_name: "", billing_signer_name: "", billing_signer_id: "",
   billing_signer_role: "", billing_signer_phone: "", billing_company_id: "",
   billing_accounting_email: "",
@@ -141,6 +141,7 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         status: order.status || "ממתין לאישור",
         payment_status: order.payment_status || "לא שולם",
         notes: order.notes || "",
+        internal_notes: order.internal_notes || "",
         billing_institution_name: order.billing_institution_name || "",
         billing_signer_name: order.billing_signer_name || "",
         billing_signer_id: order.billing_signer_id || "",
@@ -451,8 +452,18 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
           </div>
 
           <div>
-            <Label>הערות</Label>
+            <Label>הערות (ללקוח)</Label>
             <Textarea value={form.notes} onChange={e => handleChange("notes", e.target.value)} rows={3} />
+          </div>
+
+          <div>
+            <Label className="flex items-center gap-1">🔒 הערות פנימיות (צוות בלבד)</Label>
+            <Textarea
+              value={form.internal_notes}
+              onChange={e => handleChange("internal_notes", e.target.value)}
+              rows={3}
+              placeholder="לא מופיע באישור ההזמנה ללקוח ולא נשלח במייל"
+            />
           </div>
 
             </TabsContent>

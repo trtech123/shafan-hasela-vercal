@@ -279,6 +279,9 @@ export default function Orders() {
                   )}
                 </p>
                 {order.organization && <p className="text-xs text-muted-foreground truncate">{order.organization}</p>}
+                {order.internal_notes && (
+                  <p className="text-[11px] mt-1 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 text-amber-800">🔒 {order.internal_notes}</p>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -360,6 +363,9 @@ export default function Orders() {
                           )}
                         </p>
                         <p className="text-xs text-muted-foreground">{order.organization || ""}</p>
+                        {order.internal_notes && (
+                          <p className="text-[11px] mt-1 text-amber-700">🔒 {order.internal_notes}</p>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">{getActivityName(order.activity_id)}</td>
