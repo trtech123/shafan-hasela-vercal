@@ -7,13 +7,13 @@ import SiteOpeningPrompt from "@/components/SiteOpeningPrompt";
 
 const allNavItems = [
 { path: "/", label: "דשבורד", icon: LayoutDashboard, roles: ["admin"] },
-{ path: "/orders", label: "הזמנות", icon: ClipboardList, roles: ["admin"] },
-{ path: "/schedule", label: "לוח זמנים", icon: CalendarDays, roles: ["admin", "אחמ\"ש", "מדריך"] },
+{ path: "/orders", label: "הזמנות", icon: ClipboardList, roles: ["admin", "אחמ\"ש", "קופאי"] },
+{ path: "/schedule", label: "לוח זמנים", icon: CalendarDays, roles: ["admin", "אחמ\"ש", "מדריך", "קופאי"] },
 { path: "/activities", label: "פעילויות", icon: Mountain, roles: ["admin"] },
-{ path: "/instructors", label: "מדריכים", icon: Users, roles: ["admin", "אחמ\"ש"] },
+{ path: "/instructors", label: "מדריכים", icon: Users, roles: ["admin"] },
 { path: "/quotes", label: "הצעות מחיר", icon: FileText, roles: ["admin"] },
 { path: "/leads", label: "לידים", icon: UserSearch, roles: ["admin"] },
-{ path: "/cashregister", label: "קופה", icon: MonitorSmartphone, roles: ["admin"] },
+{ path: "/cashregister", label: "קופה", icon: MonitorSmartphone, roles: ["admin", "אחמ\"ש", "קופאי"] },
 { path: "/sales-report", label: "דוח קופה", icon: BarChart2, roles: ["admin"] },
 { path: "/pricing", label: "תמחור", icon: Calculator, roles: ["admin"] },
 { path: "/tasks", label: "משימות", icon: ListTodo, roles: ["admin"] },

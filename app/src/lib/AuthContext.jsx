@@ -5,6 +5,7 @@ import { supabase } from '@/api/supabaseClient';
 const ROLE_DISPLAY = {
   admin: 'admin',
   operations: 'אחמ"ש',
+  cashier: 'קופאי',
   instructor: 'מדריך',
 };
 
