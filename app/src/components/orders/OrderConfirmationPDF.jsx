@@ -35,7 +35,28 @@ import {
 // Same-origin → html2canvas captures it cleanly; no Base44 runtime dependency.
 const LOGO_SRC = "/shafan-logo.jpg";
 
+// Fixed html2canvas scale. Lowered from 2 → 1.5 to cut output size and reduce
+// per-machine variance (high-DPI/zoom can blow a scale:2 canvas past memory
+// limits, yielding a blank/oversized capture). 1.5 keeps text crisp.
+const CAPTURE_SCALE = 1.5;
+
 const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((e || "").trim());
+
+// Preload + decode an image so html2canvas never captures it mid-decode (a
+// not-yet-decoded logo renders blank on cold-cache/slow machines). Resolves on
+// error too — a missing logo must not block the whole PDF. Same src as the DOM
+// <img>, so the browser cache is shared and the on-screen copy is decoded too.
+const ensureImageReady = (src) =>
+  new Promise((resolve) => {
+    const img = new Image();
+    const done = () => resolve();
+    img.onload = () => {
+      if (img.decode) img.decode().then(done).catch(done);
+      else done();
+    };
+    img.onerror = done;
+    img.src = src;
+  });
 
 // Shared section chrome — header band (logo right, title left) matching the
 // quote-PDF look, used by both sections so they read as one document.
@@ -80,11 +101,19 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   // across pages — this avoids the broken / near-empty trailing page. Each
   // section starts on its own page, so Section B (safety) always begins fresh.
   const addSection = async (pdf, el, isFirst) => {
+    // Pin the capture box to the element's own width so the rasterized layout
+    // doesn't shift with viewport/zoom (a source of per-machine variance).
+    const captureWidth = el.offsetWidth;
     const canvas = await html2canvas(el, {
-      scale: 2,
+      scale: CAPTURE_SCALE,
       useCORS: true,
       backgroundColor: "#ffffff",
+      width: captureWidth,
+      windowWidth: captureWidth,
     });
+    console.info(
+      `OrderConfirmationPDF: section captured — ${canvas.width}×${canvas.height}px @scale ${CAPTURE_SCALE} (box ${captureWidth}px)`
+    );
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     let imgW = pageW;
@@ -107,9 +136,13 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     // Wait for web fonts (Heebo) before rasterizing — html2canvas snapshots the
     // live DOM, and capturing mid font-swap produces broken/misaligned Hebrew.
     if (document.fonts?.ready) await document.fonts.ready;
+    // Ensure the logo is fully decoded before capture (blank-logo guard).
+    await ensureImageReady(LOGO_SRC);
+    console.info("OrderConfirmationPDF: fonts + logo ready, building PDF…");
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
     await addSection(pdf, sectionARef.current, true);
     await addSection(pdf, sectionBRef.current, false);
+    console.info("OrderConfirmationPDF: PDF assembled (2 sections)");
     return pdf;
   };
 
@@ -122,7 +155,8 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
       pdf.save(fileName);
     } catch (err) {
       console.error("OrderConfirmationPDF download error:", err);
-      toast.error("שגיאה ביצירת ה-PDF");
+      const detail = err?.message || String(err);
+      toast.error(`שגיאה ביצירת ה-PDF: ${detail}`);
     } finally {
       setBusy(false);
     }
@@ -148,6 +182,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
       console.info(`OrderConfirmationPDF: PDF built — base64 ${pdfBase64.length} chars (~${kb} KB)`);
 
       step = "שליחה לשרת";
+      console.info(`OrderConfirmationPDF: invoking send-order-doc → ${recipientEmail}`);
       const { data, error } = await supabase.functions.invoke("send-order-doc", {
         body: {
           to: recipientEmail,
