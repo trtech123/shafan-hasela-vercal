@@ -1,10 +1,12 @@
 import { Minus, Plus, Trash2, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import LinkOrderSearch from "@/components/cashregister/LinkOrderSearch";
 
 const DISCOUNT_TYPES = ["הנחת עובד", "הנחת נכה", "הנחה כללית"];
 
 export default function Cart({
   items, subtotal, discount, discountAmount, discountValid, total,
+  linkedOrder, onLinkOrder,
   onSetDiscount, onUpdateQty, onUpdatePrice, onRemove, onCheckout,
 }) {
   const selectType = (type) => {
@@ -72,6 +74,15 @@ export default function Cart({
       </div>
 
       <div className="p-4 border-t border-slate-700 space-y-3">
+        {/* Link to existing order/customer */}
+        {items.length > 0 && (
+          <LinkOrderSearch
+            linkedOrder={linkedOrder}
+            onSelect={onLinkOrder}
+            onClear={() => onLinkOrder(null)}
+          />
+        )}
+
         {/* Discount controls */}
         {items.length > 0 && (
           <div className="space-y-2">

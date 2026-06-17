@@ -81,6 +81,16 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
             <span className="font-bold text-2xl text-emerald-700">{receipt.total.toLocaleString()}₪</span>
           </div>
 
+          {/* Linked order / customer — printed on the receipt. */}
+          {receipt.linkedOrder && (
+            <div className="border-t border-slate-200 pt-3 text-sm">
+              <p className="font-semibold text-slate-700">משויך להזמנה</p>
+              <div className="flex justify-between"><span className="text-slate-500">לקוח</span><span>{receipt.linkedOrder.client_name}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">הזמנה</span><span>{receipt.linkedOrder.order_number}</span></div>
+              {receipt.linkedOrder.organization && <div className="flex justify-between"><span className="text-slate-500">ארגון</span><span>{receipt.linkedOrder.organization}</span></div>}
+            </div>
+          )}
+
           {/* Split payment breakdown — printed on the receipt. */}
           {receipt.paymentDetails?.lines && (
             <div className="border-t border-slate-200 pt-3 text-sm space-y-1">

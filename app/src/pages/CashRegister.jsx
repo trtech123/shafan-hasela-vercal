@@ -18,6 +18,8 @@ export default function CashRegister() {
   const [receiptData, setReceiptData] = useState(null);
   // null = no discount; else { type, mode: 'percentage'|'fixed', value }
   const [discount, setDiscount] = useState(null);
+  // null = standalone sale; else { id, order_number, client_name, client_phone, organization }
+  const [linkedOrder, setLinkedOrder] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -99,6 +101,10 @@ export default function CashRegister() {
         discount: discount
           ? { type: discount.type, mode: discount.mode, value: discountValue, original_total: subtotal, final_total: total }
           : null,
+        order_id: linkedOrder?.id || null,
+        linked_order_info: linkedOrder
+          ? { order_number: linkedOrder.order_number, client_name: linkedOrder.client_name, client_phone: linkedOrder.client_phone, organization: linkedOrder.organization || "" }
+          : null,
         sale_date: new Date().toISOString().slice(0, 10),
       })
       .select()
@@ -119,6 +125,7 @@ export default function CashRegister() {
       method,
       paymentDetails,
       discount: discount ? { type: discount.type, amount: discountAmount, original_total: subtotal } : null,
+      linkedOrder,
       timestamp: new Date(),
       receiptNumber,
     };
@@ -132,6 +139,7 @@ export default function CashRegister() {
     setPaymentMethod(null);
     setReceiptData(null);
     setDiscount(null);
+    setLinkedOrder(null);
   };
 
   if (loading) {
@@ -173,6 +181,8 @@ export default function CashRegister() {
           discountAmount={discountAmount}
           discountValid={discountValid}
           total={total}
+          linkedOrder={linkedOrder}
+          onLinkOrder={setLinkedOrder}
           onSetDiscount={setDiscount}
           onUpdateQty={updateQty}
           onUpdatePrice={updatePrice}

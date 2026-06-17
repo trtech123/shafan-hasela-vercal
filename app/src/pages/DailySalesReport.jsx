@@ -108,7 +108,7 @@ export default function DailySalesReport() {
 
     // Sheet 2: all sales detail
     const detailRows = [
-      ["תאריך", "מספר קבלה", "אמצעי תשלום", "סכום (₪)", "פריטים", "פיצול תשלום", "מספר צ'ק", "בנק", "תאריך פירעון", "סוג הנחה", "אופן הנחה", "ערך הנחה", "סכום מקורי (₪)"],
+      ["תאריך", "מספר קבלה", "אמצעי תשלום", "סכום (₪)", "פריטים", "פיצול תשלום", "מספר צ'ק", "בנק", "תאריך פירעון", "סוג הנחה", "אופן הנחה", "ערך הנחה", "סכום מקורי (₪)", "הזמנה משויכת", "לקוח משויך", "ארגון משויך"],
       ...weekSales.map(s => {
         const lines = s.payment_details?.lines;
         const splitText = Array.isArray(lines)
@@ -131,6 +131,9 @@ export default function DailySalesReport() {
           s.discount ? (s.discount.mode === "percentage" ? "אחוז" : "סכום קבוע") : "",
           s.discount?.value ?? "",
           s.discount?.original_total ?? "",
+          s.linked_order_info?.order_number || "",
+          s.linked_order_info?.client_name || "",
+          s.linked_order_info?.organization || "",
         ];
       }),
     ];
@@ -291,6 +294,12 @@ export default function DailySalesReport() {
                     <span className="text-sm text-muted-foreground">{(sale.items || []).map(i => i.name).join(", ")}</span>
                     <span className="font-bold">{sale.total.toLocaleString()}₪</span>
                   </div>
+                  {sale.linked_order_info && (
+                    <p className="text-xs text-indigo-700">
+                      🔗 {sale.linked_order_info.client_name} · {sale.linked_order_info.order_number}
+                      {sale.linked_order_info.organization ? ` · ${sale.linked_order_info.organization}` : ""}
+                    </p>
+                  )}
                   {sale.discount && (
                     <p className="text-xs text-amber-700">
                       {sale.discount.type}: -{Number((sale.discount.original_total || 0) - (sale.discount.final_total ?? sale.total)).toLocaleString()}₪
