@@ -108,7 +108,7 @@ export default function DailySalesReport() {
 
     // Sheet 2: all sales detail
     const detailRows = [
-      ["תאריך", "מספר קבלה", "אמצעי תשלום", "סכום (₪)", "פריטים", "פיצול תשלום", "מספר צ'ק", "בנק", "תאריך פירעון"],
+      ["תאריך", "מספר קבלה", "אמצעי תשלום", "סכום (₪)", "פריטים", "פיצול תשלום", "מספר צ'ק", "בנק", "תאריך פירעון", "סוג הנחה", "אופן הנחה", "ערך הנחה", "סכום מקורי (₪)"],
       ...weekSales.map(s => {
         const lines = s.payment_details?.lines;
         const splitText = Array.isArray(lines)
@@ -127,6 +127,10 @@ export default function DailySalesReport() {
           chk?.check_number || "",
           chk?.bank || "",
           chk?.due_date || "",
+          s.discount?.type || "",
+          s.discount ? (s.discount.mode === "percentage" ? "אחוז" : "סכום קבוע") : "",
+          s.discount?.value ?? "",
+          s.discount?.original_total ?? "",
         ];
       }),
     ];
@@ -287,6 +291,13 @@ export default function DailySalesReport() {
                     <span className="text-sm text-muted-foreground">{(sale.items || []).map(i => i.name).join(", ")}</span>
                     <span className="font-bold">{sale.total.toLocaleString()}₪</span>
                   </div>
+                  {sale.discount && (
+                    <p className="text-xs text-amber-700">
+                      {sale.discount.type}: -{Number((sale.discount.original_total || 0) - (sale.discount.final_total ?? sale.total)).toLocaleString()}₪
+                      {sale.discount.mode === "percentage" ? ` (${sale.discount.value}%)` : ""}
+                      {sale.discount.original_total ? ` · מקורי ${Number(sale.discount.original_total).toLocaleString()}₪` : ""}
+                    </p>
+                  )}
                   {sale.payment_details?.lines && (
                     <p className="text-xs text-muted-foreground">
                       {sale.payment_details.lines.map((l, i) => `${l.method} ${Number(l.amount).toLocaleString()}₪`).join(" · ")}

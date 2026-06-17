@@ -1,7 +1,18 @@
 import { Minus, Plus, Trash2, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export default function Cart({ items, total, onUpdateQty, onUpdatePrice, onRemove, onCheckout }) {
+const DISCOUNT_TYPES = ["הנחת עובד", "הנחת נכה", "הנחה כללית"];
+
+export default function Cart({
+  items, subtotal, discount, discountAmount, discountValid, total,
+  onSetDiscount, onUpdateQty, onUpdatePrice, onRemove, onCheckout,
+}) {
+  const selectType = (type) => {
+    if (discount?.type === type) onSetDiscount(null); // toggle off
+    else onSetDiscount({ type, mode: discount?.mode || "percentage", value: discount?.value ?? "" });
+  };
+  const setMode = (mode) => discount && onSetDiscount({ ...discount, mode });
+  const setValue = (value) => discount && onSetDiscount({ ...discount, value });
   return (
     <>
       <div className="p-4 border-b border-slate-700 flex items-center gap-2">
@@ -61,13 +72,75 @@ export default function Cart({ items, total, onUpdateQty, onUpdatePrice, onRemov
       </div>
 
       <div className="p-4 border-t border-slate-700 space-y-3">
+        {/* Discount controls */}
+        {items.length > 0 && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-1.5">
+              {DISCOUNT_TYPES.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => selectType(t)}
+                  className={`text-xs py-1.5 rounded-lg border transition-colors ${
+                    discount?.type === t
+                      ? "bg-amber-500/20 border-amber-500 text-amber-200"
+                      : "border-slate-600 text-slate-300 hover:bg-slate-700"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            {discount && (
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-lg overflow-hidden border border-slate-600">
+                  <button
+                    onClick={() => setMode("percentage")}
+                    className={`px-3 py-1.5 text-sm ${discount.mode === "percentage" ? "bg-amber-500 text-white" : "bg-slate-700 text-slate-300"}`}
+                  >%</button>
+                  <button
+                    onClick={() => setMode("fixed")}
+                    className={`px-3 py-1.5 text-sm ${discount.mode === "fixed" ? "bg-amber-500 text-white" : "bg-slate-700 text-slate-300"}`}
+                  >₪</button>
+                </div>
+                <input
+                  type="number"
+                  value={discount.value}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder={discount.mode === "percentage" ? "אחוז" : "סכום"}
+                  className="flex-1 h-9 bg-slate-700 rounded-lg px-3 text-sm border border-slate-600 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            )}
+
+            {discount && !discountValid && (
+              <p className="text-xs text-rose-400">
+                {discount.mode === "percentage" ? "אחוז חייב להיות בין 0 ל-100" : "הנחה לא יכולה לעלות על סכום הסל"}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Totals */}
+        {discount && discountValid && discountAmount > 0 && (
+          <div className="space-y-1 text-sm">
+            <div className="flex items-center justify-between text-slate-400">
+              <span>סכום ביניים</span>
+              <span>{subtotal.toLocaleString()}₪</span>
+            </div>
+            <div className="flex items-center justify-between text-amber-300">
+              <span>{discount.type}</span>
+              <span>-{discountAmount.toLocaleString()}₪</span>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-slate-400">סה״כ לתשלום</span>
           <span className="text-2xl font-bold text-emerald-300">{total.toLocaleString()}₪</span>
         </div>
         <Button
           onClick={onCheckout}
-          disabled={items.length === 0}
+          disabled={items.length === 0 || !discountValid}
           className="w-full h-12 text-lg font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl disabled:opacity-40"
         >
           המשך לתשלום →

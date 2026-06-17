@@ -16,6 +16,8 @@ export default function CashRegister() {
   const [screen, setScreen] = useState("menu");
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [receiptData, setReceiptData] = useState(null);
+  // null = no discount; else { type, mode: 'percentage'|'fixed', value }
+  const [discount, setDiscount] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -63,7 +65,22 @@ export default function CashRegister() {
 
   const removeItem = (id) => setCartItems(prev => prev.filter(i => i.id !== id));
 
-  const total = cartItems.reduce((s, i) => s + i.customPrice * i.qty, 0);
+  const subtotal = cartItems.reduce((s, i) => s + i.customPrice * i.qty, 0);
+
+  // Discount math + validation. discountValid gates checkout.
+  const discountValue = Number(discount?.value) || 0;
+  const rawDiscountAmount = !discount
+    ? 0
+    : discount.mode === "percentage"
+      ? Math.round(subtotal * (discountValue / 100))
+      : discountValue;
+  const discountValid =
+    !discount ||
+    (discount.mode === "percentage"
+      ? discountValue >= 0 && discountValue <= 100
+      : discountValue >= 0 && discountValue <= subtotal);
+  const discountAmount = discountValid ? rawDiscountAmount : 0;
+  const total = Math.max(0, subtotal - discountAmount); // final, post-discount
 
   const handlePaymentConfirm = async (method, paymentDetails = null) => {
     setPaymentMethod(method);
@@ -79,6 +96,9 @@ export default function CashRegister() {
         total,
         method,
         payment_details: paymentDetails,
+        discount: discount
+          ? { type: discount.type, mode: discount.mode, value: discountValue, original_total: subtotal, final_total: total }
+          : null,
         sale_date: new Date().toISOString().slice(0, 10),
       })
       .select()
@@ -98,6 +118,7 @@ export default function CashRegister() {
       total,
       method,
       paymentDetails,
+      discount: discount ? { type: discount.type, amount: discountAmount, original_total: subtotal } : null,
       timestamp: new Date(),
       receiptNumber,
     };
@@ -110,6 +131,7 @@ export default function CashRegister() {
     setScreen("menu");
     setPaymentMethod(null);
     setReceiptData(null);
+    setDiscount(null);
   };
 
   if (loading) {
@@ -146,7 +168,12 @@ export default function CashRegister() {
       <div className="w-80 border-r border-slate-200 flex flex-col bg-slate-50">
         <Cart
           items={cartItems}
+          subtotal={subtotal}
+          discount={discount}
+          discountAmount={discountAmount}
+          discountValid={discountValid}
           total={total}
+          onSetDiscount={setDiscount}
           onUpdateQty={updateQty}
           onUpdatePrice={updatePrice}
           onRemove={removeItem}

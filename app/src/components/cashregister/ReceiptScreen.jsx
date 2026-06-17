@@ -62,6 +62,20 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
               ))}
             </tbody>
           </table>
+          {/* Discount summary — original / discount / final. */}
+          {receipt.discount && receipt.discount.amount > 0 && (
+            <div className="border-t border-slate-200 pt-3 text-sm space-y-1">
+              <div className="flex justify-between text-slate-500">
+                <span>סכום מקורי</span>
+                <span>{Number(receipt.discount.original_total).toLocaleString()}₪</span>
+              </div>
+              <div className="flex justify-between text-rose-600">
+                <span>{receipt.discount.type}</span>
+                <span>-{Number(receipt.discount.amount).toLocaleString()}₪</span>
+              </div>
+            </div>
+          )}
+
           <div className="border-t-2 border-slate-900 pt-3 flex justify-between items-center">
             <span className="font-bold text-lg">סה״כ לתשלום</span>
             <span className="font-bold text-2xl text-emerald-700">{receipt.total.toLocaleString()}₪</span>
