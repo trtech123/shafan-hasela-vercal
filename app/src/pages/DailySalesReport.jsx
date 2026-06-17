@@ -13,6 +13,7 @@ const METHOD_COLORS = {
   "העברה":      "bg-purple-100 text-purple-800",
   "אפליקציה":   "bg-orange-100 text-orange-800",
   "חשבונית":   "bg-slate-100 text-slate-800",
+  "מפוצל":      "bg-indigo-100 text-indigo-800",
 };
 
 export default function DailySalesReport() {
@@ -71,10 +72,19 @@ export default function DailySalesReport() {
   const weekTotal = weekSales.reduce((s, x) => s + (x.total || 0), 0);
   const weekCount = weekSales.length;
 
+  // Breakdown by ACTUAL payment method: split sales contribute per-line amounts
+  // to each real method, not a lump under "מפוצל". Non-split sales count whole.
   const methodBreakdown = useMemo(() => {
     const map = {};
     weekSales.forEach(s => {
-      map[s.method] = (map[s.method] || 0) + s.total;
+      const lines = s.payment_details?.lines;
+      if (Array.isArray(lines) && lines.length) {
+        lines.forEach(l => {
+          map[l.method] = (map[l.method] || 0) + (Number(l.amount) || 0);
+        });
+      } else {
+        map[s.method] = (map[s.method] || 0) + s.total;
+      }
     });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [weekSales]);
@@ -98,17 +108,27 @@ export default function DailySalesReport() {
 
     // Sheet 2: all sales detail
     const detailRows = [
-      ["תאריך", "מספר קבלה", "אמצעי תשלום", "סכום (₪)", "פריטים", "מספר צ'ק", "בנק", "תאריך פירעון"],
-      ...weekSales.map(s => [
-        s.sale_date,
-        s.receipt_number || "",
-        s.method || "",
-        s.total,
-        (s.items || []).map(i => `${i.name} x${i.qty}`).join(" | "),
-        s.payment_details?.check_number || "",
-        s.payment_details?.bank || "",
-        s.payment_details?.due_date || "",
-      ]),
+      ["תאריך", "מספר קבלה", "אמצעי תשלום", "סכום (₪)", "פריטים", "פיצול תשלום", "מספר צ'ק", "בנק", "תאריך פירעון"],
+      ...weekSales.map(s => {
+        const lines = s.payment_details?.lines;
+        const splitText = Array.isArray(lines)
+          ? lines.map(l => `${l.method} ${Number(l.amount).toLocaleString()}₪`).join(" | ")
+          : "";
+        // Check fields: from the single-check object, or the check line within a split.
+        const checkLine = Array.isArray(lines) ? lines.find(l => l.check_number) : null;
+        const chk = checkLine || (s.payment_details && !lines ? s.payment_details : null);
+        return [
+          s.sale_date,
+          s.receipt_number || "",
+          s.method || "",
+          s.total,
+          (s.items || []).map(i => `${i.name} x${i.qty}`).join(" | "),
+          splitText,
+          chk?.check_number || "",
+          chk?.bank || "",
+          chk?.due_date || "",
+        ];
+      }),
     ];
 
     // Sheet 3: method breakdown
@@ -267,6 +287,11 @@ export default function DailySalesReport() {
                     <span className="text-sm text-muted-foreground">{(sale.items || []).map(i => i.name).join(", ")}</span>
                     <span className="font-bold">{sale.total.toLocaleString()}₪</span>
                   </div>
+                  {sale.payment_details?.lines && (
+                    <p className="text-xs text-muted-foreground">
+                      {sale.payment_details.lines.map((l, i) => `${l.method} ${Number(l.amount).toLocaleString()}₪`).join(" · ")}
+                    </p>
+                  )}
                   {sale.payment_details?.check_number && (
                     <p className="text-xs text-rose-700">
                       צ'ק #{sale.payment_details.check_number}

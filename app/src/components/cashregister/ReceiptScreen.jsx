@@ -67,8 +67,30 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
             <span className="font-bold text-2xl text-emerald-700">{receipt.total.toLocaleString()}₪</span>
           </div>
 
-          {/* Manual payment details (e.g. check) — printed on the receipt. */}
-          {receipt.paymentDetails && (
+          {/* Split payment breakdown — printed on the receipt. */}
+          {receipt.paymentDetails?.lines && (
+            <div className="border-t border-slate-200 pt-3 text-sm space-y-1">
+              <p className="font-semibold text-slate-700">פיצול תשלום</p>
+              {receipt.paymentDetails.lines.map((l, i) => (
+                <div key={i} className="space-y-0.5">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">{l.method}</span>
+                    <span className="font-medium">{Number(l.amount).toLocaleString()}₪</span>
+                  </div>
+                  {l.check_number && (
+                    <div className="text-xs text-slate-400 pr-2">
+                      צ'ק #{l.check_number}
+                      {l.bank ? ` · ${l.bank}` : ""}
+                      {l.due_date ? ` · פירעון ${moment(l.due_date).format("DD/MM/YYYY")}` : ""}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Manual payment details (single check) — printed on the receipt. */}
+          {receipt.paymentDetails && !receipt.paymentDetails.lines && (
             <div className="border-t border-slate-200 pt-3 text-sm space-y-1">
               <p className="font-semibold text-slate-700">פרטי צ'ק</p>
               {receipt.paymentDetails.check_number && <div className="flex justify-between"><span className="text-slate-500">מספר צ'ק</span><span>{receipt.paymentDetails.check_number}</span></div>}
