@@ -11,7 +11,7 @@ import moment from "moment";
 
 // Sites match the orders/quotes/maintenance enum. blocked_slots.site is
 // free TEXT (no CHECK), so the UI is the source of truth for valid values.
-const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח"];
+const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
 
 // Radix Select forbids empty-string `value`; use a sentinel for "all sites"
 // and coerce back to NULL on save (blocked_slots.site nullable).

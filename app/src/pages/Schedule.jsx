@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
-const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח"];
+const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
 const FILTER_BUTTONS = [
   { key: "all",         label: "הכל",       color: "bg-slate-100 text-slate-700 border-slate-300" },
   { key: "orders",      label: "📅 הזמנות", color: "bg-blue-100 text-blue-800 border-blue-300" },

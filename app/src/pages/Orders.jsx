@@ -18,7 +18,7 @@ import {
 import { useAuth } from "@/lib/AuthContext";
 import { toast } from "sonner";
 
-const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח"];
+const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
 
 export default function Orders() {
   const { user } = useAuth();

@@ -10,7 +10,7 @@ import { Plus, Minus, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח"];
+const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
 
 const emptyForm = {
   client_name: "", client_phone: "", client_email: "", organization: "",

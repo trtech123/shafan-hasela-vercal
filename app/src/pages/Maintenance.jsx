@@ -12,7 +12,7 @@ import { Plus, Pencil, Trash2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import moment from "moment";
 
-const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח"];
+const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
 const CATEGORIES = ["בטיחות", "ציוד", "מתקנים", "ניקיון", "כללי"];
 const PRIORITIES = ["גבוהה", "בינונית", "נמוכה"];
 const STATUSES = ["פתוחה", "בטיפול", "הושלמה"];
