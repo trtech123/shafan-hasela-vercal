@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 const METHOD_COLORS = {
   "מזומן":      "bg-emerald-100 text-emerald-800",
   "אשראי":      "bg-blue-100 text-blue-800",
+  "צ'ק":        "bg-rose-100 text-rose-800",
   "העברה":      "bg-purple-100 text-purple-800",
   "אפליקציה":   "bg-orange-100 text-orange-800",
   "חשבונית":   "bg-slate-100 text-slate-800",
@@ -97,13 +98,16 @@ export default function DailySalesReport() {
 
     // Sheet 2: all sales detail
     const detailRows = [
-      ["תאריך", "מספר קבלה", "אמצעי תשלום", "סכום (₪)", "פריטים"],
+      ["תאריך", "מספר קבלה", "אמצעי תשלום", "סכום (₪)", "פריטים", "מספר צ'ק", "בנק", "תאריך פירעון"],
       ...weekSales.map(s => [
         s.sale_date,
         s.receipt_number || "",
         s.method || "",
         s.total,
         (s.items || []).map(i => `${i.name} x${i.qty}`).join(" | "),
+        s.payment_details?.check_number || "",
+        s.payment_details?.bank || "",
+        s.payment_details?.due_date || "",
       ]),
     ];
 
@@ -263,6 +267,13 @@ export default function DailySalesReport() {
                     <span className="text-sm text-muted-foreground">{(sale.items || []).map(i => i.name).join(", ")}</span>
                     <span className="font-bold">{sale.total.toLocaleString()}₪</span>
                   </div>
+                  {sale.payment_details?.check_number && (
+                    <p className="text-xs text-rose-700">
+                      צ'ק #{sale.payment_details.check_number}
+                      {sale.payment_details.bank ? ` · ${sale.payment_details.bank}` : ""}
+                      {sale.payment_details.due_date ? ` · פירעון ${moment(sale.payment_details.due_date).format("DD/MM/YYYY")}` : ""}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

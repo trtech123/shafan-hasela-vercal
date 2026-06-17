@@ -66,6 +66,22 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
             <span className="font-bold text-lg">סה״כ לתשלום</span>
             <span className="font-bold text-2xl text-emerald-700">{receipt.total.toLocaleString()}₪</span>
           </div>
+
+          {/* Manual payment details (e.g. check) — printed on the receipt. */}
+          {receipt.paymentDetails && (
+            <div className="border-t border-slate-200 pt-3 text-sm space-y-1">
+              <p className="font-semibold text-slate-700">פרטי צ'ק</p>
+              {receipt.paymentDetails.check_number && <div className="flex justify-between"><span className="text-slate-500">מספר צ'ק</span><span>{receipt.paymentDetails.check_number}</span></div>}
+              {receipt.paymentDetails.bank && <div className="flex justify-between"><span className="text-slate-500">בנק</span><span>{receipt.paymentDetails.bank}</span></div>}
+              {receipt.paymentDetails.branch && <div className="flex justify-between"><span className="text-slate-500">סניף</span><span>{receipt.paymentDetails.branch}</span></div>}
+              {receipt.paymentDetails.account_number && <div className="flex justify-between"><span className="text-slate-500">חשבון</span><span>{receipt.paymentDetails.account_number}</span></div>}
+              {receipt.paymentDetails.account_holder && <div className="flex justify-between"><span className="text-slate-500">בעל החשבון</span><span>{receipt.paymentDetails.account_holder}</span></div>}
+              {receipt.paymentDetails.due_date && <div className="flex justify-between"><span className="text-slate-500">תאריך פירעון</span><span>{moment(receipt.paymentDetails.due_date).format("DD/MM/YYYY")}</span></div>}
+              {receipt.paymentDetails.amount != null && <div className="flex justify-between"><span className="text-slate-500">סכום צ'ק</span><span>{Number(receipt.paymentDetails.amount).toLocaleString()}₪</span></div>}
+              {receipt.paymentDetails.notes && <div className="flex justify-between"><span className="text-slate-500">הערות</span><span>{receipt.paymentDetails.notes}</span></div>}
+            </div>
+          )}
+
           <p className="text-center text-slate-400 text-xs">תשלום ב{receipt.method} | אדוונצ׳ר — תודה!</p>
         </div>
 
