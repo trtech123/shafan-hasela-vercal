@@ -19,6 +19,7 @@ import CashRegister from './pages/CashRegister';
 import DailySalesReport from './pages/DailySalesReport';
 import Pricing from './pages/Pricing';
 import Users from './pages/Users';
+import Products from './pages/Products';
 import Login from './pages/Login';
 
 const AuthenticatedApp = () => {
@@ -56,6 +57,7 @@ const AuthenticatedApp = () => {
         <Route path="/sales-report" element={<DailySalesReport />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/products" element={<Products />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>
