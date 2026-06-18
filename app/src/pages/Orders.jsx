@@ -3,8 +3,9 @@ import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Pencil, Trash2, Mail, FileText, CheckCircle2, Link2, Lock } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Mail, FileText, CheckCircle2, Link2, Lock, CalendarClock } from "lucide-react";
 import InstructorEmailDialog from "../components/orders/InstructorEmailDialog";
+import InstructorDailyDialog from "../components/orders/InstructorDailyDialog";
 import OrderDocumentDialog from "../components/orders/OrderDocumentDialog";
 import OrderConfirmationPDF from "../components/orders/OrderConfirmationPDF";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
@@ -39,6 +40,7 @@ export default function Orders() {
   const [editingOrder, setEditingOrder] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [emailOrder, setEmailOrder] = useState(null);
+  const [dailyOrder, setDailyOrder] = useState(null); // triggers the daily-summary dialog
   const [docOrder, setDocOrder] = useState(null); // legacy text doc — kept as fallback
   const [pdfOrder, setPdfOrder] = useState(null); // combined order-confirmation PDF
   // Order being prepared for "lock this slot" — null when no confirm dialog open.
@@ -128,6 +130,25 @@ export default function Orders() {
     }
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, instructor_notified: true } : o));
   };
+
+  // Mark every order in a daily summary as notified in one update.
+  const markNotifiedMany = async (orderIds) => {
+    if (!orderIds?.length) return;
+    const { error } = await supabase
+      .from('orders')
+      .update({ instructor_notified: true })
+      .in('id', orderIds);
+    if (error) {
+      console.error('mark notified (batch) error:', error);
+      return;
+    }
+    setOrders(prev => prev.map(o => orderIds.includes(o.id) ? { ...o, instructor_notified: true } : o));
+  };
+
+  // All orders for the same instructor + date as the triggering order.
+  const dailyOrders = dailyOrder
+    ? orders.filter(o => o.instructor_id === dailyOrder.instructor_id && o.activity_date === dailyOrder.activity_date)
+    : [];
 
   // Lock action is only meaningful when the order has a precise slot:
   // a date, a site, and a start/end time pair. Without these, the resulting
@@ -305,6 +326,11 @@ export default function Orders() {
                       <Mail className="w-4 h-4 text-blue-400" />
                     </button>
                   )}
+                  {order.instructor_id && (
+                    <button onClick={() => setDailyOrder(order)} className="p-2 hover:bg-indigo-50 rounded-lg transition-colors" title="סיכום יומי למדריך">
+                      <CalendarClock className="w-4 h-4 text-indigo-400" />
+                    </button>
+                  )}
                   {isAdminOrOps && canLockOrder(order) && (
                     <button onClick={() => setLockingOrder(order)} className="p-2 hover:bg-red-50 rounded-lg transition-colors" title="חסום שעות אלו לאחרים">
                       <Lock className="w-4 h-4 text-red-500" />
@@ -387,6 +413,11 @@ export default function Orders() {
                             <Mail className="w-4 h-4 text-blue-400" />
                           </button>
                         )}
+                        {order.instructor_id && (
+                          <button onClick={() => setDailyOrder(order)} className="p-1.5 hover:bg-indigo-50 rounded-lg transition-colors" title="סיכום יומי למדריך">
+                            <CalendarClock className="w-4 h-4 text-indigo-400" />
+                          </button>
+                        )}
                         {isAdminOrOps && canLockOrder(order) && (
                           <button onClick={() => setLockingOrder(order)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" title="חסום שעות אלו לאחרים">
                             <Lock className="w-4 h-4 text-red-500" />
@@ -414,6 +445,16 @@ export default function Orders() {
         instructor={instructors.find(i => i.id === emailOrder?.instructor_id)}
         activity={activities.find(a => a.id === emailOrder?.activity_id)}
         onNotified={() => emailOrder && markNotified(emailOrder.id)}
+      />
+
+      <InstructorDailyDialog
+        open={!!dailyOrder}
+        onClose={() => setDailyOrder(null)}
+        instructor={instructors.find(i => i.id === dailyOrder?.instructor_id)}
+        date={dailyOrder?.activity_date}
+        dayOrders={dailyOrders}
+        activities={activities}
+        onNotifiedAll={() => markNotifiedMany(dailyOrders.map(o => o.id))}
       />
 
       {/* Combined order-confirmation PDF (Section A: confirmation + terms + signature, Section B: safety). */}
