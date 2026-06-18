@@ -3,40 +3,40 @@
 You are continuing work on **Shafan Hasela / Adventure Ops Pro**. Read `PROGRESS.md` (root) first, then `CLAUDE.md`. This block is the quick-start.
 
 ## Project overview
-Hebrew RTL operations app for an Israeli adventure-activities business (sites: עכו / טבריה / נוף הגליל / שטח, plus ויה פרטה for leads). Original Base44 MVP was recovered onto a Supabase backend. Now in post-MVP feature work, gated stage-by-stage.
+Hebrew RTL operations app for an Israeli adventure-activities business. Original Base44 MVP recovered onto a Supabase backend; now in post-MVP feature work, gated stage-by-stage.
 
 ## Infra / deployment
-- Repo root: `C:\Users\nadav\OneDrive\Desktop\dev-projs\shafan-hasela\shafan-hasela-vercal` (Windows/PowerShell; Bash also available).
-- Frontend: `app/` (Vite + React, JS). Dev `npm run dev --prefix app`; build `npm run build --prefix app`.
-- GitHub: `origin` = `https://github.com/trtech123/shafan-hasela-vercal.git`, branch `main` (commit directly to main). Vercel auto-deploys on push to main.
-- Supabase project ref `divzxsynczeifkpnpupl`. CLI is **`npx supabase`** only (no global; no `functions logs` subcommand → use Dashboard logs). Migrations applied manually in the SQL Editor; latest = `014`.
-- Secrets never in repo. Edge Function secrets (`GMAIL_USER`, `GMAIL_APP_PASSWORD`) set via Dashboard. Owner runs `npx supabase` deploys/logins themselves (the agent shell lacks `SUPABASE_ACCESS_TOKEN`).
+- Repo root: `C:\Users\nadav\OneDrive\Desktop\dev-projs\shafan-hasela\shafan-hasela-vercal` (Windows/PowerShell; Bash tool = real bash).
+- Frontend: `app/` (Vite + React, JS). Dev `npm run dev --prefix app`; build `npx vite build` in `app/`.
+- GitHub: `origin` = `trtech123/shafan-hasela-vercal`, branch `main` (commit direct to main). Vercel auto-deploys on push.
+- Supabase ref `divzxsynczeifkpnpupl`. CLI = `npx supabase` only. **Migrations applied manually by the owner in the SQL Editor; latest = `020`.** Edge Function secrets via Dashboard. Owner runs deploys/migrations themselves (agent shell lacks `SUPABASE_ACCESS_TOKEN`).
+- Secrets never in repo.
 
-## Current production state (all shipped + pushed)
-- **Order confirmation PDF** (`OrderConfirmationPDF.jsx`): one combined PDF — Section A (confirmation + fixed terms + signature, real local logo `app/public/shafan-logo.jpg`, itemized line, `כולל מע"מ`, mobile contact) + Section B (safety/health declaration). Download + WhatsApp-text + email.
-- **Email delivery** (Edge Function `send-order-doc`): client PDF → base64 → JWT-secured function → **Gmail SMTP via `npm:nodemailer`**, sender `שפן הסלע <Info.shafan@gmail.com>`, recipient `order.client_email`. Working in production.
-- **Roles/permissions**: roles `admin` / `operations`(אחמ"ש) / `cashier`(קופאי) / `instructor`(compat). Menu: admin=all; אחמ"ש=schedule+cashregister+orders+maintenance; קופאי=schedule+cashregister+orders. RLS via `is_cashier()` (orders + sales). For the business, מדריך = אחמ"ש = `operations`.
-- **Internal order notes**: `orders.internal_notes` — staff-only, shown in OrderForm/Orders/Schedule, **never** in PDF/email/WhatsApp.
-- **Site-opening prompt**: `נוהל פתיחת אתר` modal, every login, **אחמ"ש only** (owner's choice), two Google-Form buttons.
+## Operating rhythm (important — follow exactly)
+- **One feature per task, gated.** For each: read-only review → implement → `npx vite build` (expect EXIT=0) → report files changed + verify checklist.
+- **If a migration is needed: STOP before push.** Give the owner the SQL + verification queries. They apply it, then say "commit and push" → you commit (one feature per commit) + push + report `git status -sb` + latest commit.
+- **If no migration: build then commit + push** (still per the task's instruction).
+- Migrations **must be idempotent**: `CREATE TABLE IF NOT EXISTS`, `DROP TRIGGER/POLICY IF EXISTS` before CREATE, seeds `ON CONFLICT DO NOTHING`. (019 failed once without this.)
+- **Commit messages via Bash tool**: use multiple `-m` flags. NEVER `@'...'@` (that's PowerShell; bash injects a literal `@`).
+- Verification I can do = build EXIT=0 + dev boot HTTP 200. Interactive click-through + migration apply = owner's.
 
-## Completed stages
-Base44→Supabase recovery (all 7 phases) → data cutover → quick-win UI → availability blocking → Israeli holidays → leads enhancements → order-confirmation PDF (Phase B) → Gmail SMTP email (Phase C) → permissions/cashier + internal notes (Phase D). All in `PROGRESS.md`.
+## Current production state (all shipped + pushed, latest commit `37734d9`)
+- **Roles**: admin / operations(אחמ"ש) / cashier(קופאי) / instructor(compat). Admin-only pages redirect non-admins. RLS via `is_admin()`/`is_admin_or_ops()`/`is_cashier()`.
+- **Admin screens**: `/users` (create via `create-user` Edge Fn, delete via `delete-user`, inline role edit, self-demotion blocked), `/products` (CRUD + image, sites), `/templates` (editable message bodies — storage+editor only, NOT wired to sending). See memory `admin-screens`.
+- **Cash register** (`/cashregister`): check payment, split payments, discounts, link-sale-to-order. All in `sales` JSONB columns (`payment_details`, `discount`, `order_id`+`linked_order_info`); `sales.total`=final. Surfaces on receipt + DailySalesReport + CSV. See memory `pos-cash-register`.
+- **Sites**: עכו/טבריה/נוף הגליל/שטח/פודטראק/קפה אקסטרים (+ויה פרטה on leads).
+- **Order PDF + Gmail SMTP email** (`send-order-doc`, `Info.shafan@gmail.com`), **internal order notes**, **site-opening prompt** (אחמ"ש every login), **instructor invites** (per-activity + new daily summary `InstructorDailyDialog`).
 
-## Pending / next
-- ✅ **DONE (Phase E, 2026-06-17): admin user management.** `/users` (`app/src/pages/Users.jsx`, admin-only) + service-role Edge Function `create-user` (JWT-secured, admin-gated, `SUPABASE_SERVICE_ROLE_KEY` server-side only). List + create + inline role edit; UI roles admin/operations/cashier (instructor hidden); self-demotion blocked; no delete. Deploy: `npx supabase functions deploy create-user`. Follow-ups: user delete/disable, password reset.
-- **Deferred bugfix:** PDF/email client-machine non-determinism (html2canvas fonts/canvas/DPI) — see memory `pdf-email-reliability-bug`. Owner commit `b791ad9` may already address part of it — review first.
-- WhatsApp document send (Green API); verified Resend domain (optional); DB sent-tracking.
+## Pending / next (each its own gated task — confirm before starting)
+- **Open follow-ups:** wire Task 12 templates into actual sending (placeholder substitution); add a Schedule-side entry for the instructor daily summary (Schedule loads orders+profiles but not the `instructors` table).
+- **Postponed — do NOT start without explicit ask:** external ticketing/Carousel API, payment gateway, WhatsApp PDF (file) delivery.
+- **Deferred:** verified Resend domain, DB email sent-tracking.
 
-## Important business rules / constraints
-- Hebrew RTL throughout — never translate UI strings to English.
-- `orders.notes` is **customer-facing** (prints in PDF); `orders.internal_notes` is **staff-only** — keep separate.
-- Never put secrets in repo/PROGRESS/CLAUDE or inline on CLI commands.
-- Phases are gated: do ONE stage, run build, report, wait for approval. Never chain stages or commit/push without being asked.
-- `supabase/.temp/` is git-ignored (CLI cache).
+## Business rules / constraints
+- Hebrew RTL throughout — never translate UI strings.
+- `orders.notes` customer-facing; `orders.internal_notes` staff-only — keep separate, never in PDF/email/WhatsApp.
+- Never put secrets in repo/PROGRESS/CLAUDE or inline on CLI.
 
-## Working state checks to run first
-- `git status -sb` and `git log --oneline -10`.
-- Read `PROGRESS.md` top (active phase) + the Phase D section.
-
-## Next recommended task
-Confirm the owner wants **Stage 3 (admin user management)**; if yes, start with the read-only/plan then the Edge Function `create-user`, gated.
+## First steps in a new window
+- `git status -sb` + `git log --oneline -10`. Read `PROGRESS.md` top (Phase F section) + the relevant memory files.
+- Confirm which task the owner wants next; do the read-only review first.
