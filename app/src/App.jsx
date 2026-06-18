@@ -20,6 +20,7 @@ import DailySalesReport from './pages/DailySalesReport';
 import Pricing from './pages/Pricing';
 import Users from './pages/Users';
 import Products from './pages/Products';
+import Templates from './pages/Templates';
 import Login from './pages/Login';
 
 const AuthenticatedApp = () => {
@@ -58,6 +59,7 @@ const AuthenticatedApp = () => {
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/users" element={<Users />} />
         <Route path="/products" element={<Products />} />
+        <Route path="/templates" element={<Templates />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>
