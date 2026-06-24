@@ -13,12 +13,6 @@
 //   META_WHATSAPP_TOKEN    permanent or temporary System User token from Meta developer console
 //   META_PHONE_NUMBER_ID   e.g. 1215201798346282 (test number or production number)
 //
-// Also set on Vercel (Dashboard → Settings → Environment Variables) if any
-// server-side Vercel functions ever need them — currently only Supabase Edge uses them:
-//   META_WHATSAPP_TOKEN
-//   META_PHONE_NUMBER_ID
-//   META_WABA_ID           (WhatsApp Business Account ID — for reference / future use)
-//
 // Phase 1: text-only. PDF/document sending comes after text is verified working.
 // Auth: verify_jwt = true  →  deploy with:
 //   npx supabase functions deploy send-whatsapp
@@ -58,6 +52,8 @@ Deno.serve(async (req: Request) => {
     const TOKEN = Deno.env.get("META_WHATSAPP_TOKEN");
     const PHONE_NUMBER_ID = Deno.env.get("META_PHONE_NUMBER_ID");
 
+    console.log(`[send-whatsapp] secrets check — PHONE_NUMBER_ID="${PHONE_NUMBER_ID ?? "(missing)"}" TOKEN_LEN=${TOKEN?.length ?? 0}`);
+
     if (!TOKEN || !PHONE_NUMBER_ID) {
       return json(
         { ok: false, error: "META_WHATSAPP_TOKEN / META_PHONE_NUMBER_ID not configured in Edge Function secrets" },
@@ -86,7 +82,17 @@ Deno.serve(async (req: Request) => {
     if (!phone) return json({ ok: false, error: `invalid phone number: "${rawPhone}"` }, 400);
 
     const apiUrl = `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
-    console.log(`[send-whatsapp] calling Meta API → ${apiUrl} to=${phone}`);
+
+    // Complete request payload (token excluded for security)
+    const metaPayload = {
+      messaging_product: "whatsapp",
+      to: phone,
+      type: "text",
+      text: { body: message },
+    };
+    console.log(`[send-whatsapp] META REQUEST → POST ${apiUrl}`);
+    console.log(`[send-whatsapp] META REQUEST payload: ${JSON.stringify(metaPayload)}`);
+    console.log(`[send-whatsapp] META REQUEST token_prefix: ${TOKEN.slice(0, 12)}... token_suffix: ...${TOKEN.slice(-6)}`);
 
     const metaRes = await fetch(apiUrl, {
       method: "POST",
@@ -94,28 +100,42 @@ Deno.serve(async (req: Request) => {
         Authorization: `Bearer ${TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: phone,
-        type: "text",
-        text: { body: message },
-      }),
+      body: JSON.stringify(metaPayload),
     });
 
     // deno-lint-ignore no-explicit-any
     const metaData: any = await metaRes.json();
-    console.log(`[send-whatsapp] Meta response status=${metaRes.status} body=${JSON.stringify(metaData)}`);
+    console.log(`[send-whatsapp] META RESPONSE status=${metaRes.status}`);
+    console.log(`[send-whatsapp] META RESPONSE body: ${JSON.stringify(metaData)}`);
+
+    // Log the messaging_product and contacts array from the response for delivery diagnosis
+    if (metaData?.contacts) {
+      console.log(`[send-whatsapp] META contacts: ${JSON.stringify(metaData.contacts)}`);
+    }
+    if (metaData?.messages) {
+      console.log(`[send-whatsapp] META messages: ${JSON.stringify(metaData.messages)}`);
+    }
 
     if (!metaRes.ok) {
       const errMsg = metaData?.error?.message ?? `Meta API returned ${metaRes.status}`;
-      console.error(`[send-whatsapp] Meta error: ${errMsg}`);
+      console.error(`[send-whatsapp] META ERROR: ${errMsg}`);
+      console.error(`[send-whatsapp] META ERROR full: ${JSON.stringify(metaData?.error)}`);
       return json({ ok: false, error: errMsg, meta: metaData }, metaRes.status < 500 ? metaRes.status : 502);
     }
 
     const messageId = metaData?.messages?.[0]?.id ?? null;
-    console.log(`[send-whatsapp] success — messageId=${messageId} to=${phone}`);
-    return json({ ok: true, messageId, to: phone });
+    const contactWaId = metaData?.contacts?.[0]?.wa_id ?? null;
+    const contactInput = metaData?.contacts?.[0]?.input ?? null;
+    console.log(`[send-whatsapp] SUCCESS — messageId=${messageId} to=${phone} wa_id=${contactWaId} input=${contactInput}`);
+
+    // wa_id is the WhatsApp-resolved phone. If it differs from `phone`, Meta remapped it.
+    if (contactWaId && contactWaId !== phone) {
+      console.log(`[send-whatsapp] NOTE: Meta resolved phone ${phone} → wa_id ${contactWaId}`);
+    }
+
+    return json({ ok: true, messageId, to: phone, wa_id: contactWaId });
   } catch (e) {
+    console.error(`[send-whatsapp] EXCEPTION: ${String(e)}`);
     return json({ ok: false, error: String(e) }, 500);
   }
 });
