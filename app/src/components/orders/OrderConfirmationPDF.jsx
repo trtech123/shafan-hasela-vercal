@@ -81,6 +81,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [waSending, setWaSending] = useState(false);
+  const [waSendStep, setWaSendStep] = useState(null); // null | "מייצר PDF..." | "שולח..."
 
   if (!order) return null;
 
@@ -238,28 +239,44 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     ? `https://wa.me/${waPhone}?text=${waText}`
     : `https://wa.me/?text=${waText}`;
 
-  // Send via Meta WhatsApp Cloud API through the send-whatsapp Edge Function.
-  // Token never reaches client — all secrets live in Supabase Edge Function env.
+  // Send PDF via Meta WhatsApp Cloud API (Phase 2 — document mode).
+  //   1. Build the same 2-page PDF used by download + email.
+  //   2. Send base64 to send-whatsapp Edge Function.
+  //   3. Edge Function uploads to Meta Media API → gets media_id → sends document msg.
+  // Token never reaches client — all secrets in Supabase Edge Function env.
   const handleWhatsAppAPI = async () => {
     if (!order.client_phone) {
       toast.error("אין מספר טלפון ללקוח");
       return;
     }
     setWaSending(true);
+    setWaSendStep("מייצר PDF...");
     try {
+      const pdf = await buildPdf();
+      const pdfBase64 = pdf.output("datauristring").split(",")[1];
+      const kb = Math.round((pdfBase64.length * 3) / 4 / 1024);
+      console.info(`[WA PDF] PDF built — ~${kb} KB`);
+
+      setWaSendStep("שולח...");
       const { data, error } = await supabase.functions.invoke("send-whatsapp", {
-        body: { phone: order.client_phone, message: waMessage },
+        body: {
+          phone: order.client_phone,
+          message: waMessage,
+          pdfBase64,
+          fileName,
+        },
       });
       if (error || !data?.ok) {
         const errText = data?.error ?? error?.message ?? "שגיאה לא ידועה";
-        toast.error(`WhatsApp API נכשל: ${errText}`);
+        toast.error(`WhatsApp PDF נכשל: ${errText}`);
       } else {
-        toast.success(`WhatsApp נשלח ✓ (id: ${data.messageId ?? "—"})`);
+        toast.success(`WhatsApp PDF נשלח ✓ (id: ${data.messageId ?? "—"})`);
       }
     } catch (e) {
       toast.error(`שגיאה: ${e?.message ?? String(e)}`);
     } finally {
       setWaSending(false);
+      setWaSendStep(null);
     }
   };
 
@@ -295,10 +312,10 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
               className="gap-2 border-green-700 text-green-800 hover:bg-green-50"
               onClick={handleWhatsAppAPI}
               disabled={waSending || !order.client_phone}
-              title={!order.client_phone ? "אין מספר טלפון ללקוח" : "שלח דרך Meta WhatsApp Cloud API"}
+              title={!order.client_phone ? "אין מספר טלפון ללקוח" : "שלח PDF דרך Meta WhatsApp Cloud API"}
             >
               {waSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
-              {waSending ? "שולח..." : "WA API"}
+              {waSendStep ?? "WA PDF"}
             </Button>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
