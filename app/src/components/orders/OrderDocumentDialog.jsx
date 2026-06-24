@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Copy, Share2, FileText } from "lucide-react";
+import { Copy, Share2, FileText, Loader2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import moment from "moment";
+import { supabase } from "@/api/supabaseClient";
 
 export default function OrderDocumentDialog({ open, onClose, order, activity }) {
+  const [waSending, setWaSending] = useState(false);
+
   if (!order) return null;
 
   const activityName = activity?.name || "—";
@@ -54,9 +58,33 @@ ${pricePerPerson ? `מחיר לאדם: ₪${pricePerPerson.toLocaleString()}` : 
 תאריך: _______________________
 `.trim();
 
-  const whatsappText = encodeURIComponent(
-    `שלום ${order.client_name},\n\nמצורף אישור ההזמנה שלך לפעילות *${activityName}* בתאריך *${dateFormatted}*.\n\nפרטי ההזמנה:\n• מספר משתתפים: ${order.num_participants}\n• סה״כ לתשלום: ₪${(order.total_price || 0).toLocaleString()}\n\nאנא השב/י לאישור.\n\nתודה! 🏔️`
-  );
+  const whatsappMessage = `שלום ${order.client_name},\n\nמצורף אישור ההזמנה שלך לפעילות *${activityName}* בתאריך *${dateFormatted}*.\n\nפרטי ההזמנה:\n• מספר משתתפים: ${order.num_participants}\n• סה״כ לתשלום: ₪${(order.total_price || 0).toLocaleString()}\n\nאנא השב/י לאישור.\n\nתודה! 🏔️`;
+  const whatsappText = encodeURIComponent(whatsappMessage);
+
+  // Send via Meta WhatsApp Cloud API (server-side token, no exposure in client).
+  // Requires Edge Function send-whatsapp deployed with META_WHATSAPP_TOKEN +
+  // META_PHONE_NUMBER_ID secrets. Phase 1 = test number only.
+  const handleWhatsAppAPI = async () => {
+    if (!order.client_phone) {
+      toast.error("אין מספר טלפון ללקוח");
+      return;
+    }
+    setWaSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-whatsapp", {
+        body: { phone: order.client_phone, message: whatsappMessage },
+      });
+      if (error || !data?.ok) {
+        toast.error(`שליחת WhatsApp נכשלה: ${data?.error ?? error?.message ?? "שגיאה לא ידועה"}`);
+      } else {
+        toast.success("הודעת WhatsApp נשלחה בהצלחה");
+      }
+    } catch (e) {
+      toast.error(`שגיאה: ${e?.message ?? String(e)}`);
+    } finally {
+      setWaSending(false);
+    }
+  };
 
   const whatsappLink = order.client_phone
     ? `https://wa.me/972${order.client_phone.replace(/^0/, "").replace(/-/g, "")}?text=${whatsappText}`
@@ -94,12 +122,22 @@ ${pricePerPerson ? `מחיר לאדם: ₪${pricePerPerson.toLocaleString()}` : 
             <Copy className="w-4 h-4" /> העתק מסמך
           </Button>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <a href={whatsappLink} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" className="gap-2 text-green-600 border-green-200 hover:bg-green-50">
                 <Share2 className="w-4 h-4" /> שלח בוואטסאפ
               </Button>
             </a>
+            <Button
+              variant="outline"
+              className="gap-2 text-green-700 border-green-300 hover:bg-green-50"
+              onClick={handleWhatsAppAPI}
+              disabled={waSending || !order.client_phone}
+              title={!order.client_phone ? "אין מספר טלפון ללקוח" : "שלח דרך Meta WhatsApp Cloud API"}
+            >
+              {waSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+              WA API
+            </Button>
             <a href={mailtoLink} target="_blank" rel="noopener noreferrer">
               <Button className="gap-2">
                 <Share2 className="w-4 h-4" /> שלח במייל
