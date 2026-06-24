@@ -76,13 +76,17 @@ Deno.serve(async (req: Request) => {
     const rawPhone: string = (body?.phone ?? "").toString().trim();
     const message: string = (body?.message ?? "").toString().trim();
 
+    console.log(`[send-whatsapp] invoked — rawPhone="${rawPhone}" msgLen=${message.length}`);
+
     if (!rawPhone) return json({ ok: false, error: "missing phone" }, 400);
     if (!message) return json({ ok: false, error: "missing message" }, 400);
 
     const phone = normalizePhone(rawPhone);
+    console.log(`[send-whatsapp] normalized phone: "${rawPhone}" → "${phone}"`);
     if (!phone) return json({ ok: false, error: `invalid phone number: "${rawPhone}"` }, 400);
 
     const apiUrl = `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+    console.log(`[send-whatsapp] calling Meta API → ${apiUrl} to=${phone}`);
 
     const metaRes = await fetch(apiUrl, {
       method: "POST",
@@ -100,13 +104,17 @@ Deno.serve(async (req: Request) => {
 
     // deno-lint-ignore no-explicit-any
     const metaData: any = await metaRes.json();
+    console.log(`[send-whatsapp] Meta response status=${metaRes.status} body=${JSON.stringify(metaData)}`);
 
     if (!metaRes.ok) {
       const errMsg = metaData?.error?.message ?? `Meta API returned ${metaRes.status}`;
+      console.error(`[send-whatsapp] Meta error: ${errMsg}`);
       return json({ ok: false, error: errMsg, meta: metaData }, metaRes.status < 500 ? metaRes.status : 502);
     }
 
-    return json({ ok: true, messageId: metaData?.messages?.[0]?.id ?? null, to: phone });
+    const messageId = metaData?.messages?.[0]?.id ?? null;
+    console.log(`[send-whatsapp] success — messageId=${messageId} to=${phone}`);
+    return json({ ok: true, messageId, to: phone });
   } catch (e) {
     return json({ ok: false, error: String(e) }, 500);
   }

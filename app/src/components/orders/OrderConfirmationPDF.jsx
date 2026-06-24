@@ -80,6 +80,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   const [busy, setBusy] = useState(false);
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [waSending, setWaSending] = useState(false);
 
   if (!order) return null;
 
@@ -213,30 +214,54 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     }
   };
 
-  // WhatsApp share — Israeli phone normalization (05X… → 972…), same convention
-  // as OrderDocumentDialog. No PDF attaches (browser wa.me can't); text summary.
-  const waText = encodeURIComponent(
-    [
-      `שלום ${order.client_name || ""},`,
-      "",
-      `מצורף אישור ההזמנה שלך לפעילות *${activityName}* בתאריך *${dateFormatted}*.`,
-      "",
-      "פרטי ההזמנה:",
-      `• מספר הזמנה: ${orderNumber}`,
-      participants ? `• מספר משתתפים: ${participants}` : "",
-      `• סה״כ לתשלום: ₪${total.toLocaleString()}`,
-      "",
-      "נא להחזיר את הטופס מלא וחתום.",
-      "",
-      "תודה! 🏔️ צוות שפן הסלע",
-    ]
-      .filter(Boolean)
-      .join("\n")
-  );
+  // WhatsApp share — Israeli phone normalization (05X… → 972…).
+  // waMessage = raw text used by both wa.me link and Meta Cloud API send.
+  const waMessage = [
+    `שלום ${order.client_name || ""},`,
+    "",
+    `מצורף אישור ההזמנה שלך לפעילות *${activityName}* בתאריך *${dateFormatted}*.`,
+    "",
+    "פרטי ההזמנה:",
+    `• מספר הזמנה: ${orderNumber}`,
+    participants ? `• מספר משתתפים: ${participants}` : "",
+    `• סה״כ לתשלום: ₪${total.toLocaleString()}`,
+    "",
+    "נא להחזיר את הטופס מלא וחתום.",
+    "",
+    "תודה! 🏔️ צוות שפן הסלע",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const waText = encodeURIComponent(waMessage);
   const waPhone = (order.client_phone || "").replace(/\D/g, "").replace(/^0/, "972");
   const waLink = waPhone
     ? `https://wa.me/${waPhone}?text=${waText}`
     : `https://wa.me/?text=${waText}`;
+
+  // Send via Meta WhatsApp Cloud API through the send-whatsapp Edge Function.
+  // Token never reaches client — all secrets live in Supabase Edge Function env.
+  const handleWhatsAppAPI = async () => {
+    if (!order.client_phone) {
+      toast.error("אין מספר טלפון ללקוח");
+      return;
+    }
+    setWaSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-whatsapp", {
+        body: { phone: order.client_phone, message: waMessage },
+      });
+      if (error || !data?.ok) {
+        const errText = data?.error ?? error?.message ?? "שגיאה לא ידועה";
+        toast.error(`WhatsApp API נכשל: ${errText}`);
+      } else {
+        toast.success(`WhatsApp נשלח ✓ (id: ${data.messageId ?? "—"})`);
+      }
+    } catch (e) {
+      toast.error(`שגיאה: ${e?.message ?? String(e)}`);
+    } finally {
+      setWaSending(false);
+    }
+  };
 
   const sectionStyle = { fontFamily: "'Heebo', Arial, sans-serif" };
 
@@ -265,6 +290,16 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
                 <MessageCircle className="w-4 h-4" /> שלח וואטסאפ
               </Button>
             </a>
+            <Button
+              variant="outline"
+              className="gap-2 border-green-700 text-green-800 hover:bg-green-50"
+              onClick={handleWhatsAppAPI}
+              disabled={waSending || !order.client_phone}
+              title={!order.client_phone ? "אין מספר טלפון ללקוח" : "שלח דרך Meta WhatsApp Cloud API"}
+            >
+              {waSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+              {waSending ? "שולח..." : "WA API"}
+            </Button>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
