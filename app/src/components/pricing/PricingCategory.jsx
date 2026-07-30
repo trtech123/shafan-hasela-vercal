@@ -62,7 +62,7 @@ export default function PricingCategory({ category, onChange, onDelete, numParti
               <thead>
                 <tr className="border-b border-border/60 bg-muted/20 text-xs text-muted-foreground">
                 <th className="text-right px-3 py-2 font-medium min-w-[200px]">תיאור</th>
-                <th className="text-center px-3 py-2 font-medium w-24">כמות</th>
+                <th className="text-center px-3 py-2 font-medium w-32 min-w-[8rem]">כמות</th>
                 <th className="text-left px-3 py-2 font-medium w-36">עלות ליחידה ₪</th>
                 <th className="text-left px-3 py-2 font-medium w-36">סה"כ עלות</th>
                 <th className="text-left px-3 py-2 font-medium w-36">מחיר מכירה ₪</th>

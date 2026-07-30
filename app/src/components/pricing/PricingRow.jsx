@@ -41,12 +41,13 @@ export default function PricingRow({ row, onChange, onDelete, numParticipants })
           className="h-9 text-sm"
         />
       </td>
-      <td className="px-3 py-2 w-24">
+      <td className="px-2 py-2 w-32 min-w-[8rem]">
         <Input
           type="number"
           value={row.quantity ?? 1}
           onChange={e => handleChange("quantity", e.target.value)}
-          className="h-9 text-sm text-center"
+          className="h-9 w-full min-w-[7rem] px-2 text-sm text-center tabular-nums"
+          dir="ltr"
           min={0}
         />
       </td>
