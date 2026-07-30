@@ -38,10 +38,12 @@ describe("Pricing Quantity column layout", () => {
     const quantityInput = container.querySelector('input[type="number"][min="0"]');
     const quantityCell = quantityInput.closest("td");
 
-    expect(quantityHeader).toHaveClass("w-32", "min-w-[8rem]");
-    expect(quantityCell).toHaveClass("w-32", "min-w-[8rem]", "px-2");
-    expect(quantityInput).toHaveClass("w-full", "min-w-[7rem]", "px-2", "tabular-nums");
+    expect(quantityHeader).toHaveClass("w-40", "min-w-[10rem]");
+    expect(quantityCell).toHaveClass("w-40", "min-w-[10rem]", "px-2");
+    expect(quantityInput).toHaveClass("w-full", "min-w-[9rem]", "px-2", "tabular-nums");
     expect(quantityInput).toHaveAttribute("dir", "ltr");
+    expect(quantityInput).toHaveAttribute("type", "number");
+    expect(quantityInput).toHaveAttribute("min", "0");
     expect(quantityInput).toHaveValue(7);
     expect(container.querySelector(".overflow-x-auto")).toBeInTheDocument();
 
