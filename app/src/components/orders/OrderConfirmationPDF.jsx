@@ -1,6 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import moment from "moment";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Download, MessageCircle, Mail, X, Loader2 } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -42,6 +44,13 @@ const CAPTURE_SCALE = 1.5;
 
 const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((e || "").trim());
 
+const getEmailError = (value) => {
+  const normalized = (value || "").trim();
+  if (!normalized) return "יש להזין כתובת אימייל";
+  if (!isValidEmail(normalized)) return "כתובת האימייל אינה תקינה";
+  return "";
+};
+
 // Preload + decode an image so html2canvas never captures it mid-decode (a
 // not-yet-decoded logo renders blank on cold-cache/slow machines). Resolves on
 // error too — a missing logo must not block the whole PDF. Same src as the DOM
@@ -82,6 +91,14 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   const [emailSent, setEmailSent] = useState(false);
   const [waSending, setWaSending] = useState(false);
   const [waSendStep, setWaSendStep] = useState(null); // null | "מייצר PDF..." | "שולח..."
+  const [recipientEmail, setRecipientEmail] = useState(order?.client_email || "");
+  const [emailError, setEmailError] = useState("");
+
+  useEffect(() => {
+    setRecipientEmail(order?.client_email || "");
+    setEmailError("");
+    setEmailSent(false);
+  }, [order?.id, order?.client_email]);
 
   if (!order) return null;
 
@@ -95,8 +112,6 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   const total = order.total_price || 0;
   const pricePerPerson =
     total && participants ? Math.round(total / participants) : null;
-  const recipientEmail = order.client_email;
-  const emailValid = isValidEmail(recipientEmail);
 
   // Render one section onto exactly ONE A4 page. If the section is taller than
   // a page it is scaled to fit (preserving aspect, centered) rather than sliced
@@ -167,10 +182,13 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   // Generate the same PDF, send it as a real attachment via the send-order-doc
   // Edge Function (Resend) to the order's client email.
   const handleEmail = async () => {
-    if (!emailValid) {
-      toast.error("אין כתובת אימייל תקינה ללקוח");
+    const normalizedRecipientEmail = recipientEmail.trim();
+    const validationError = getEmailError(normalizedRecipientEmail);
+    setEmailError(validationError);
+    if (validationError) {
       return;
     }
+
     setEmailBusy(true);
     // Track which stage we're in so a failure points at the real culprit
     // (PDF generation vs. Supabase invoke vs. Edge function) instead of a
@@ -184,10 +202,10 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
       console.info(`OrderConfirmationPDF: PDF built — base64 ${pdfBase64.length} chars (~${kb} KB)`);
 
       step = "שליחה לשרת";
-      console.info(`OrderConfirmationPDF: invoking send-order-doc → ${recipientEmail}`);
+      console.info(`OrderConfirmationPDF: invoking send-order-doc → ${normalizedRecipientEmail}`);
       const { data, error } = await supabase.functions.invoke("send-order-doc", {
         body: {
-          to: recipientEmail,
+          to: normalizedRecipientEmail,
           orderNumber: order.order_number || "",
           clientName: order.client_name || "",
           activityName,
@@ -212,6 +230,15 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
       toast.error(`שליחת המייל נכשלה (${step}): ${detail}`);
     } finally {
       setEmailBusy(false);
+    }
+  };
+
+  const handleRecipientChange = (event) => {
+    const value = event.target.value;
+    setRecipientEmail(value);
+    setEmailSent(false);
+    if (emailError) {
+      setEmailError(getEmailError(value));
     }
   };
 
@@ -294,9 +321,9 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
             </Button>
             <Button
               onClick={handleEmail}
-              disabled={emailBusy || !emailValid}
+              disabled={emailBusy}
               variant="outline"
-              title={emailValid ? `שלח אל ${recipientEmail}` : "אין כתובת אימייל תקינה ללקוח"}
+              title={recipientEmail.trim() ? `שלח אל ${recipientEmail.trim()}` : "הזן כתובת אימייל לשליחה"}
               className="gap-2 border-blue-500 text-blue-700 hover:bg-blue-50"
             >
               {emailBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
@@ -321,6 +348,31 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
           </Button>
+        </div>
+
+        <div className="mb-3 rounded-xl bg-white px-3 py-3 shadow-sm">
+          <Label htmlFor="order-pdf-recipient-email" className="text-sm font-medium text-slate-700">
+            כתובת אימייל לשליחה
+          </Label>
+          <Input
+            id="order-pdf-recipient-email"
+            type="email"
+            value={recipientEmail}
+            onChange={handleRecipientChange}
+            aria-invalid={Boolean(emailError)}
+            aria-describedby={emailError ? "order-pdf-recipient-email-error" : undefined}
+            className={emailError ? "mt-1 border-red-500 focus-visible:ring-red-500" : "mt-1"}
+            dir="ltr"
+          />
+          {emailError && (
+            <p
+              id="order-pdf-recipient-email-error"
+              role="alert"
+              className="mt-1 text-sm text-red-600"
+            >
+              {emailError}
+            </p>
+          )}
         </div>
 
         <div className="space-y-4">

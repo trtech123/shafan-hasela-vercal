@@ -410,7 +410,7 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-2">
               <div>
                 <Label>מספר משתתפים *</Label>
                 <Input type="number" min="1" value={form.num_participants} onChange={e => handleChange("num_participants", e.target.value)} required />
