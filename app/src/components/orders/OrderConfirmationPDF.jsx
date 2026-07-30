@@ -3,7 +3,7 @@ import moment from "moment";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Download, MessageCircle, Mail, X, Loader2 } from "lucide-react";
+import { Download, MessageCircle, Mail, X, Loader2, Pencil } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { supabase } from "@/api/supabaseClient";
@@ -92,11 +92,17 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   const [waSending, setWaSending] = useState(false);
   const [waSendStep, setWaSendStep] = useState(null); // null | "מייצר PDF..." | "שולח..."
   const [recipientEmail, setRecipientEmail] = useState(order?.client_email || "");
-  const [emailError, setEmailError] = useState("");
+  const [emailError, setEmailError] = useState(() => getEmailError(order?.client_email || ""));
+  const [isEditingEmail, setIsEditingEmail] = useState(() =>
+    Boolean(getEmailError(order?.client_email || ""))
+  );
 
   useEffect(() => {
-    setRecipientEmail(order?.client_email || "");
-    setEmailError("");
+    const nextRecipientEmail = order?.client_email || "";
+    const nextEmailError = getEmailError(nextRecipientEmail);
+    setRecipientEmail(nextRecipientEmail);
+    setEmailError(nextEmailError);
+    setIsEditingEmail(Boolean(nextEmailError));
     setEmailSent(false);
   }, [order?.id, order?.client_email]);
 
@@ -186,9 +192,12 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     const validationError = getEmailError(normalizedRecipientEmail);
     setEmailError(validationError);
     if (validationError) {
+      setIsEditingEmail(true);
       return;
     }
 
+    setRecipientEmail(normalizedRecipientEmail);
+    setIsEditingEmail(false);
     setEmailBusy(true);
     // Track which stage we're in so a failure points at the real culprit
     // (PDF generation vs. Supabase invoke vs. Edge function) instead of a
@@ -231,6 +240,18 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     } finally {
       setEmailBusy(false);
     }
+  };
+
+  const handleRecipientDone = () => {
+    const normalizedRecipientEmail = recipientEmail.trim();
+    const validationError = getEmailError(normalizedRecipientEmail);
+    setEmailError(validationError);
+    if (validationError) {
+      return;
+    }
+
+    setRecipientEmail(normalizedRecipientEmail);
+    setIsEditingEmail(false);
   };
 
   const handleRecipientChange = (event) => {
@@ -351,27 +372,56 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
         </div>
 
         <div className="mb-3 rounded-xl bg-white px-3 py-3 shadow-sm">
-          <Label htmlFor="order-pdf-recipient-email" className="text-sm font-medium text-slate-700">
-            כתובת אימייל לשליחה
-          </Label>
-          <Input
-            id="order-pdf-recipient-email"
-            type="email"
-            value={recipientEmail}
-            onChange={handleRecipientChange}
-            aria-invalid={Boolean(emailError)}
-            aria-describedby={emailError ? "order-pdf-recipient-email-error" : undefined}
-            className={emailError ? "mt-1 border-red-500 focus-visible:ring-red-500" : "mt-1"}
-            dir="ltr"
-          />
-          {emailError && (
-            <p
-              id="order-pdf-recipient-email-error"
-              role="alert"
-              className="mt-1 text-sm text-red-600"
-            >
-              {emailError}
-            </p>
+          {isEditingEmail ? (
+            <div>
+              <Label htmlFor="order-pdf-recipient-email" className="text-sm font-medium text-slate-700">
+                כתובת אימייל לשליחה
+              </Label>
+              <div className="mt-1 flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <Input
+                    id="order-pdf-recipient-email"
+                    type="email"
+                    value={recipientEmail}
+                    onChange={handleRecipientChange}
+                    aria-invalid={Boolean(emailError)}
+                    aria-describedby={emailError ? "order-pdf-recipient-email-error" : undefined}
+                    className={emailError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                    dir="ltr"
+                  />
+                  {emailError && (
+                    <p
+                      id="order-pdf-recipient-email-error"
+                      role="alert"
+                      className="mt-1 text-sm text-red-600"
+                    >
+                      {emailError}
+                    </p>
+                  )}
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={handleRecipientDone}>
+                  סיום
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-700">כתובת אימייל לשליחה</p>
+                <p className="truncate text-sm text-slate-600" dir="ltr">{recipientEmail}</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsEditingEmail(true)}
+                aria-label="עריכת כתובת אימייל"
+                title="עריכת כתובת אימייל"
+                className="h-8 w-8 shrink-0 text-slate-500"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
           )}
         </div>
 
