@@ -52,7 +52,7 @@ The bootstrap function:
 6. Otherwise it submits the Utility template with the document handle and body examples.
 7. Returns only the template ID, exact name, language, category, status, and sanitized Meta validation/rejection details.
 
-The bootstrap function is deployed without exposing any credential in source or responses, invoked once, and deleted from Supabase and the local workspace immediately after the creation attempt, whether the attempt succeeds or fails.
+The bootstrap function is deployed with JWT verification and without exposing any credential in source or responses. It is deleted from Supabase and the local workspace only after Meta confirms that the template exists and its ID, exact name, language, category, and current status have been recorded. If creation fails or the resulting template cannot be confirmed, the workflow stops and reports the sanitized failure without automatically deleting the bootstrap function.
 
 ## `send-whatsapp` request contract
 
@@ -137,7 +137,7 @@ Tests cover:
 - `OrderConfirmationPDF` invokes `send-whatsapp` with template mode and the exact three order-derived values.
 - Existing email and rendering tests continue to pass.
 
-Before any implementation commit, run the focused tests, the complete Vitest suite, lint, typecheck, and the production Vite build. Deploy only the verified `send-whatsapp` function. The short-lived bootstrap function is deleted immediately after its one-time use and is not committed as a permanent production function.
+Before any implementation commit, run the focused tests, the complete Vitest suite, lint, typecheck, and the production Vite build. Deploy only the verified `send-whatsapp` function. After the template is confirmed and its metadata recorded, delete the short-lived bootstrap function; do not commit it as a permanent production function.
 
 ## Completion evidence
 
