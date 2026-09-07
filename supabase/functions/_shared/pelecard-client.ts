@@ -57,8 +57,9 @@ function timeoutSignal(config: PelecardConfig): AbortSignal {
   return AbortSignal.timeout(timeoutMs);
 }
 
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error &&
+    (error.name === "AbortError" || error.name === "TimeoutError");
 }
 
 async function callTransport<T>(operation: () => Promise<T>): Promise<T> {
@@ -66,7 +67,7 @@ async function callTransport<T>(operation: () => Promise<T>): Promise<T> {
     return await operation();
   } catch (error) {
     if (error instanceof PaymentError) throw error;
-    if (isAbortError(error)) throw new PaymentError("provider_timeout");
+    if (isTimeoutError(error)) throw new PaymentError("provider_timeout");
     throw new PaymentError("provider_unavailable");
   }
 }

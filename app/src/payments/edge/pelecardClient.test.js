@@ -129,6 +129,23 @@ describe("Pelecard provider client", () => {
     await expectPaymentError(client.initiate(initiation), "provider_timeout");
   });
 
+  test("maps the native timeout signal reason to provider_timeout", async () => {
+    const transport = vi.fn().mockImplementation((_input, signal) =>
+      new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        });
+      })
+    );
+    const client = createPelecardClient(createConfig(
+      { initiate: { transport, decode: (raw) => raw } },
+      { timeoutMs: 1 },
+    ));
+
+    await expectPaymentError(client.initiate(initiation), "provider_timeout");
+    expect(transport).toHaveBeenCalledOnce();
+  });
+
   test("fails closed when authoritative lookup is not configured", async () => {
     const client = createPelecardClient(createConfig());
 
