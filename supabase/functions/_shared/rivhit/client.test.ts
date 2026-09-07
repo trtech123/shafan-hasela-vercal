@@ -55,6 +55,33 @@ describe("RivhitClient", () => {
     expect(fetchImpl.mock.calls[0][0]).toContain("Customer.New");
   });
 
+  test.each([-20, -22])(
+    "returns null when Customer.Get reports CUSTOMER_NOT_EXISTS (%s)",
+    async (errorCode) => {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
+        error_code: errorCode,
+        client_message: "customer not found",
+        debug_message: `${errorCode} : CUSTOMER_NOT_EXISTS`,
+        data: null,
+      }, 500));
+      const client = new RivhitClient({ apiToken: token, fetchImpl });
+
+      await expect(client.findCustomerByAccRef("missing")).resolves.toBeNull();
+    },
+  );
+
+  test("handles the sandbox Customer.Get not-found envelope", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
+      error_code: 500,
+      client_message: "customer not found",
+      debug_message: "-22 : CUSTOMER_NOT_EXISTS",
+      data: null,
+    }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+
+    await expect(client.findCustomerByAccRef("missing")).resolves.toBeNull();
+  });
+
   test("creates a document and validates all persisted result fields", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
       error_code: 0,

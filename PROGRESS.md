@@ -1328,3 +1328,19 @@ Radix UI `Select` reserves the empty-string `value` to represent the unselected 
 - [ ] No new `@base44` imports introduced; pages migrated this phase have zero `@base44` references.
 - [ ] `PROGRESS.md` updated (this file).
 - [ ] User notified and approval obtained before starting next phase.
+
+---
+
+## Rivhit accounting workstream
+
+**Date:** 2026-09-07
+**Branch:** `workstream/rivhit-accounting`
+**Base:** `c8a0663`
+
+- Added additive, generic `accounting_customers` and `accounting_documents` ledgers with RLS, service-role claim functions, retry metadata, local uniqueness, and payload mismatch protection.
+- Added a server-only Rivhit client, configurable order mapping, idempotent workflow, Supabase persistence adapter, and authenticated `admin`/`operations` Edge Function.
+- Left local `RCP-*` receipts, Pelecard, iCredit, sales, and existing order schema unchanged.
+- Automated connector, mapping, failure, retry, persistence, migration-contract, and duplicate-prevention tests pass.
+- Live sandbox proof created customer `534205241` and TEST document `6659` (`b9f9eb95-1aa5-4442-bdbf-5db15299d63b`). A fresh second run used the persisted document and made no second `Document.New` request.
+- No Production migration, configuration, deployment, credentials, or Rivhit document was used.
+- Docker is unavailable, so the migration and Edge Function were not executed against a local Supabase stack.

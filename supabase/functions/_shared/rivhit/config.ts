@@ -4,6 +4,18 @@ function isIntegerInRange(value: unknown, min: number, max: number): value is nu
   return Number.isInteger(value) && Number(value) >= min && Number(value) <= max;
 }
 
+function requiredBoolean(
+  key: string,
+  mapping: Record<string, unknown>,
+  field: "price_include_vat" | "send_mail" | "digital_signature",
+): boolean {
+  const value = mapping[field];
+  if (typeof value !== "boolean") {
+    throw new Error(`Invalid Rivhit mapping "${key}": ${field}`);
+  }
+  return value;
+}
+
 function validateMapping(key: string, value: unknown): DocumentMapping {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`Invalid Rivhit mapping "${key}": mapping`);
@@ -19,19 +31,13 @@ function validateMapping(key: string, value: unknown): DocumentMapping {
   if (!isIntegerInRange(mapping.currency_id, 1, 10)) {
     throw new Error(`Invalid Rivhit mapping "${key}": currency_id`);
   }
-  for (const field of ["price_include_vat", "send_mail", "digital_signature"] as const) {
-    if (typeof mapping[field] !== "boolean") {
-      throw new Error(`Invalid Rivhit mapping "${key}": ${field}`);
-    }
-  }
-
   return {
     document_type: mapping.document_type,
     sort_code: mapping.sort_code,
     currency_id: mapping.currency_id,
-    price_include_vat: mapping.price_include_vat,
-    send_mail: mapping.send_mail,
-    digital_signature: mapping.digital_signature,
+    price_include_vat: requiredBoolean(key, mapping, "price_include_vat"),
+    send_mail: requiredBoolean(key, mapping, "send_mail"),
+    digital_signature: requiredBoolean(key, mapping, "digital_signature"),
   };
 }
 

@@ -19,6 +19,7 @@ const RETRYABLE_CODES = new Set([
   -1000,
   -9998,
 ]);
+const CUSTOMER_NOT_FOUND_CODES = new Set([-2, -20, -22]);
 
 interface RivhitErrorOptions {
   retryable?: boolean;
@@ -143,7 +144,13 @@ export class RivhitClient {
       }
       return { customerId: String(customerId) };
     } catch (error) {
-      if (error instanceof RivhitError && error.errorCode === -2) return null;
+      if (
+        error instanceof RivhitError
+        && (
+          (error.errorCode !== null && CUSTOMER_NOT_FOUND_CODES.has(error.errorCode))
+          || /^-(20|22)\s*:\s*CUSTOMER_NOT_EXISTS\b/i.test(error.debugMessage ?? "")
+        )
+      ) return null;
       throw error;
     }
   }
