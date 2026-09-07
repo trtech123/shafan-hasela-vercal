@@ -1,0 +1,106 @@
+export class PaymentHttpError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(status: number, code: string) {
+    super(code);
+    this.name = "PaymentHttpError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function configuredOrigins(origins: readonly string[]): ReadonlySet<string> {
+  if (!Array.isArray(origins) || origins.length === 0) {
+    throw new PaymentHttpError(500, "invalid_configuration");
+  }
+
+  const normalized = new Set<string>();
+  for (const origin of origins) {
+    let parsed: URL;
+    try {
+      parsed = new URL(origin);
+    } catch {
+      throw new PaymentHttpError(500, "invalid_configuration");
+    }
+    if (
+      parsed.protocol !== "https:" || parsed.origin !== origin ||
+      parsed.pathname !== "/" || parsed.search || parsed.hash ||
+      parsed.username || parsed.password
+    ) {
+      throw new PaymentHttpError(500, "invalid_configuration");
+    }
+    normalized.add(origin);
+  }
+  return normalized;
+}
+
+export function paymentCorsHeaders(
+  request: Request,
+  allowedOrigins: readonly string[],
+): HeadersInit {
+  const allowed = configuredOrigins(allowedOrigins);
+  const origin = request.headers.get("Origin");
+  if (origin !== null && !allowed.has(origin)) {
+    throw new PaymentHttpError(403, "origin_forbidden");
+  }
+
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+  if (origin !== null) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
+}
+
+export function paymentJson(
+  body: unknown,
+  status: number,
+  corsHeaders: HeadersInit = {},
+): Response {
+  const headers = new Headers(corsHeaders);
+  headers.set("Content-Type", "application/json; charset=utf-8");
+  headers.set("Cache-Control", "no-store");
+  return new Response(JSON.stringify(body), {
+    status,
+    headers,
+  });
+}
+
+export async function parsePaymentJson(
+  request: Request,
+  maxBodyBytes: number,
+): Promise<unknown> {
+  if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes <= 0) {
+    throw new PaymentHttpError(500, "invalid_configuration");
+  }
+
+  const contentType = request.headers.get("Content-Type")?.split(";", 1)[0]
+    .trim().toLowerCase();
+  if (contentType !== "application/json") {
+    throw new PaymentHttpError(415, "unsupported_media_type");
+  }
+
+  const advertisedSize = request.headers.get("Content-Length");
+  if (advertisedSize !== null) {
+    const size = Number(advertisedSize);
+    if (!Number.isFinite(size) || size < 0) {
+      throw new PaymentHttpError(400, "invalid_request");
+    }
+    if (size > maxBodyBytes) {
+      throw new PaymentHttpError(413, "body_too_large");
+    }
+  }
+
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > maxBodyBytes) {
+    throw new PaymentHttpError(413, "body_too_large");
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new PaymentHttpError(400, "invalid_json");
+  }
+}
