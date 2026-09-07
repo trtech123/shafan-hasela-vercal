@@ -77,6 +77,7 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9._:-]{8,100}$/;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
+const MAX_LEDGER_AMOUNT_MINOR = 9_999_999_999;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -131,11 +132,12 @@ function validateItems(value: unknown): { items: CheckoutItem[]; subtotalMinor: 
       return null;
     }
     const priceMinor = toMinor(candidate.customPrice);
-    if (priceMinor === null || priceMinor > 9_999_999_999) return null;
+    if (priceMinor === null || priceMinor > MAX_LEDGER_AMOUNT_MINOR) return null;
     const lineTotal = priceMinor * qty;
     if (!Number.isSafeInteger(lineTotal)) return null;
     subtotalMinor += lineTotal;
-    if (!Number.isSafeInteger(subtotalMinor)) return null;
+    if (!Number.isSafeInteger(subtotalMinor) ||
+      subtotalMinor > MAX_LEDGER_AMOUNT_MINOR) return null;
     items.push({
       id: candidate.id,
       name: candidate.name,

@@ -263,6 +263,77 @@ describe("Pelecard initiation handler", () => {
     });
   });
 
+  test("accepts the maximum NUMERIC(10,2) ledger amount", async () => {
+    const maximumCheckout = {
+      ...checkout,
+      items: [{
+        id: "maximum-item",
+        name: "Maximum ledger amount",
+        qty: 1,
+        customPrice: 99_999_999.99,
+      }],
+      discount: null,
+    };
+
+    const { context, response } = await invoke(jsonRequest({
+      ...requestBody,
+      checkout: maximumCheckout,
+    }));
+
+    expect(response.status).toBe(201);
+    expect(context.store.reserve).toHaveBeenCalledWith(expect.objectContaining({
+      amountMinor: 9_999_999_999,
+    }));
+    expect(context.provider.initiate).toHaveBeenCalledOnce();
+  });
+
+  test("rejects an aggregate one cent above the ledger maximum before side effects", async () => {
+    const overMaximumCheckout = {
+      ...checkout,
+      items: [
+        {
+          id: "maximum-item",
+          name: "Maximum ledger amount",
+          qty: 1,
+          customPrice: 99_999_999.99,
+        },
+        { id: "one-cent", name: "One cent", qty: 1, customPrice: 0.01 },
+      ],
+      discount: null,
+    };
+
+    const { context, response, body } = await invoke(jsonRequest({
+      ...requestBody,
+      checkout: overMaximumCheckout,
+    }));
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({ error: { code: "invalid_input" } });
+    expect(context.store.reserve).not.toHaveBeenCalled();
+    expect(context.provider.initiate).not.toHaveBeenCalled();
+  });
+
+  test.each([10.001, "10.00", null, { amount: 10 }])(
+    "rejects an invalid item price %# before side effects",
+    async (customPrice) => {
+      const invalidCheckout = {
+        ...checkout,
+        items: [{ ...checkout.items[0], customPrice }],
+        discount: null,
+      };
+
+      const { context, response, body } = await invoke(jsonRequest({
+        ...requestBody,
+        checkout: invalidCheckout,
+      }));
+
+      expect(response.status).toBe(400);
+      expect(body).toEqual({ error: { code: "invalid_input" } });
+      expect(context.store.reserve).not.toHaveBeenCalled();
+      expect(context.provider.initiate).not.toHaveBeenCalled();
+    },
+  );
+
   test("accepts a standalone checkout when orderId is omitted", async () => {
     const { orderId: _orderId, ...standaloneRequest } = requestBody;
 
