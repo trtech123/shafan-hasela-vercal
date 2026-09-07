@@ -1,4 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   ICREDIT_TEST_BASE_URL,
   buildEnrollmentRequest,
@@ -14,6 +17,7 @@ const agreementId = "91354a2b-a001-438a-8e9c-f54c1d91c734";
 const recurringId = "617804f2-99d6-4ed9-8721-ecde4f92a715";
 const saleId = "cc5be6fa-f0d1-4a6f-b466-3137ec65cf5d";
 const groupToken = "a1408bfc-18da-49dc-aa77-d65870f7943e";
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 describe("iCredit TEST provider adapter", () => {
   test("builds hosted monthly recurring enrollment without document or card fields", () => {
@@ -226,5 +230,43 @@ describe("iCredit TEST provider adapter", () => {
       }),
     );
     await expect(cancelRecurringSale(successFetch, recurringId)).resolves.toBe(true);
+  });
+});
+
+describe("recurring Edge Function security boundaries", () => {
+  test("authenticates admin enrollment and keeps the merchant identifier server-side", () => {
+    const admin = readFileSync(resolve(repoRoot, "supabase/functions/_shared/admin.ts"), "utf8");
+    const enroll = readFileSync(resolve(repoRoot, "supabase/functions/club-recurring-enroll/index.ts"), "utf8");
+
+    expect(admin).toMatch(/auth\.getUser\(\)/);
+    expect(admin).toMatch(/role[^\n]+admin/);
+    expect(enroll).toMatch(/requireAdmin/);
+    expect(enroll).toMatch(/Deno\.env\.get\("ICREDIT_GROUP_PRIVATE_TOKEN"\)/);
+    expect(enroll).toMatch(/buildEnrollmentRequest/);
+    expect(enroll).toMatch(/readEnrollmentResponse/);
+    expect(enroll).not.toContain("https://icredit.rivhit.co.il");
+  });
+
+  test("verifies untrusted IPN before invoking the atomic reconciliation RPC", () => {
+    const ipn = readFileSync(resolve(repoRoot, "supabase/functions/club-recurring-ipn/index.ts"), "utf8");
+
+    expect(ipn).toMatch(/normalizeIpn/);
+    expect(ipn).toMatch(/verifyIpn/);
+    expect(ipn).toMatch(/process_icredit_recurring_event/);
+    expect(ipn.indexOf("verifyIpn")).toBeLessThan(ipn.indexOf("process_icredit_recurring_event"));
+    expect(ipn).not.toMatch(/console\.(?:log|info).*body/i);
+  });
+
+  test("cancels at iCredit before finalizing local cancellation", () => {
+    const cancel = readFileSync(resolve(repoRoot, "supabase/functions/club-recurring-cancel/index.ts"), "utf8");
+
+    expect(cancel).toMatch(/requireAdmin/);
+    expect(cancel).toMatch(/cancelRecurringSale/);
+    expect(cancel).toMatch(/cancel_icredit_recurring_membership/);
+    expect(cancel).toMatch(/status:\s*"cancellation_pending"/);
+    expect(cancel).toMatch(/status:\s*"active"/);
+    expect(cancel.indexOf("cancelRecurringSale")).toBeLessThan(
+      cancel.indexOf("cancel_icredit_recurring_membership"),
+    );
   });
 });
