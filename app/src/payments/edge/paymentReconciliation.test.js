@@ -130,7 +130,13 @@ describe("payment reconciliation", () => {
     })).toEqual(expected);
   });
 
-  test.each(["failed", "refunded", "voided"])(
+  test.each([
+    "failed",
+    "refund_pending",
+    "refunded",
+    "void_pending",
+    "voided",
+  ])(
     "never downgrades a locally %s payment",
     (status) => {
       expect(decisionFor({

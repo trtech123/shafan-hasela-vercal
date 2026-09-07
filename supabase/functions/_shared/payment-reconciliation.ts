@@ -46,7 +46,9 @@ export type ReconciliationDecision =
 const FINAL_STATES: ReadonlySet<PaymentLifecycleStatus> = new Set([
   "succeeded",
   "failed",
+  "refund_pending",
   "refunded",
+  "void_pending",
   "voided",
 ]);
 
