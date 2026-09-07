@@ -11,12 +11,13 @@ export type PaymentLifecycleStatus =
   | "void_pending"
   | "voided";
 
-export type SafeFailureCode =
+export type RejectionCode =
   | "forged_callback"
   | "provider_mismatch"
-  | "provider_declined"
   | "amount_mismatch"
   | "currency_mismatch";
+
+export type SafeFailureCode = RejectionCode | "provider_declined";
 
 export interface LocalPaymentForReconciliation {
   status: PaymentLifecycleStatus;
@@ -24,6 +25,8 @@ export interface LocalPaymentForReconciliation {
   currencyCode: string;
   terminalNumber: string;
   merchantCorrelation: string;
+  providerTransactionId?: string;
+  providerSessionReference?: string;
   /** Provider success codes come from confirmed runtime configuration. */
   successfulProviderStatusCodes: readonly string[];
 }
@@ -33,14 +36,24 @@ export interface CallbackNotice {
   providerTransactionId?: string;
 }
 
+export type ProviderCorrelationEvidence =
+  | { kind: "provider_transaction_id"; value: string }
+  | { kind: "provider_session"; value: string }
+  | { kind: "merchant_correlation"; value: string };
+
 export type ProviderLookupResult =
-  | { kind: "verified"; transaction: VerifiedProviderTransaction }
+  | {
+    kind: "verified";
+    transaction: VerifiedProviderTransaction;
+    correlation: ProviderCorrelationEvidence;
+  }
   | { kind: "error"; code: "provider_timeout" };
 
 export type ReconciliationDecision =
   | { kind: "finalize"; transaction: VerifiedProviderTransaction }
   | { kind: "already_finalized" }
-  | { kind: "fail"; code: SafeFailureCode }
+  | { kind: "reject"; code: RejectionCode }
+  | { kind: "mark_failed"; code: "provider_declined" }
   | { kind: "remain_pending"; code: "provider_timeout" };
 
 const FINAL_STATES: ReadonlySet<PaymentLifecycleStatus> = new Set([
@@ -66,6 +79,31 @@ function safeTransaction(
   };
 }
 
+function hasMatchingCorrelation(
+  localPayment: LocalPaymentForReconciliation,
+  callbackNotice: CallbackNotice,
+  transaction: VerifiedProviderTransaction,
+  evidence: ProviderCorrelationEvidence | undefined,
+): boolean {
+  if (!evidence || typeof evidence.value !== "string") return false;
+
+  switch (evidence.kind) {
+    case "provider_transaction_id":
+      return evidence.value === transaction.providerTransactionId &&
+        (
+          evidence.value === localPayment.providerTransactionId ||
+          evidence.value === callbackNotice.providerTransactionId
+        );
+    case "provider_session":
+      return localPayment.providerSessionReference !== undefined &&
+        evidence.value === localPayment.providerSessionReference;
+    case "merchant_correlation":
+      return evidence.value === localPayment.merchantCorrelation;
+    default:
+      return false;
+  }
+}
+
 export function reconcilePayment(
   localPayment: LocalPaymentForReconciliation,
   callbackNotice: CallbackNotice,
@@ -76,7 +114,7 @@ export function reconcilePayment(
   }
 
   if (!callbackNotice.confirmationValid) {
-    return { kind: "fail", code: "forged_callback" };
+    return { kind: "reject", code: "forged_callback" };
   }
 
   if (providerResult.kind === "error") {
@@ -89,26 +127,37 @@ export function reconcilePayment(
     transaction.terminalNumber !== localPayment.terminalNumber ||
     transaction.merchantKey !== localPayment.merchantCorrelation
   ) {
-    return { kind: "fail", code: "provider_mismatch" };
+    return { kind: "reject", code: "provider_mismatch" };
   }
 
   if (
-    callbackNotice.providerTransactionId !== undefined &&
-    transaction.providerTransactionId !== callbackNotice.providerTransactionId
+    (localPayment.providerTransactionId !== undefined &&
+      transaction.providerTransactionId !== localPayment.providerTransactionId) ||
+    (callbackNotice.providerTransactionId !== undefined &&
+      transaction.providerTransactionId !== callbackNotice.providerTransactionId)
   ) {
-    return { kind: "fail", code: "provider_mismatch" };
+    return { kind: "reject", code: "provider_mismatch" };
+  }
+
+  if (!hasMatchingCorrelation(
+    localPayment,
+    callbackNotice,
+    transaction,
+    providerResult.correlation,
+  )) {
+    return { kind: "reject", code: "provider_mismatch" };
   }
 
   if (!localPayment.successfulProviderStatusCodes.includes(transaction.statusCode)) {
-    return { kind: "fail", code: "provider_declined" };
+    return { kind: "mark_failed", code: "provider_declined" };
   }
 
   if (transaction.amountMinor !== localPayment.amountMinor) {
-    return { kind: "fail", code: "amount_mismatch" };
+    return { kind: "reject", code: "amount_mismatch" };
   }
 
   if (transaction.currencyCode !== localPayment.currencyCode) {
-    return { kind: "fail", code: "currency_mismatch" };
+    return { kind: "reject", code: "currency_mismatch" };
   }
 
   return { kind: "finalize", transaction: safeTransaction(transaction) };

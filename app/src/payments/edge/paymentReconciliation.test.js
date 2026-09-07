@@ -34,6 +34,10 @@ const verifiedResult = (transactionOverrides = {}) => ({
     ...verifiedTransaction,
     ...transactionOverrides,
   },
+  correlation: {
+    kind: "provider_transaction_id",
+    value: "651650799",
+  },
 });
 
 const decisionFor = ({
@@ -68,39 +72,39 @@ describe("payment reconciliation", () => {
     {
       name: "provider decline",
       providerResult: verifiedResult({ statusCode: "006" }),
-      expected: { kind: "fail", code: "provider_declined" },
+      expected: { kind: "mark_failed", code: "provider_declined" },
     },
     {
       name: "forged callback",
       callbackOverrides: { confirmationValid: false },
-      expected: { kind: "fail", code: "forged_callback" },
+      expected: { kind: "reject", code: "forged_callback" },
     },
     {
       name: "transaction mismatch",
       providerResult: verifiedResult({
         providerTransactionId: "different-transaction",
       }),
-      expected: { kind: "fail", code: "provider_mismatch" },
+      expected: { kind: "reject", code: "provider_mismatch" },
     },
     {
       name: "terminal mismatch",
       providerResult: verifiedResult({ terminalNumber: "different-terminal" }),
-      expected: { kind: "fail", code: "provider_mismatch" },
+      expected: { kind: "reject", code: "provider_mismatch" },
     },
     {
       name: "amount mismatch",
       providerResult: verifiedResult({ amountMinor: 9_999 }),
-      expected: { kind: "fail", code: "amount_mismatch" },
+      expected: { kind: "reject", code: "amount_mismatch" },
     },
     {
       name: "currency mismatch",
       providerResult: verifiedResult({ currencyCode: "USD" }),
-      expected: { kind: "fail", code: "currency_mismatch" },
+      expected: { kind: "reject", code: "currency_mismatch" },
     },
     {
       name: "merchant correlation mismatch",
       providerResult: verifiedResult({ merchantKey: "different-payment" }),
-      expected: { kind: "fail", code: "provider_mismatch" },
+      expected: { kind: "reject", code: "provider_mismatch" },
     },
     {
       name: "provider timeout",
@@ -152,7 +156,7 @@ describe("payment reconciliation", () => {
       name: "confirmation before provider correlation",
       callbackOverrides: { confirmationValid: false },
       providerResult: verifiedResult({ terminalNumber: "different-terminal" }),
-      expected: "forged_callback",
+      expected: { kind: "reject", code: "forged_callback" },
     },
     {
       name: "terminal/correlation before transaction identity",
@@ -160,7 +164,7 @@ describe("payment reconciliation", () => {
         terminalNumber: "different-terminal",
         providerTransactionId: "different-transaction",
       }),
-      expected: "provider_mismatch",
+      expected: { kind: "reject", code: "provider_mismatch" },
     },
     {
       name: "transaction identity before provider status",
@@ -168,26 +172,95 @@ describe("payment reconciliation", () => {
         providerTransactionId: "different-transaction",
         statusCode: "006",
       }),
-      expected: "provider_mismatch",
+      expected: { kind: "reject", code: "provider_mismatch" },
     },
     {
       name: "provider status before amount",
       providerResult: verifiedResult({ statusCode: "006", amountMinor: 9_999 }),
-      expected: "provider_declined",
+      expected: { kind: "mark_failed", code: "provider_declined" },
     },
     {
       name: "amount before currency",
       providerResult: verifiedResult({ amountMinor: 9_999, currencyCode: "USD" }),
-      expected: "amount_mismatch",
+      expected: { kind: "reject", code: "amount_mismatch" },
     },
   ])("applies $name", ({
     callbackOverrides,
     providerResult,
     expected,
   }) => {
-    expect(decisionFor({ callbackOverrides, providerResult })).toEqual({
-      kind: "fail",
-      code: expected,
-    });
+    expect(decisionFor({ callbackOverrides, providerResult })).toEqual(expected);
+  });
+
+  test("rejects a verified lookup without authoritative correlation evidence", () => {
+    expect(decisionFor({
+      providerResult: {
+        kind: "verified",
+        transaction: verifiedTransaction,
+      },
+    })).toEqual({ kind: "reject", code: "provider_mismatch" });
+  });
+
+  test("accepts merchant correlation evidence when no transaction ID is known", () => {
+    expect(decisionFor({
+      callbackOverrides: { providerTransactionId: undefined },
+      providerResult: {
+        ...verifiedResult(),
+        correlation: {
+          kind: "merchant_correlation",
+          value: "payment-uuid",
+        },
+      },
+    })).toEqual({ kind: "finalize", transaction: verifiedTransaction });
+  });
+
+  test("rejects a returned transaction that differs from the locally stored ID", () => {
+    expect(decisionFor({
+      localOverrides: { providerTransactionId: "stored-transaction" },
+    })).toEqual({ kind: "reject", code: "provider_mismatch" });
+  });
+
+  test.each([
+    {
+      name: "missing local session",
+      localOverrides: {},
+      evidenceValue: "hosted-session-fixture",
+      expected: { kind: "reject", code: "provider_mismatch" },
+    },
+    {
+      name: "mismatched local session",
+      localOverrides: { providerSessionReference: "different-session" },
+      evidenceValue: "hosted-session-fixture",
+      expected: { kind: "reject", code: "provider_mismatch" },
+    },
+    {
+      name: "matching local session",
+      localOverrides: { providerSessionReference: "hosted-session-fixture" },
+      evidenceValue: "hosted-session-fixture",
+      expected: { kind: "finalize", transaction: verifiedTransaction },
+    },
+  ])("requires a $name for provider-session evidence", ({
+    localOverrides,
+    evidenceValue,
+    expected,
+  }) => {
+    expect(decisionFor({
+      localOverrides,
+      callbackOverrides: { providerTransactionId: undefined },
+      providerResult: {
+        ...verifiedResult(),
+        correlation: {
+          kind: "provider_session",
+          value: evidenceValue,
+        },
+      },
+    })).toEqual(expected);
+  });
+
+  test("keeps forged confirmation non-terminal even for a provider decline", () => {
+    expect(decisionFor({
+      callbackOverrides: { confirmationValid: false },
+      providerResult: verifiedResult({ statusCode: "006" }),
+    })).toEqual({ kind: "reject", code: "forged_callback" });
   });
 });
