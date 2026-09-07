@@ -97,6 +97,48 @@ describe("ClubFormDialog", () => {
     expect(screen.getByLabelText("שם החוג")).toHaveValue("חוג קיים");
     expect(screen.getAllByLabelText(/יום בשבוע/)).toHaveLength(2);
   });
+
+  test("updates a club and replaces its recurring schedule rules", async () => {
+    const clubEq = vi.fn(async () => ({ error: null }));
+    const clubUpdate = vi.fn(() => ({ eq: clubEq }));
+    const rulesEq = vi.fn(async () => ({ error: null }));
+    const rulesDelete = vi.fn(() => ({ eq: rulesEq }));
+    const rulesInsert = vi.fn(async () => ({ error: null }));
+    fromMock.mockImplementation((table) => {
+      if (table === "clubs") return { update: clubUpdate };
+      if (table === "club_schedule_rules") return { delete: rulesDelete, insert: rulesInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    render(
+      <ClubFormDialog
+        open
+        onClose={vi.fn()}
+        club={{
+          id: "club-1", name: "חוג קיים", description: null, instructor_id: null,
+          site: "עכו", capacity: 12, monthly_price: 200, default_billing_day: 5,
+          status: "active", notes: null,
+        }}
+        scheduleRules={[{ id: "rule-1", weekday: 1, start_time: "16:00:00", end_time: "17:30:00" }]}
+        instructors={[]}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("שם החוג"), { target: { value: "חוג מעודכן" } });
+    fireEvent.change(screen.getByLabelText("מחיר חודשי"), { target: { value: "225" } });
+    fireEvent.click(screen.getByRole("button", { name: "שמירת חוג" }));
+
+    await waitFor(() => expect(clubUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      name: "חוג מעודכן",
+      monthly_price: 225,
+    })));
+    expect(clubEq).toHaveBeenCalledWith("id", "club-1");
+    expect(rulesEq).toHaveBeenCalledWith("club_id", "club-1");
+    expect(rulesInsert).toHaveBeenCalledWith([
+      expect.objectContaining({ club_id: "club-1", weekday: 1 }),
+    ]);
+  });
 });
 
 describe("MemberRegistrationDialog", () => {

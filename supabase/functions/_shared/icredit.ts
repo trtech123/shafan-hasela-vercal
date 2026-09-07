@@ -234,6 +234,34 @@ export async function createEventDigest(
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export async function prepareVerifiedIpn(
+  fetcher: typeof fetch,
+  input: {
+    raw: Record<string, unknown>;
+    groupPrivateToken: string;
+    agreementId: string;
+    providerRecurringId: string | null;
+    expectedAmount: number;
+  },
+): Promise<{ event: NormalizedIcreditIpn; kind: IcreditEventKind; digest: string }> {
+  const event = normalizeIpn(input.raw);
+  const agreementId = requireUuid(input.agreementId, "local agreementId");
+  if (event.agreementId !== agreementId) throw new Error("Recurring agreement mismatch");
+  if (input.providerRecurringId) {
+    const providerRecurringId = requireUuid(input.providerRecurringId, "local RecurringId");
+    if (event.recurringId !== providerRecurringId) throw new Error("Recurring agreement mismatch");
+  }
+
+  await verifyIpn(fetcher, {
+    groupPrivateToken: input.groupPrivateToken,
+    event,
+    expectedAmount: input.expectedAmount,
+  });
+  const kind = classifyIpn(event);
+  const digest = await createEventDigest(event, kind);
+  return { event, kind, digest };
+}
+
 export function readEnrollmentResponse(data: Record<string, unknown>): string {
   if (Number(data.Status) !== 0) {
     throw new Error(cleanText(data.DebugMessage, 500) ?? "iCredit enrollment failed");

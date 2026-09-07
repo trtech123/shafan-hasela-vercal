@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { classifyIpn, createEventDigest, normalizeIpn, verifyIpn } from "../_shared/icredit.ts";
+import { normalizeIpn, prepareVerifiedIpn } from "../_shared/icredit.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -34,7 +34,8 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "server not configured" }, 500);
     }
 
-    const event = normalizeIpn(await readIpn(req));
+    const rawEvent = await readIpn(req);
+    const event = normalizeIpn(rawEvent);
     const adminClient = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -60,22 +61,26 @@ Deno.serve(async (req: Request) => {
     if (!membership) return json({ ok: false, error: "membership not found" }, 404);
     const expectedAmount = Number(membership.monthly_price);
 
-    await verifyIpn(fetch, { groupPrivateToken, event, expectedAmount });
-    const kind = classifyIpn(event);
-    const digest = await createEventDigest(event, kind);
+    const prepared = await prepareVerifiedIpn(fetch, {
+      raw: rawEvent,
+      groupPrivateToken,
+      agreementId: agreement.id,
+      providerRecurringId: agreement.provider_recurring_id,
+      expectedAmount,
+    });
 
     const { data: result, error: processError } = await adminClient.rpc(
       "process_icredit_recurring_event",
       {
         p_agreement_id: agreement.id,
-        p_event_digest: digest,
-        p_event_kind: kind,
-        p_provider_sale_id: event.saleId,
-        p_provider_recurring_id: event.recurringId,
-        p_provider_charge_number: event.chargeNumber,
+        p_event_digest: prepared.digest,
+        p_event_kind: prepared.kind,
+        p_provider_sale_id: prepared.event.saleId,
+        p_provider_recurring_id: prepared.event.recurringId,
+        p_provider_charge_number: prepared.event.chargeNumber,
         p_amount: expectedAmount,
-        p_failure_code: event.failureCode,
-        p_failure_message: event.failureMessage,
+        p_failure_code: prepared.event.failureCode,
+        p_failure_message: prepared.event.failureMessage,
       },
     );
     if (processError) return json({ ok: false, error: "could not reconcile verified IPN" }, 500);

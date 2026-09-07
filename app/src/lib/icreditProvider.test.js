@@ -9,6 +9,7 @@ import {
   classifyIpn,
   createEventDigest,
   normalizeIpn,
+  prepareVerifiedIpn,
   readEnrollmentResponse,
   verifyIpn,
 } from "../../../supabase/functions/_shared/icredit.ts";
@@ -185,6 +186,72 @@ describe("iCredit TEST provider adapter", () => {
     })).resolves.toBe(true);
   });
 
+  test("prepares a verified creation IPN only after matching the local agreement", async () => {
+    const verifiedFetch = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ Status: "VERIFIED" }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    ));
+    const raw = {
+      SaleId: saleId,
+      GroupPrivateToken: groupToken,
+      Custom1: agreementId,
+      RecurringId: recurringId,
+      RecurringSaleChargeNumber: "0",
+      RecurringSaleCount: "0",
+      TransactionParamJ: "5",
+      TransactionStatus: "0",
+      TransactionAmount: "245",
+    };
+
+    const prepared = await prepareVerifiedIpn(verifiedFetch, {
+      raw,
+      groupPrivateToken: groupToken,
+      agreementId,
+      providerRecurringId: null,
+      expectedAmount: 245,
+    });
+
+    expect(prepared.kind).toBe("agreement_created");
+    expect(prepared.event.recurringId).toBe(recurringId);
+    expect(prepared.digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(verifiedFetch).toHaveBeenCalledOnce();
+  });
+
+  test("rejects mismatched or unverified IPN before producing reconciliation input", async () => {
+    const unverifiedFetch = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ Status: "NOT_VERIFIED" }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    ));
+    const raw = {
+      SaleId: saleId,
+      GroupPrivateToken: groupToken,
+      Custom1: agreementId,
+      RecurringId: recurringId,
+      RecurringSaleChargeNumber: "1",
+      RecurringSaleCount: "0",
+      TransactionParamJ: "0",
+      TransactionStatus: "0",
+      TransactionAmount: "245",
+    };
+
+    await expect(prepareVerifiedIpn(unverifiedFetch, {
+      raw,
+      groupPrivateToken: groupToken,
+      agreementId: "06b61eef-9c17-41ba-9a21-6e83337ad798",
+      providerRecurringId: null,
+      expectedAmount: 245,
+    })).rejects.toThrow(/agreement mismatch/i);
+    expect(unverifiedFetch).not.toHaveBeenCalled();
+
+    await expect(prepareVerifiedIpn(unverifiedFetch, {
+      raw,
+      groupPrivateToken: groupToken,
+      agreementId,
+      providerRecurringId: recurringId,
+      expectedAmount: 245,
+    })).rejects.toThrow(/not verified/i);
+  });
+
   test("creates a stable digest from safe normalized fields", async () => {
     const event = normalizeIpn({
       SaleId: saleId,
@@ -251,9 +318,9 @@ describe("recurring Edge Function security boundaries", () => {
     const ipn = readFileSync(resolve(repoRoot, "supabase/functions/club-recurring-ipn/index.ts"), "utf8");
 
     expect(ipn).toMatch(/normalizeIpn/);
-    expect(ipn).toMatch(/verifyIpn/);
+    expect(ipn).toMatch(/prepareVerifiedIpn/);
     expect(ipn).toMatch(/process_icredit_recurring_event/);
-    expect(ipn.indexOf("verifyIpn")).toBeLessThan(ipn.indexOf("process_icredit_recurring_event"));
+    expect(ipn.indexOf("prepareVerifiedIpn")).toBeLessThan(ipn.indexOf("process_icredit_recurring_event"));
     expect(ipn).not.toMatch(/console\.(?:log|info).*body/i);
   });
 
