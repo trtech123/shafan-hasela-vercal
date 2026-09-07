@@ -69,18 +69,12 @@ export function paymentJson(
   });
 }
 
-export async function parsePaymentJson(
+async function readPaymentText(
   request: Request,
   maxBodyBytes: number,
-): Promise<unknown> {
+): Promise<string> {
   if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes <= 0) {
     throw new PaymentHttpError(500, "invalid_configuration");
-  }
-
-  const contentType = request.headers.get("Content-Type")?.split(";", 1)[0]
-    .trim().toLowerCase();
-  if (contentType !== "application/json") {
-    throw new PaymentHttpError(415, "unsupported_media_type");
   }
 
   const advertisedSize = request.headers.get("Content-Length");
@@ -121,12 +115,56 @@ export async function parsePaymentJson(
     offset += chunk.byteLength;
   }
 
-  let text: string;
   try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
     throw new PaymentHttpError(400, "invalid_json");
   }
+}
+
+function paymentContentType(request: Request): string {
+  return request.headers.get("Content-Type")?.split(";", 1)[0]
+    .trim().toLowerCase() ?? "";
+}
+
+export async function parsePaymentBody(
+  request: Request,
+  maxBodyBytes: number,
+): Promise<{ contentType: string; body: unknown }> {
+  const contentType = paymentContentType(request);
+  if (contentType !== "application/json" &&
+    contentType !== "application/x-www-form-urlencoded") {
+    throw new PaymentHttpError(415, "unsupported_media_type");
+  }
+
+  const text = await readPaymentText(request, maxBodyBytes);
+  if (contentType === "application/json") {
+    try {
+      return { contentType, body: JSON.parse(text) };
+    } catch {
+      throw new PaymentHttpError(400, "invalid_json");
+    }
+  }
+
+  const body: Record<string, string> = {};
+  const params = new URLSearchParams(text);
+  for (const [key, value] of params) {
+    if (Object.hasOwn(body, key)) {
+      throw new PaymentHttpError(400, "invalid_input");
+    }
+    body[key] = value;
+  }
+  return { contentType, body };
+}
+
+export async function parsePaymentJson(
+  request: Request,
+  maxBodyBytes: number,
+): Promise<unknown> {
+  if (paymentContentType(request) !== "application/json") {
+    throw new PaymentHttpError(415, "unsupported_media_type");
+  }
+  const text = await readPaymentText(request, maxBodyBytes);
   try {
     return JSON.parse(text);
   } catch {

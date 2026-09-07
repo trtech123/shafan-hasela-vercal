@@ -93,6 +93,10 @@ function nullableString(row: UnknownRecord, field: string): string | undefined {
   return value;
 }
 
+function nullableStringOrNull(row: UnknownRecord, field: string): string | null {
+  return nullableString(row, field) ?? null;
+}
+
 function decimalToMinor(value: unknown): number {
   if (typeof value !== "string" && typeof value !== "number") {
     throw new PaymentStoreError();
@@ -156,6 +160,21 @@ async function rpc(
   return asRecord(result.data);
 }
 
+async function nullableRpc(
+  client: SupabaseRpcClient,
+  name: string,
+  parameters: Record<string, unknown>,
+): Promise<unknown> {
+  let result: RpcResult;
+  try {
+    result = await client.rpc(name, parameters);
+  } catch {
+    throw new PaymentStoreError();
+  }
+  if (result.error) throw new PaymentStoreError();
+  return result.data;
+}
+
 function amountDecimal(amountMinor: number): string {
   return `${Math.trunc(amountMinor / 100)}.${String(amountMinor % 100).padStart(2, "0")}`;
 }
@@ -198,3 +217,84 @@ export function createSupabasePaymentStore(
     },
   };
 }
+
+function mapVerificationPayment(value: unknown): PaymentRecord {
+  const row = asRecord(value);
+  const status = stringField(row, "status");
+  if (!(status in {
+    initiated: true,
+    pending_provider: true,
+    succeeded: true,
+    failed: true,
+    timed_out: true,
+    refund_pending: true,
+    refunded: true,
+    void_pending: true,
+    voided: true,
+  })) {
+    throw new PaymentStoreError();
+  }
+  return {
+    id: stringField(row, "id"),
+    orderId: nullableStringOrNull(row, "order_id"),
+    saleId: nullableStringOrNull(row, "sale_id"),
+    amountMinor: decimalToMinor(row.amount),
+    currencyCode: stringField(row, "currency"),
+    status: status as PaymentStatus,
+    failureCode: nullableStringOrNull(row, "failure_code"),
+    providerTransactionId: nullableStringOrNull(
+      row,
+      "provider_transaction_id",
+    ),
+    providerSessionReference: nullableStringOrNull(row, "provider_session_id"),
+    receiptNumber: nullableStringOrNull(row, "receipt_number"),
+    createdAt: stringField(row, "created_at"),
+    updatedAt: stringField(row, "updated_at"),
+    verifiedAt: nullableStringOrNull(row, "verified_at"),
+  };
+}
+
+/** Service-role RPC adapter. It accepts and returns allowlisted fields only. */
+export function createSupabasePaymentVerificationStore(
+  client: SupabaseRpcClient,
+): PaymentVerificationStore {
+  return {
+    async getPayment(paymentId) {
+      const data = await nullableRpc(client, "get_pelecard_payment", {
+        p_payment_id: paymentId,
+      });
+      return data === null ? null : mapVerificationPayment(data);
+    },
+
+    async finalize(paymentId, transaction) {
+      return mapVerificationPayment(await rpc(
+        client,
+        "finalize_pelecard_payment",
+        {
+          p_payment_id: paymentId,
+          p_provider_transaction_id: transaction.providerTransactionId,
+          p_approval_id: transaction.approvalId,
+          p_provider_status_code: transaction.statusCode,
+          p_amount: amountDecimal(transaction.amountMinor),
+          p_currency: transaction.currencyCode,
+        },
+      ));
+    },
+
+    async markFailed(paymentId, providerStatusCode) {
+      return mapVerificationPayment(await rpc(
+        client,
+        "fail_pelecard_payment",
+        {
+          p_payment_id: paymentId,
+          p_provider_status_code: providerStatusCode,
+          p_failure_code: "provider_declined",
+        },
+      ));
+    },
+  };
+}
+import type {
+  PaymentRecord,
+  PaymentVerificationStore,
+} from "./payment-handlers.ts";
