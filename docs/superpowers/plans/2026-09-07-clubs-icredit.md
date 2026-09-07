@@ -12,7 +12,7 @@
 
 ## File structure
 
-- `supabase/migrations/021_clubs_and_recurring_billing.sql`: additive tables, constraints, indexes, RLS, grants and atomic billing functions.
+- `supabase/migrations/023_clubs_and_recurring_billing.sql`: additive tables, constraints, indexes, RLS, grants and atomic billing functions.
 - `supabase/functions/_shared/icredit.ts`: pure provider payload, response, IPN normalization, sanitization and digest helpers.
 - `supabase/functions/_shared/admin.ts`: reusable JWT/admin authorization for the two authenticated billing functions.
 - `supabase/functions/club-recurring-enroll/index.ts`: validate admin and membership, create/reuse agreement, call TEST GetUrl.
@@ -36,11 +36,11 @@
 
 **Files:**
 - Create: `app/src/lib/clubsMigrationContract.test.js`
-- Create: `supabase/migrations/021_clubs_and_recurring_billing.sql`
+- Create: `supabase/migrations/023_clubs_and_recurring_billing.sql`
 
 - [ ] **Step 1: Write the failing migration contract test**
 
-Read migration `021` with Node `fs` and assert all nine `CREATE TABLE` statements, `ENABLE ROW LEVEL SECURITY`, unique provider keys, admin-only policies, revoked browser mutation rights, and the functions `process_icredit_recurring_event`/`cancel_icredit_recurring_membership` exist.
+Read migration `023` with Node `fs` and assert all nine `CREATE TABLE` statements, `ENABLE ROW LEVEL SECURITY`, unique provider keys, admin-only policies, revoked browser mutation rights, and the functions `process_icredit_recurring_event`/`cancel_icredit_recurring_membership` exist.
 
 ```js
 const requiredTables = [
@@ -61,7 +61,7 @@ expect(sql).toContain('event_digest TEXT NOT NULL UNIQUE');
 - [ ] **Step 2: Verify RED**
 
 Run: `npx vitest run src/lib/clubsMigrationContract.test.js --pool=threads --maxWorkers=1`  
-Expected: FAIL because migration `021` does not exist.
+Expected: FAIL because migration `023` does not exist.
 
 - [ ] **Step 3: Implement migration**
 
@@ -88,7 +88,7 @@ Run the focused migration contract test and `git diff --check`. Expected: PASS a
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add app/src/lib/clubsMigrationContract.test.js supabase/migrations/021_clubs_and_recurring_billing.sql
+git add app/src/lib/clubsMigrationContract.test.js supabase/migrations/023_clubs_and_recurring_billing.sql
 git commit -m "feat: add clubs membership schema"
 ```
 

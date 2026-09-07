@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration 021: Clubs, memberships, and iCredit reconciliation
+-- Migration 023: Clubs, memberships, and iCredit reconciliation
 -- Additive only. Does not alter orders/activities or create documents.
 -- ============================================================
 

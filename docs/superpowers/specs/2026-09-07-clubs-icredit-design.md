@@ -29,7 +29,7 @@ The existing `activities` and `orders` tables describe one-off offerings and dat
 
 ## Data model
 
-Migration `021_clubs_and_recurring_billing.sql` adds the following tables and no destructive changes.
+Migration `023_clubs_and_recurring_billing.sql` adds the following tables and no destructive changes.
 
 ### `clubs`
 

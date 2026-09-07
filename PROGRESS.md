@@ -5,7 +5,7 @@
 **Date:** 2026-09-08
 **Branch/base:** `workstream/clubs-icredit` from `c8a0663a35ae8254211194e3712519b79a1afe54`
 
-- Added additive migration `021` for Clubs, weekly rules, sparse sessions, participants, memberships, recurring agreements/charges, attendance, and a safe webhook ledger. Billing identity/debt reconciliation, enrollment preparation, and club/schedule replacement are atomic; provider tables are browser-read-only.
+- Added additive migration `023` for Clubs, weekly rules, sparse sessions, participants, memberships, recurring agreements/charges, attendance, and a safe webhook ledger. Billing identity/debt reconciliation, enrollment preparation, and club/schedule replacement are atomic; provider tables are browser-read-only.
 - Added admin-only `/clubs` list/create/edit/registration UI, price snapshots, payment/debt state, hosted TEST enrollment, and provider-first cancellation.
 - Added TEST-only enrollment, verified/idempotent IPN, and cancellation Edge Functions. Hosted capability URLs are not stored; cancelled pending enrollments cannot be reactivated by a late IPN. No Rivhit accounting API or card/token storage was added.
 - Official TEST `GetUrl` smoke returned HTTP 200/provider status 0 and a hosted TEST page. No card was submitted and no recurring agreement was activated.

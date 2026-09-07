@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationPath = resolve(
   here,
-  "../../../supabase/migrations/021_clubs_and_recurring_billing.sql",
+  "../../../supabase/migrations/023_clubs_and_recurring_billing.sql",
 );
 
 function migrationSql() {
