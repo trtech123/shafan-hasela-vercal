@@ -1,4 +1,13 @@
-export type InitiationStatus = "initiated" | "pending_provider" | "timed_out";
+export type PaymentStatus =
+  | "initiated"
+  | "pending_provider"
+  | "succeeded"
+  | "failed"
+  | "timed_out"
+  | "refund_pending"
+  | "refunded"
+  | "void_pending"
+  | "voided";
 
 export interface ReservedPayment {
   id: string;
@@ -10,7 +19,7 @@ export interface ReservedPayment {
   currencyCode: string;
   checkoutSnapshot: unknown;
   merchantCorrelation: string;
-  status: InitiationStatus;
+  status: PaymentStatus;
   providerSessionId?: string;
   redirectUrl?: string;
   failureCode?: string;
@@ -100,7 +109,17 @@ function mapPayment(value: unknown): ReservedPayment {
   const row = asRecord(value);
   const id = stringField(row, "id");
   const status = stringField(row, "status");
-  if (!(["initiated", "pending_provider", "timed_out"] as string[]).includes(status)) {
+  if (!([
+    "initiated",
+    "pending_provider",
+    "succeeded",
+    "failed",
+    "timed_out",
+    "refund_pending",
+    "refunded",
+    "void_pending",
+    "voided",
+  ] as string[]).includes(status)) {
     throw new PaymentStoreError();
   }
   if (row.provider !== "pelecard") throw new PaymentStoreError();
@@ -115,7 +134,7 @@ function mapPayment(value: unknown): ReservedPayment {
     currencyCode: stringField(row, "currency"),
     checkoutSnapshot: row.checkout_snapshot,
     merchantCorrelation: id,
-    status: status as InitiationStatus,
+    status: status as PaymentStatus,
     providerSessionId: nullableString(row, "provider_session_id"),
     redirectUrl: nullableString(row, "provider_redirect_url"),
     failureCode: nullableString(row, "failure_code"),

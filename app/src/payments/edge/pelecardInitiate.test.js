@@ -3,6 +3,12 @@ import { describe, expect, test, vi } from "vitest";
 import {
   createPelecardInitiateHandler,
 } from "../../../../supabase/functions/_shared/payment-initiation.ts";
+import {
+  parsePaymentJson,
+} from "../../../../supabase/functions/_shared/payment-http.ts";
+import {
+  createSupabasePaymentStore,
+} from "../../../../supabase/functions/_shared/payment-store.ts";
 import { PaymentError } from "../../../../supabase/functions/_shared/payment-types.ts";
 
 const PAYMENT_ID = "11111111-1111-4111-8111-111111111111";
@@ -285,6 +291,50 @@ describe("Pelecard initiation handler", () => {
     expect(context.provider.initiate).toHaveBeenCalledOnce();
   });
 
+  test.each([
+    "initiated",
+    "pending_provider",
+    "succeeded",
+    "failed",
+    "timed_out",
+    "refund_pending",
+    "refunded",
+    "void_pending",
+    "voided",
+  ])("returns an existing %s ledger attempt without another provider call", async (status) => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        created: false,
+        id: PAYMENT_ID,
+        provider: "pelecard",
+        order_id: ORDER_ID,
+        created_by: USER_ID,
+        idempotency_key: requestBody.idempotencyKey,
+        amount: "120.00",
+        currency: "ILS",
+        checkout_snapshot: checkout,
+        status,
+        provider_session_id: status === "pending_provider"
+          ? "hosted-session-fixture"
+          : null,
+        provider_redirect_url: status === "pending_provider" ? REDIRECT_URL : null,
+        failure_code: null,
+      },
+      error: null,
+    });
+    const store = createSupabasePaymentStore({ rpc });
+    const provider = { initiate: vi.fn() };
+
+    const { response, body } = await invoke(jsonRequest(), { store, provider });
+
+    expect(response.status).toBe(status === "pending_provider" ? 200 : 202);
+    expect(body).toEqual(status === "pending_provider"
+      ? { paymentId: PAYMENT_ID, status, redirectUrl: REDIRECT_URL }
+      : { paymentId: PAYMENT_ID, status });
+    expect(provider.initiate).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledOnce();
+  });
+
   test("does not return a corrupt stored redirect on an idempotent retry", async () => {
     const baseStore = createMemoryStore();
     await baseStore.reserve({
@@ -307,8 +357,8 @@ describe("Pelecard initiation handler", () => {
       provider,
     });
 
-    expect(response.status).toBe(502);
-    expect(body).toEqual({ error: { code: "invalid_provider_response" } });
+    expect(response.status).toBe(202);
+    expect(body).toEqual({ paymentId: PAYMENT_ID, status: "pending_provider" });
     expect(provider.initiate).not.toHaveBeenCalled();
   });
 
@@ -423,5 +473,76 @@ describe("Pelecard initiation handler", () => {
     expect(result.response.headers.get("Access-Control-Allow-Origin")).toBeNull();
     expect(result.context.auth.authenticate).not.toHaveBeenCalled();
     expect(result.context.store.reserve).not.toHaveBeenCalled();
+  });
+});
+
+describe("bounded payment JSON parsing", () => {
+  function streamedRequest(chunks, onCancel) {
+    let index = 0;
+    return new Request("https://edge.example.test/pelecard-initiate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: new ReadableStream({
+        pull(controller) {
+          if (index >= chunks.length) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(chunks[index++]);
+        },
+        cancel: onCancel,
+      }),
+      duplex: "half",
+    });
+  }
+
+  test("cancels a chunked body as soon as its byte limit is exceeded", async () => {
+    const cancel = vi.fn();
+    const chunks = Array.from(
+      { length: 100 },
+      () => new Uint8Array(8).fill("x".charCodeAt(0)),
+    );
+    const request = streamedRequest(chunks, cancel);
+
+    await expect(parsePaymentJson(request, 10)).rejects.toMatchObject({
+      status: 413,
+      code: "body_too_large",
+    });
+
+    expect(request.headers.get("Content-Length")).toBeNull();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  test("still returns the safe size error when stream cancellation rejects", async () => {
+    const request = streamedRequest(
+      [new Uint8Array(11)],
+      vi.fn().mockRejectedValue(new Error("transport detail")),
+    );
+
+    await expect(parsePaymentJson(request, 10)).rejects.toMatchObject({
+      status: 413,
+      code: "body_too_large",
+    });
+  });
+
+  test("counts valid multibyte JSON by bytes", async () => {
+    const encoded = new TextEncoder().encode(JSON.stringify({ name: "שלום" }));
+    const accepted = streamedRequest([encoded], vi.fn());
+    const rejected = streamedRequest([encoded], vi.fn());
+
+    await expect(parsePaymentJson(accepted, encoded.byteLength)).resolves.toEqual({
+      name: "שלום",
+    });
+    await expect(parsePaymentJson(rejected, encoded.byteLength - 1)).rejects
+      .toMatchObject({ status: 413, code: "body_too_large" });
+  });
+
+  test.each(["", "{"])("safely rejects empty or malformed JSON", async (raw) => {
+    const request = streamedRequest([new TextEncoder().encode(raw)], vi.fn());
+
+    await expect(parsePaymentJson(request, 100)).rejects.toMatchObject({
+      status: 400,
+      code: "invalid_json",
+    });
   });
 });

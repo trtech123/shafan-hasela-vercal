@@ -94,9 +94,38 @@ export async function parsePaymentJson(
     }
   }
 
-  const text = await request.text();
-  if (new TextEncoder().encode(text).byteLength > maxBodyBytes) {
-    throw new PaymentHttpError(413, "body_too_large");
+  if (!request.body) throw new PaymentHttpError(400, "invalid_json");
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBodyBytes) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The size violation is authoritative; do not expose stream details.
+      }
+      throw new PaymentHttpError(413, "body_too_large");
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new PaymentHttpError(400, "invalid_json");
   }
   try {
     return JSON.parse(text);

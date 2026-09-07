@@ -296,17 +296,11 @@ function existingResponse(
   allowedRedirectOrigins: readonly string[],
   cors: HeadersInit,
 ): Response {
-  if (payment.status === "pending_provider" && payment.redirectUrl) {
-    if (!payment.providerSessionId || !validHostedSession({
+  if (payment.status === "pending_provider" && payment.redirectUrl &&
+    payment.providerSessionId && validHostedSession({
       redirectUrl: payment.redirectUrl,
       sessionReference: payment.providerSessionId,
     }, allowedRedirectOrigins)) {
-      return paymentJson(
-        { error: { code: "invalid_provider_response" } },
-        502,
-        cors,
-      );
-    }
     return paymentJson({
       paymentId: payment.id,
       status: "pending_provider",
