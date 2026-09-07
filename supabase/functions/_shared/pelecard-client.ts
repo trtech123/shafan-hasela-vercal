@@ -2,6 +2,7 @@ import {
   type ConfirmationValidation,
   type HostedPaymentSession,
   type InitiateProviderPayment,
+  type LookupProviderPayment,
   type PaymentProvider,
   type ProviderAdjustment,
   type ProviderAdjustmentCapabilityInput,
@@ -26,7 +27,7 @@ export interface PelecardCapabilities {
     signal: AbortSignal,
   ) => Promise<boolean>;
   lookup?: {
-    transport: ProviderTransport<string>;
+    transport: ProviderTransport<LookupProviderPayment>;
     decode: ProviderDecoder<unknown>;
   };
   /**
@@ -40,7 +41,7 @@ export interface PelecardCapabilities {
 }
 
 export interface PelecardConfig {
-  allowedRedirectHosts: readonly string[];
+  allowedRedirectOrigins: readonly string[];
   capabilities?: PelecardCapabilities;
   timeoutMs?: number;
   cancelEnabled?: boolean;
@@ -154,7 +155,7 @@ function validateInitiationInput(input: InitiateProviderPayment): void {
 
 function sanitizeHostedSession(
   decoded: unknown,
-  allowedRedirectHosts: readonly string[],
+  allowedRedirectOrigins: ReadonlySet<string>,
 ): HostedPaymentSession {
   const record = asRecord(decoded);
   const redirectUrl = requiredString(record, "redirectUrl", 2_048);
@@ -167,19 +168,55 @@ function sanitizeHostedSession(
     throw new PaymentError("invalid_provider_response");
   }
 
-  const allowedHosts = new Set(
-    allowedRedirectHosts.map((host) => host.trim().toLowerCase()),
-  );
   if (
     parsed.protocol !== "https:" ||
     parsed.username !== "" ||
     parsed.password !== "" ||
-    !allowedHosts.has(parsed.hostname.toLowerCase())
+    !allowedRedirectOrigins.has(parsed.origin)
   ) {
     throw new PaymentError("invalid_provider_response");
   }
 
   return { redirectUrl, sessionReference };
+}
+
+function normalizeAllowedRedirectOrigins(
+  configuredOrigins: readonly string[],
+): ReadonlySet<string> {
+  if (!Array.isArray(configuredOrigins) || configuredOrigins.length === 0) {
+    throw new PaymentError("invalid_configuration");
+  }
+
+  const origins = new Set<string>();
+  for (const configuredOrigin of configuredOrigins) {
+    if (
+      typeof configuredOrigin !== "string" ||
+      configuredOrigin.length === 0 ||
+      configuredOrigin.trim() !== configuredOrigin
+    ) {
+      throw new PaymentError("invalid_configuration");
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(configuredOrigin);
+    } catch {
+      throw new PaymentError("invalid_configuration");
+    }
+
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      parsed.pathname !== "/" ||
+      parsed.search !== "" ||
+      parsed.hash !== ""
+    ) {
+      throw new PaymentError("invalid_configuration");
+    }
+    origins.add(parsed.origin);
+  }
+  return origins;
 }
 
 function sanitizeVerifiedTransaction(decoded: unknown): VerifiedProviderTransaction {
@@ -206,6 +243,25 @@ function validateConfirmationInput(input: ConfirmationValidation): void {
   assertAmountMinor(input.amountMinor, "invalid_input");
 }
 
+function validateLookupInput(input: LookupProviderPayment): void {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new PaymentError("invalid_input");
+  }
+  assertInputString(input.localPaymentId, 100);
+  assertInputString(input.merchantCorrelation, 500);
+
+  for (const optionalCorrelation of [
+    input.terminalReference,
+    input.providerTransactionId,
+    input.sessionReference,
+    input.callbackReference,
+  ]) {
+    if (optionalCorrelation !== undefined) {
+      assertInputString(optionalCorrelation, 500);
+    }
+  }
+}
+
 function validateAdjustment(input: ProviderAdjustment): void {
   assertInputString(input.providerTransactionId, 100);
   if (input.amountMinor !== undefined) {
@@ -215,6 +271,9 @@ function validateAdjustment(input: ProviderAdjustment): void {
 
 export function createPelecardClient(config: PelecardConfig): PaymentProvider {
   const capabilities = config.capabilities ?? {};
+  const allowedRedirectOrigins = normalizeAllowedRedirectOrigins(
+    config.allowedRedirectOrigins,
+  );
 
   return {
     async initiate(input) {
@@ -225,7 +284,7 @@ export function createPelecardClient(config: PelecardConfig): PaymentProvider {
         capability.transport(input, timeoutSignal(config))
       );
       const decoded = decodeResponse(capability.decode, response);
-      return sanitizeHostedSession(decoded, config.allowedRedirectHosts);
+      return sanitizeHostedSession(decoded, allowedRedirectOrigins);
     },
 
     async validateConfirmation(input) {
@@ -239,16 +298,19 @@ export function createPelecardClient(config: PelecardConfig): PaymentProvider {
       return true;
     },
 
-    async lookup(providerTransactionId) {
+    async lookup(input) {
       const capability = capabilities.lookup;
       if (!capability) throw new PaymentError("capability_unconfigured");
-      assertInputString(providerTransactionId, 100);
+      validateLookupInput(input);
       const response = await callTransport(() =>
-        capability.transport(providerTransactionId, timeoutSignal(config))
+        capability.transport(input, timeoutSignal(config))
       );
       const decoded = decodeResponse(capability.decode, response);
       const transaction = sanitizeVerifiedTransaction(decoded);
-      if (transaction.providerTransactionId !== providerTransactionId) {
+      if (
+        input.providerTransactionId !== undefined &&
+        transaction.providerTransactionId !== input.providerTransactionId
+      ) {
         throw new PaymentError("provider_mismatch");
       }
       return transaction;

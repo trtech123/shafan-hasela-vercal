@@ -22,8 +22,15 @@ const verifiedTransaction = {
   merchantKey: "payment-uuid",
 };
 
+const lookupByTransaction = {
+  localPaymentId: "local-payment-uuid",
+  merchantCorrelation: "payment-uuid",
+  terminalReference: "sandbox-terminal-fixture",
+  providerTransactionId: "651650799",
+};
+
 const createConfig = (capabilities = {}, overrides = {}) => ({
-  allowedRedirectHosts: ["gateway20.pelecard.biz"],
+  allowedRedirectOrigins: ["https://gateway20.pelecard.biz"],
   capabilities,
   ...overrides,
 });
@@ -73,10 +80,48 @@ describe("Pelecard provider client", () => {
       lookup: { transport, decode: (raw) => raw },
     }));
 
-    const result = await client.lookup("651650799");
+    const result = await client.lookup(lookupByTransaction);
 
     expect(result).toEqual(verifiedTransaction);
     expect(Object.keys(result)).toEqual(Object.keys(verifiedTransaction));
+  });
+
+  test("transports lookup using locally known correlations without a transaction id", async () => {
+    const lookupContext = {
+      localPaymentId: "local-payment-uuid",
+      merchantCorrelation: "payment-uuid",
+      terminalReference: "sandbox-terminal-fixture",
+      sessionReference: "hosted-session-fixture",
+      callbackReference: "callback-fixture",
+    };
+    const transport = vi.fn().mockResolvedValue(verifiedTransaction);
+    const client = createPelecardClient(createConfig({
+      lookup: { transport, decode: (raw) => raw },
+    }));
+
+    const result = await client.lookup(lookupContext);
+
+    expect(result).toEqual(verifiedTransaction);
+    expect(transport).toHaveBeenCalledWith(
+      lookupContext,
+      expect.any(AbortSignal),
+    );
+  });
+
+  test("validates lookup correlation context before transport", async () => {
+    const transport = vi.fn().mockResolvedValue(verifiedTransaction);
+    const client = createPelecardClient(createConfig({
+      lookup: { transport, decode: (raw) => raw },
+    }));
+
+    await expectPaymentError(
+      client.lookup({
+        localPaymentId: " ",
+        merchantCorrelation: "payment-uuid",
+      }),
+      "invalid_input",
+    );
+    expect(transport).not.toHaveBeenCalled();
   });
 
   test("fails closed when a decoded provider response is invalid", async () => {
@@ -91,7 +136,7 @@ describe("Pelecard provider client", () => {
     }));
 
     await expectPaymentError(
-      client.lookup("651650799"),
+      client.lookup(lookupByTransaction),
       "invalid_provider_response",
     );
   });
@@ -99,6 +144,7 @@ describe("Pelecard provider client", () => {
   test.each([
     ["non-HTTPS", "http://gateway20.pelecard.biz/PaymentGW/?session=fixture"],
     ["non-allowlisted", "https://evil.example/PaymentGW/?session=fixture"],
+    ["custom-port", "https://gateway20.pelecard.biz:8443/PaymentGW/?session=fixture"],
   ])("rejects a %s hosted redirect", async (_description, redirectUrl) => {
     const client = createPelecardClient(createConfig({
       initiate: {
@@ -114,6 +160,21 @@ describe("Pelecard provider client", () => {
       client.initiate(initiation),
       "invalid_provider_response",
     );
+  });
+
+  test.each([
+    ["credentials", "https://user:pass@gateway20.pelecard.biz"],
+    ["path", "https://gateway20.pelecard.biz/PaymentGW"],
+    ["non-HTTPS scheme", "http://gateway20.pelecard.biz"],
+  ])("rejects an allowed redirect origin containing %s", (_description, origin) => {
+    expect(() => createPelecardClient(createConfig(
+      {},
+      { allowedRedirectOrigins: [origin] },
+    ))).toThrowError(expect.objectContaining({
+      name: "PaymentError",
+      code: "invalid_configuration",
+      message: "invalid_configuration",
+    }));
   });
 
   test("maps AbortError to a safe provider_timeout error", async () => {
@@ -150,7 +211,7 @@ describe("Pelecard provider client", () => {
     const client = createPelecardClient(createConfig());
 
     await expectPaymentError(
-      client.lookup("651650799"),
+      client.lookup(lookupByTransaction),
       "capability_unconfigured",
     );
   });
@@ -182,7 +243,7 @@ describe("Pelecard provider client", () => {
     }));
 
     await expectPaymentError(
-      client.lookup("651650799"),
+      client.lookup(lookupByTransaction),
       "provider_mismatch",
     );
   });

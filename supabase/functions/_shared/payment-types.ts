@@ -49,6 +49,19 @@ export interface VerifiedProviderTransaction {
   merchantKey: string;
 }
 
+/**
+ * Locally known correlations available to an injected authoritative lookup.
+ * This is deliberately independent of any provider's wire request schema.
+ */
+export interface LookupProviderPayment {
+  localPaymentId: string;
+  merchantCorrelation: string;
+  terminalReference?: string;
+  providerTransactionId?: string;
+  sessionReference?: string;
+  callbackReference?: string;
+}
+
 export interface ProviderAdjustment {
   providerTransactionId: string;
   amountMinor?: number;
@@ -61,7 +74,7 @@ export interface ProviderAdjustmentCapabilityInput extends ProviderAdjustment {
 export interface PaymentProvider {
   initiate(input: InitiateProviderPayment): Promise<HostedPaymentSession>;
   validateConfirmation(input: ConfirmationValidation): Promise<true>;
-  lookup(providerTransactionId: string): Promise<VerifiedProviderTransaction>;
+  lookup(input: LookupProviderPayment): Promise<VerifiedProviderTransaction>;
   cancel(input: ProviderAdjustment): Promise<void>;
   refund(input: ProviderAdjustment): Promise<void>;
 }
