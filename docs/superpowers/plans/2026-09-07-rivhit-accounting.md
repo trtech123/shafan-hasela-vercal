@@ -47,7 +47,7 @@ describe("021 Rivhit accounting migration", () => {
 
 - [ ] **Step 2: Run the test and verify RED**
 
-Run: `npm exec --prefix app vitest -- run --root .. supabase/functions/_shared/rivhit/migration.test.ts`  
+Run: `npm exec --prefix app vitest -- run --root .. supabase/functions/_shared/rivhit/migration.test.ts`
 Expected: FAIL because `021_rivhit_accounting.sql` does not exist.
 
 - [ ] **Step 3: Implement the additive schema**
@@ -82,12 +82,12 @@ TABLE (
 
 - [ ] **Step 4: Run the test and verify GREEN**
 
-Run: `npm exec --prefix app vitest -- run --root .. supabase/functions/_shared/rivhit/migration.test.ts`  
+Run: `npm exec --prefix app vitest -- run --root .. supabase/functions/_shared/rivhit/migration.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Check migration formatting and commit**
 
-Run: `git diff --check`  
+Run: `git diff --check`
 Expected: exit 0.
 
 Commit:
@@ -117,7 +117,7 @@ export function parseDocumentTypeMap(raw: string | undefined): Record<string, Do
 export function getDocumentMapping(map: Record<string, DocumentMapping>, key: string): DocumentMapping;
 ```
 
-Run: `npm exec --prefix app vitest -- run --root .. supabase/functions/_shared/rivhit/config.test.ts`  
+Run: `npm exec --prefix app vitest -- run --root .. supabase/functions/_shared/rivhit/config.test.ts`
 Expected: FAIL because `config.ts` does not exist.
 
 - [ ] **Step 2: Implement and verify configuration GREEN**
@@ -213,7 +213,7 @@ export interface AccountingRepository {
 
 Tests must cover found customer, created customer, persisted customer ID, created/persisted document, duplicate success without another API call, active processing, retry not due, retry after due, network error persistence, permanent response persistence, and reconciliation-required persistence.
 
-Run: `npm exec --prefix app vitest -- run --root .. supabase/functions/_shared/rivhit/workflow.test.ts`  
+Run: `npm exec --prefix app vitest -- run --root .. supabase/functions/_shared/rivhit/workflow.test.ts`
 Expected: FAIL because `workflow.ts` does not exist.
 
 - [ ] **Step 2: Implement and verify workflow GREEN**

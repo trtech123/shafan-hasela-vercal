@@ -10,6 +10,7 @@ const mapping: DocumentMapping = {
   send_mail: false,
   digital_signature: false,
 };
+const accountNamespace = "official-sandbox";
 
 const order: OrderSource = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -28,7 +29,7 @@ const order: OrderSource = {
 
 describe("order to Rivhit mapping", () => {
   test("uses billing priority while storing only a hashed identity", async () => {
-    const result = await mapOrderToAccountingSource(order, "Climbing Day", "sandbox_test", mapping);
+    const result = await mapOrderToAccountingSource(order, "Climbing Day", "sandbox_test", mapping, accountNamespace);
 
     expect(result.customer.last_name).toBe("Institution Billing Name");
     expect(result.customer.email).toBe("billing@example.com");
@@ -39,10 +40,11 @@ describe("order to Rivhit mapping", () => {
     expect(result.externalCustomerReference).toHaveLength(20);
     expect(result.customer).not.toHaveProperty("vat_number");
     expect(result.customer).not.toHaveProperty("id_number");
+    expect(result.accountNamespace).toBe(accountNamespace);
   });
 
   test("maps order amounts and configurable document behavior", async () => {
-    const result = await mapOrderToAccountingSource(order, "Climbing Day", "sandbox_test", mapping);
+    const result = await mapOrderToAccountingSource(order, "Climbing Day", "sandbox_test", mapping, accountNamespace);
 
     expect(result.document).toMatchObject({
       document_type: 1,
@@ -74,6 +76,7 @@ describe("order to Rivhit mapping", () => {
       null,
       "sandbox_test",
       mapping,
+      accountNamespace,
     );
 
     expect(result.document.items).toEqual([
@@ -87,9 +90,9 @@ describe("order to Rivhit mapping", () => {
   });
 
   test("produces stable references and hashes for the same operation", async () => {
-    const first = await mapOrderToAccountingSource(order, "Climbing Day", "sandbox_test", mapping);
-    const second = await mapOrderToAccountingSource(order, "Climbing Day", "sandbox_test", mapping);
-    const otherType = await mapOrderToAccountingSource(order, "Climbing Day", "other_type", mapping);
+    const first = await mapOrderToAccountingSource(order, "Climbing Day", "sandbox_test", mapping, accountNamespace);
+    const second = await mapOrderToAccountingSource(order, "Climbing Day", "sandbox_test", mapping, accountNamespace);
+    const otherType = await mapOrderToAccountingSource(order, "Climbing Day", "other_type", mapping, accountNamespace);
 
     expect(second).toEqual(first);
     expect(first.documentRequestReference).toBe(
@@ -106,6 +109,7 @@ describe("order to Rivhit mapping", () => {
         "Climbing Day",
         "sandbox_test",
         mapping,
+        accountNamespace,
       ),
     ).rejects.toThrow("Order has no positive accounting amount");
   });

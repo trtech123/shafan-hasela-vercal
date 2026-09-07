@@ -65,6 +65,7 @@ export interface RivhitDocumentDraft {
 
 export interface MappedAccountingSource {
   provider: "rivhit";
+  accountNamespace: string;
   sourceType: "order";
   sourceId: string;
   documentTypeKey: string;

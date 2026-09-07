@@ -1,7 +1,7 @@
 # Rivhit Accounting Integration Design
 
-**Date:** 2026-09-07  
-**Branch:** `workstream/rivhit-accounting`  
+**Date:** 2026-09-07
+**Branch:** `workstream/rivhit-accounting`
 **Base:** `c8a0663a35ae8254211194e3712519b79a1afe54`
 
 ## Goal
@@ -39,18 +39,20 @@ Migration `021_rivhit_accounting.sql` creates two generic tables without alterin
 
 - `id` UUID primary key.
 - `provider` text; this phase writes `rivhit`.
+- `account_namespace` text; a stable, non-secret Rivhit account/environment identifier that prevents sandbox and Production state from colliding.
 - `identity_key` text containing a one-way hash-derived local identity, never raw phone/email/company data.
 - `external_customer_id` text for the Rivhit customer number.
 - `external_reference` text for the deterministic Rivhit `acc_ref`.
 - `status`: `pending`, `processing`, `succeeded`, `retryable_error`, `permanent_error`, or `reconciliation_required`.
 - `attempt_count`, `last_attempt_at`, `retry_after`, and structured `last_error` JSONB.
 - `created_at` and `updated_at`.
-- Unique provider/identity and provider/external-reference constraints.
+- Unique provider/account-namespace/identity and provider/account-namespace/external-reference constraints.
 
 #### `accounting_documents`
 
 - `id` UUID primary key.
 - `provider` text.
+- `account_namespace` text using the same environment/account boundary as its customer.
 - `accounting_customer_id` foreign key to `accounting_customers`.
 - `source_type` and `source_id`; this phase accepts only `order`, while the schema can represent later source types.
 - `document_type_key`, the internal configurable mapping name.
@@ -58,11 +60,13 @@ Migration `021_rivhit_accounting.sql` creates two generic tables without alterin
 - `status` using the same observable lifecycle states.
 - `request_reference`, `payload_hash`, `external_document_id`, `external_document_number`, and `document_url`.
 - `attempt_count`, `last_attempt_at`, `retry_after`, structured `last_error`, `created_at`, and `updated_at`.
-- Unique provider/source/type-key and provider/request-reference constraints.
+- Unique provider/account-namespace/source/type-key and provider/account-namespace/request-reference constraints.
 
 Foreign-key and lookup columns receive indexes. RLS permits admin/operations read access and defines no client-side insert/update/delete policies. The service role performs writes after the Edge Function authenticates and authorizes the caller.
 
-Short, security-definer claim functions atomically create or reclaim customer/document work. They never hold a database transaction open during a Rivhit HTTP request. Execute permission is revoked from public, anon, and authenticated roles and granted only to `service_role`.
+Short, security-definer claim functions atomically create or reclaim customer/document work. Completion/failure functions compare the claimed `attempt_count` generation and `processing` state, so a stale worker cannot overwrite a newer attempt. They never hold a database transaction open during a Rivhit HTTP request. Execute permission is revoked from public, anon, and authenticated roles and granted only to `service_role`.
+
+The existing own-profile update policy allows users to edit their profile row. An additive trigger guard blocks role changes unless the caller is already an admin or uses the service role, preventing self-promotion into an accounting-authorized role while preserving admin user management.
 
 The migration is expand-only. Rollback consists of dropping the new claim functions, policies, indexes, and tables; no existing data needs transformation or restoration.
 
@@ -75,8 +79,10 @@ Focused shared modules implement:
 - A typed `RivhitError` carrying HTTP status, Rivhit error code, messages, and retry classification.
 - Retry classification: network errors, HTTP 408/429, and HTTP 5xx are retryable; validation/authentication errors and other HTTP 4xx responses are permanent. Rivhit `-107` becomes `reconciliation_required` when no local success record exists because retrying cannot safely reconstruct the original link from the documented response.
 - Exponential retry metadata calculated locally; retries occur only on a later explicit invocation after `retry_after`.
+- A bounded request timeout shorter than the database stale-work window.
+- Ambiguous successful `Document.New` responses (malformed/missing result data) and provider-success/local-persistence failures become `reconciliation_required`; any returned external identifiers are retained when the fenced reconciliation write succeeds.
 
-The API token is read only from `RIVHIT_API_TOKEN` in the Edge Function environment. It is never accepted in request JSON, returned in responses, logged, or referenced by frontend code.
+The API token is read only from `RIVHIT_API_TOKEN` in the Edge Function environment. `RIVHIT_ACCOUNT_NAMESPACE` is also required and must differ between sandbox and Production. Neither is accepted in request JSON, returned in responses, logged, or referenced by frontend code.
 
 ### 3. Configurable document mapping
 
@@ -126,7 +132,7 @@ The JWT-protected `rivhit-accounting` Edge Function accepts:
 
 The flow is:
 
-1. Authenticate the caller and require role `admin` or `operations`.
+1. Authenticate the caller and require role `admin` or `operations`; the migration prevents non-admin users from changing their own role.
 2. Load and validate the source order and activity with a server-side Supabase client.
 3. Resolve the document mapping from server environment.
 4. Derive customer identity, request references, and a canonical payload hash.
@@ -137,7 +143,7 @@ The flow is:
 9. Persist identifiers, number, URL, and succeeded status, then return them.
 10. On failure, persist the error and retry metadata before returning a controlled error response.
 
-The local unique constraints prevent concurrent duplicate work. Rivhit's request reference protects the remote side if a request is retried after an ambiguous network failure. A payload hash prevents silently reusing an idempotency identity after source accounting data changes.
+The local unique constraints prevent concurrent duplicate work, the account namespace separates sandbox and Production ledgers, and attempt-fenced finalization prevents stale workers from overwriting newer outcomes. Rivhit's request reference protects the remote side if a request is retried after an ambiguous network failure. A payload hash prevents silently reusing an idempotency identity after source accounting data changes.
 
 ### 6. Testing and sandbox proof
 
@@ -162,6 +168,7 @@ Because Docker is not installed and no non-Production Supabase project was suppl
 Production remains disabled until all of the following are supplied and explicitly approved:
 
 - A Rivhit Online/Invoice Online Production API token stored as Edge Function secret `RIVHIT_API_TOKEN`.
+- A stable Production-only `RIVHIT_ACCOUNT_NAMESPACE` that is different from the sandbox namespace.
 - A reviewed `RIVHIT_DOCUMENT_TYPE_MAP` containing every approved business mapping.
 - Explicit `RIVHIT_ACCOUNTING_MODE=production`; local verification uses `sandbox`.
 - Confirmation that the Production Rivhit account's document types, sort codes, currency settings, VAT configuration, email defaults, and signature settings match the approved mapping.

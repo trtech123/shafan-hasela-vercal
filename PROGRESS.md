@@ -1340,7 +1340,8 @@ Radix UI `Select` reserves the empty-string `value` to represent the unselected 
 - Added additive, generic `accounting_customers` and `accounting_documents` ledgers with RLS, service-role claim functions, retry metadata, local uniqueness, and payload mismatch protection.
 - Added a server-only Rivhit client, configurable order mapping, idempotent workflow, Supabase persistence adapter, and authenticated `admin`/`operations` Edge Function.
 - Left local `RCP-*` receipts, Pelecard, iCredit, sales, and existing order schema unchanged.
-- Automated connector, mapping, failure, retry, persistence, migration-contract, and duplicate-prevention tests pass.
-- Live sandbox proof created customer `534205241` and TEST document `6659` (`b9f9eb95-1aa5-4442-bdbf-5db15299d63b`). A fresh second run used the persisted document and made no second `Document.New` request.
+- Automated connector, mapping, failure, retry, persistence, migration-contract, authorization-guard, stale-worker, environment-isolation, and duplicate-prevention tests pass.
+- The ledger is namespaced per Rivhit account/environment, completion is fenced by attempt generation, and non-admin profile self-promotion is blocked before accounting authorization.
+- Final live sandbox proof created customer `534205242` and TEST document `6660` (`d6d939e5-c264-4fec-b319-b1672192ab9b`). A fresh second run used the persisted document and made no second `Document.New` request.
 - No Production migration, configuration, deployment, credentials, or Rivhit document was used.
 - Docker is unavailable, so the migration and Edge Function were not executed against a local Supabase stack.

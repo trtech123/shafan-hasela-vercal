@@ -40,8 +40,9 @@ Deno.serve(async (req: Request) => {
   const rivhitApiToken = Deno.env.get("RIVHIT_API_TOKEN");
   const documentMapRaw = Deno.env.get("RIVHIT_DOCUMENT_TYPE_MAP");
   const accountingMode = Deno.env.get("RIVHIT_ACCOUNTING_MODE");
+  const accountNamespace = Deno.env.get("RIVHIT_ACCOUNT_NAMESPACE")?.trim();
 
-  if (!supabaseUrl || !anonKey || !serviceKey || !rivhitApiToken) {
+  if (!supabaseUrl || !anonKey || !serviceKey || !rivhitApiToken || !accountNamespace) {
     return json({ ok: false, error: "server accounting configuration is incomplete" }, 500);
   }
   if (accountingMode !== "sandbox" && accountingMode !== "production") {
@@ -124,9 +125,10 @@ Deno.serve(async (req: Request) => {
       activityName,
       documentTypeKey,
       mapping,
+      accountNamespace,
     );
     const rivhitClient = new RivhitClient({ apiToken: rivhitApiToken });
-    const repository = new SupabaseAccountingRepository(adminClient as never);
+    const repository = new SupabaseAccountingRepository(adminClient);
     const result = await runRivhitAccounting({
       source,
       repository,
@@ -134,6 +136,12 @@ Deno.serve(async (req: Request) => {
     });
 
     if (result.status !== "succeeded") {
+      if (
+        result.status === "permanent_error"
+        || result.status === "reconciliation_required"
+      ) {
+        return json({ ok: false, mode: accountingMode, ...result }, 409);
+      }
       return json({ ok: true, mode: accountingMode, ...result }, 202);
     }
     return json({ ok: true, mode: accountingMode, ...result });

@@ -141,6 +141,30 @@ describe("RivhitClient", () => {
     }
   });
 
+  test("treats transient HTTP status as retryable when error_code is zero", async () => {
+    const client = new RivhitClient({
+      apiToken: token,
+      fetchImpl: vi.fn().mockResolvedValue(jsonResponse({ error_code: 0 }, 503)),
+    });
+
+    await expect(client.findCustomerByAccRef("shabc")).rejects.toMatchObject({
+      retryable: true,
+      httpStatus: 503,
+    });
+  });
+
+  test("adds a request timeout signal", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
+      error_code: 0,
+      data: { customer_id: 1234 },
+    }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl, timeoutMs: 1234 });
+
+    await client.findCustomerByAccRef("shabc");
+
+    expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
   test("classifies structured validation and duplicate errors safely", async () => {
     const validationClient = new RivhitClient({
       apiToken: token,
@@ -191,5 +215,24 @@ describe("RivhitClient", () => {
       request_reference: "x",
       prevent_duplicates: true,
     })).rejects.toThrow(message);
+  });
+
+  test.each([
+    "not-json",
+    JSON.stringify({ error_code: 0, data: { customer_id: 1 } }),
+  ])("marks ambiguous successful Document.New responses for reconciliation", async (body) => {
+    const client = new RivhitClient({
+      apiToken: token,
+      fetchImpl: vi.fn().mockResolvedValue(new Response(body, { status: 200 })),
+    });
+
+    await expect(client.createDocument({
+      document_type: 1,
+      customer_id: 1,
+      last_name: "x",
+      items: [],
+      request_reference: "x",
+      prevent_duplicates: true,
+    })).rejects.toMatchObject({ reconciliationRequired: true });
   });
 });

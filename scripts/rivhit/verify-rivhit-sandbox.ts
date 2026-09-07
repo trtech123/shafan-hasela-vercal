@@ -93,6 +93,7 @@ async function main(): Promise<void> {
       send_mail: false,
       digital_signature: false,
     },
+    "official-shared-sandbox",
   );
 
   const firstResult = await runRivhitAccounting({

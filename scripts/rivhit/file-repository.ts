@@ -132,7 +132,9 @@ export class FileAccountingRepository implements AccountingRepository {
     const state = await this.load();
     const now = this.now();
     const existing = state.customers.find((row) =>
-      row.provider === input.provider && row.identityKey === input.identityKey
+      row.provider === input.provider
+      && row.accountNamespace === input.accountNamespace
+      && row.identityKey === input.identityKey
     );
     if (!existing) {
       const row: CustomerRow = {
@@ -168,10 +170,15 @@ export class FileAccountingRepository implements AccountingRepository {
     return customerClaim(existing, true);
   }
 
-  async succeedCustomer(id: string, externalCustomerId: string): Promise<void> {
+  async succeedCustomer(
+    id: string,
+    attemptCount: number,
+    externalCustomerId: string,
+  ): Promise<void> {
     const state = await this.load();
     const row = state.customers.find((candidate) => candidate.id === id);
     if (!row) throw new Error(`Unknown accounting customer ${id}`);
+    this.assertActiveAttempt(row, attemptCount);
     Object.assign(row, {
       status: "succeeded" as const,
       externalCustomerId,
@@ -182,14 +189,21 @@ export class FileAccountingRepository implements AccountingRepository {
     await this.save(state);
   }
 
-  async failCustomer(id: string, failure: PersistedFailure): Promise<void> {
+  async failCustomer(
+    id: string,
+    attemptCount: number,
+    failure: PersistedFailure,
+    externalCustomerId?: string,
+  ): Promise<void> {
     const state = await this.load();
     const row = state.customers.find((candidate) => candidate.id === id);
     if (!row) throw new Error(`Unknown accounting customer ${id}`);
+    this.assertActiveAttempt(row, attemptCount);
     Object.assign(row, {
       status: failure.status,
       retryAfter: failure.retryAfter,
       failure,
+      externalCustomerId: externalCustomerId ?? row.externalCustomerId,
       updatedAt: this.now().toISOString(),
     });
     await this.save(state);
@@ -200,6 +214,7 @@ export class FileAccountingRepository implements AccountingRepository {
     const now = this.now();
     const existing = state.documents.find((row) =>
       row.provider === input.provider
+      && row.accountNamespace === input.accountNamespace
       && row.sourceType === input.sourceType
       && row.sourceId === input.sourceId
       && row.documentTypeKey === input.documentTypeKey
@@ -245,10 +260,15 @@ export class FileAccountingRepository implements AccountingRepository {
     return documentClaim(existing, true);
   }
 
-  async succeedDocument(id: string, result: RivhitDocumentResult): Promise<void> {
+  async succeedDocument(
+    id: string,
+    attemptCount: number,
+    result: RivhitDocumentResult,
+  ): Promise<void> {
     const state = await this.load();
     const row = state.documents.find((candidate) => candidate.id === id);
     if (!row) throw new Error(`Unknown accounting document ${id}`);
+    this.assertActiveAttempt(row, attemptCount);
     Object.assign(row, {
       status: "succeeded" as const,
       externalDocumentId: result.documentId,
@@ -261,16 +281,34 @@ export class FileAccountingRepository implements AccountingRepository {
     await this.save(state);
   }
 
-  async failDocument(id: string, failure: PersistedFailure): Promise<void> {
+  async failDocument(
+    id: string,
+    attemptCount: number,
+    failure: PersistedFailure,
+    result?: RivhitDocumentResult,
+  ): Promise<void> {
     const state = await this.load();
     const row = state.documents.find((candidate) => candidate.id === id);
     if (!row) throw new Error(`Unknown accounting document ${id}`);
+    this.assertActiveAttempt(row, attemptCount);
     Object.assign(row, {
       status: failure.status,
       retryAfter: failure.retryAfter,
       failure,
+      externalDocumentId: result?.documentId ?? row.externalDocumentId,
+      externalDocumentNumber: result?.documentNumber ?? row.externalDocumentNumber,
+      documentUrl: result?.documentUrl ?? row.documentUrl,
       updatedAt: this.now().toISOString(),
     });
     await this.save(state);
+  }
+
+  private assertActiveAttempt(
+    row: Pick<CustomerRow, "status" | "attemptCount">,
+    attemptCount: number,
+  ): void {
+    if (row.status !== "processing" || row.attemptCount !== attemptCount) {
+      throw new Error("stale accounting finalization");
+    }
   }
 }

@@ -5,8 +5,14 @@
 -- unchanged. In particular, sales.receipt_number is not a Rivhit document ID.
 --
 -- Rollback, if this migration has not been used in Production:
---   DROP FUNCTION public.claim_accounting_document(text, uuid, text, text, text, integer, text, text, integer);
---   DROP FUNCTION public.claim_accounting_customer(text, text, text, integer);
+--   DROP TRIGGER protect_profile_role_updates ON public.profiles;
+--   DROP FUNCTION public.protect_profile_role_updates();
+--   DROP FUNCTION public.fail_accounting_document(uuid, integer, text, timestamptz, jsonb, text, text, text);
+--   DROP FUNCTION public.complete_accounting_document(uuid, integer, text, text, text);
+--   DROP FUNCTION public.fail_accounting_customer(uuid, integer, text, timestamptz, jsonb, text);
+--   DROP FUNCTION public.complete_accounting_customer(uuid, integer, text);
+--   DROP FUNCTION public.claim_accounting_document(text, text, uuid, text, text, text, integer, text, text, integer);
+--   DROP FUNCTION public.claim_accounting_customer(text, text, text, text, integer);
 --   DROP TABLE public.accounting_documents;
 --   DROP TABLE public.accounting_customers;
 -- ============================================================
@@ -14,6 +20,7 @@
 CREATE TABLE public.accounting_customers (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   provider              TEXT NOT NULL CHECK (provider <> ''),
+  account_namespace     TEXT NOT NULL CHECK (account_namespace <> ''),
   identity_key          TEXT NOT NULL CHECK (identity_key <> ''),
   external_customer_id  TEXT,
   external_reference    TEXT NOT NULL CHECK (external_reference <> ''),
@@ -33,12 +40,12 @@ CREATE TABLE public.accounting_customers (
   last_error            JSONB,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (provider, identity_key),
-  UNIQUE (provider, external_reference)
+  UNIQUE (provider, account_namespace, identity_key),
+  UNIQUE (provider, account_namespace, external_reference)
 );
 
 CREATE UNIQUE INDEX idx_accounting_customers_external_id
-  ON public.accounting_customers(provider, external_customer_id)
+  ON public.accounting_customers(provider, account_namespace, external_customer_id)
   WHERE external_customer_id IS NOT NULL;
 
 CREATE INDEX idx_accounting_customers_retry
@@ -52,6 +59,7 @@ CREATE TRIGGER trg_accounting_customers_updated_at
 CREATE TABLE public.accounting_documents (
   id                        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   provider                  TEXT NOT NULL CHECK (provider <> ''),
+  account_namespace         TEXT NOT NULL CHECK (account_namespace <> ''),
   accounting_customer_id    UUID NOT NULL REFERENCES public.accounting_customers(id) ON DELETE RESTRICT,
   source_type               TEXT NOT NULL CHECK (source_type <> ''),
   source_id                 TEXT NOT NULL CHECK (source_id <> ''),
@@ -78,15 +86,15 @@ CREATE TABLE public.accounting_documents (
   last_error                JSONB,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (provider, source_type, source_id, document_type_key),
-  UNIQUE (provider, request_reference)
+  UNIQUE (provider, account_namespace, source_type, source_id, document_type_key),
+  UNIQUE (provider, account_namespace, request_reference)
 );
 
 CREATE INDEX idx_accounting_documents_customer_id
   ON public.accounting_documents(accounting_customer_id);
 
 CREATE UNIQUE INDEX idx_accounting_documents_external_id
-  ON public.accounting_documents(provider, external_document_id)
+  ON public.accounting_documents(provider, account_namespace, external_document_id)
   WHERE external_document_id IS NOT NULL;
 
 CREATE INDEX idx_accounting_documents_retry
@@ -108,9 +116,41 @@ CREATE POLICY "accounting documents: admin/ops read"
   ON public.accounting_documents FOR SELECT
   USING (public.is_admin_or_ops());
 
+-- The existing own-profile update policy must not allow self-promotion into an
+-- accounting-authorized role. Service-role jobs and existing admins retain role management.
+CREATE OR REPLACE FUNCTION public.protect_profile_role_updates()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.role IS DISTINCT FROM OLD.role
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.profiles p
+       WHERE p.id = auth.uid()
+         AND p.role = 'admin'
+     ) THEN
+    RAISE EXCEPTION 'profile role changes require an administrator';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER protect_profile_role_updates
+  BEFORE UPDATE OF role ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.protect_profile_role_updates();
+
+REVOKE ALL ON FUNCTION public.protect_profile_role_updates() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.protect_profile_role_updates() FROM anon;
+REVOKE ALL ON FUNCTION public.protect_profile_role_updates() FROM authenticated;
+
 -- Claim customer work without holding a transaction open during HTTP calls.
 CREATE OR REPLACE FUNCTION public.claim_accounting_customer(
   p_provider TEXT,
+  p_account_namespace TEXT,
   p_identity_key TEXT,
   p_external_reference TEXT,
   p_stale_after_seconds INTEGER DEFAULT 300
@@ -133,6 +173,7 @@ DECLARE
 BEGIN
   INSERT INTO public.accounting_customers (
     provider,
+    account_namespace,
     identity_key,
     external_reference,
     status,
@@ -141,13 +182,14 @@ BEGIN
   )
   VALUES (
     p_provider,
+    p_account_namespace,
     p_identity_key,
     p_external_reference,
     'processing',
     1,
     NOW()
   )
-  ON CONFLICT (provider, identity_key) DO NOTHING
+  ON CONFLICT (provider, account_namespace, identity_key) DO NOTHING
   RETURNING accounting_customers.id INTO v_inserted_id;
 
   IF v_inserted_id IS NOT NULL THEN
@@ -162,6 +204,7 @@ BEGIN
   SELECT * INTO v_row
   FROM public.accounting_customers ac
   WHERE ac.provider = p_provider
+    AND ac.account_namespace = p_account_namespace
     AND ac.identity_key = p_identity_key
   FOR UPDATE;
 
@@ -200,6 +243,7 @@ $$;
 -- Claim document work and reject reuse after the accounting payload changed.
 CREATE OR REPLACE FUNCTION public.claim_accounting_document(
   p_provider TEXT,
+  p_account_namespace TEXT,
   p_accounting_customer_id UUID,
   p_source_type TEXT,
   p_source_id TEXT,
@@ -229,6 +273,7 @@ DECLARE
 BEGIN
   INSERT INTO public.accounting_documents (
     provider,
+    account_namespace,
     accounting_customer_id,
     source_type,
     source_id,
@@ -242,6 +287,7 @@ BEGIN
   )
   VALUES (
     p_provider,
+    p_account_namespace,
     p_accounting_customer_id,
     p_source_type,
     p_source_id,
@@ -253,7 +299,7 @@ BEGIN
     1,
     NOW()
   )
-  ON CONFLICT (provider, source_type, source_id, document_type_key) DO NOTHING
+  ON CONFLICT (provider, account_namespace, source_type, source_id, document_type_key) DO NOTHING
   RETURNING accounting_documents.id INTO v_inserted_id;
 
   IF v_inserted_id IS NOT NULL THEN
@@ -276,6 +322,7 @@ BEGIN
   SELECT * INTO v_row
   FROM public.accounting_documents ad
   WHERE ad.provider = p_provider
+    AND ad.account_namespace = p_account_namespace
     AND ad.source_type = p_source_type
     AND ad.source_id = p_source_id
     AND ad.document_type_key = p_document_type_key
@@ -332,15 +379,149 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.claim_accounting_customer(TEXT, TEXT, TEXT, INTEGER) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.claim_accounting_customer(TEXT, TEXT, TEXT, INTEGER) FROM anon;
-REVOKE ALL ON FUNCTION public.claim_accounting_customer(TEXT, TEXT, TEXT, INTEGER) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.claim_accounting_customer(TEXT, TEXT, TEXT, INTEGER) TO service_role;
+-- Finalizers fence stale workers with the attempt generation returned by claim.
+CREATE OR REPLACE FUNCTION public.complete_accounting_customer(
+  p_id UUID,
+  p_attempt_count INTEGER,
+  p_external_customer_id TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_updated INTEGER;
+BEGIN
+  UPDATE public.accounting_customers
+  SET status = 'succeeded',
+      external_customer_id = p_external_customer_id,
+      retry_after = NULL,
+      last_error = NULL
+  WHERE id = p_id
+    AND attempt_count = p_attempt_count
+    AND status = 'processing';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated = 1;
+END;
+$$;
 
-REVOKE ALL ON FUNCTION public.claim_accounting_document(TEXT, UUID, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, INTEGER) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.claim_accounting_document(TEXT, UUID, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, INTEGER) FROM anon;
-REVOKE ALL ON FUNCTION public.claim_accounting_document(TEXT, UUID, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, INTEGER) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.claim_accounting_document(TEXT, UUID, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, INTEGER) TO service_role;
+CREATE OR REPLACE FUNCTION public.fail_accounting_customer(
+  p_id UUID,
+  p_attempt_count INTEGER,
+  p_status TEXT,
+  p_retry_after TIMESTAMPTZ,
+  p_last_error JSONB,
+  p_external_customer_id TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_updated INTEGER;
+BEGIN
+  IF p_status NOT IN ('retryable_error', 'permanent_error', 'reconciliation_required') THEN
+    RAISE EXCEPTION 'invalid accounting customer failure status';
+  END IF;
+  UPDATE public.accounting_customers
+  SET status = p_status,
+      external_customer_id = COALESCE(p_external_customer_id, external_customer_id),
+      retry_after = p_retry_after,
+      last_error = p_last_error
+  WHERE id = p_id
+    AND attempt_count = p_attempt_count
+    AND status = 'processing';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated = 1;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.complete_accounting_document(
+  p_id UUID,
+  p_attempt_count INTEGER,
+  p_external_document_id TEXT,
+  p_external_document_number TEXT,
+  p_document_url TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_updated INTEGER;
+BEGIN
+  UPDATE public.accounting_documents
+  SET status = 'succeeded',
+      external_document_id = p_external_document_id,
+      external_document_number = p_external_document_number,
+      document_url = p_document_url,
+      retry_after = NULL,
+      last_error = NULL
+  WHERE id = p_id
+    AND attempt_count = p_attempt_count
+    AND status = 'processing';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated = 1;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.fail_accounting_document(
+  p_id UUID,
+  p_attempt_count INTEGER,
+  p_status TEXT,
+  p_retry_after TIMESTAMPTZ,
+  p_last_error JSONB,
+  p_external_document_id TEXT,
+  p_external_document_number TEXT,
+  p_document_url TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_updated INTEGER;
+BEGIN
+  IF p_status NOT IN ('retryable_error', 'permanent_error', 'reconciliation_required') THEN
+    RAISE EXCEPTION 'invalid accounting document failure status';
+  END IF;
+  UPDATE public.accounting_documents
+  SET status = p_status,
+      external_document_id = COALESCE(p_external_document_id, external_document_id),
+      external_document_number = COALESCE(p_external_document_number, external_document_number),
+      document_url = COALESCE(p_document_url, document_url),
+      retry_after = p_retry_after,
+      last_error = p_last_error
+  WHERE id = p_id
+    AND attempt_count = p_attempt_count
+    AND status = 'processing';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated = 1;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_accounting_customer(TEXT, TEXT, TEXT, TEXT, INTEGER) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.claim_accounting_customer(TEXT, TEXT, TEXT, TEXT, INTEGER) FROM anon;
+REVOKE ALL ON FUNCTION public.claim_accounting_customer(TEXT, TEXT, TEXT, TEXT, INTEGER) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_accounting_customer(TEXT, TEXT, TEXT, TEXT, INTEGER) TO service_role;
+
+REVOKE ALL ON FUNCTION public.claim_accounting_document(TEXT, TEXT, UUID, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, INTEGER) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.claim_accounting_document(TEXT, TEXT, UUID, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, INTEGER) FROM anon;
+REVOKE ALL ON FUNCTION public.claim_accounting_document(TEXT, TEXT, UUID, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, INTEGER) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_accounting_document(TEXT, TEXT, UUID, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, INTEGER) TO service_role;
+
+REVOKE ALL ON FUNCTION public.complete_accounting_customer(UUID, INTEGER, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_accounting_customer(UUID, INTEGER, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.fail_accounting_customer(UUID, INTEGER, TEXT, TIMESTAMPTZ, JSONB, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fail_accounting_customer(UUID, INTEGER, TEXT, TIMESTAMPTZ, JSONB, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.complete_accounting_document(UUID, INTEGER, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_accounting_document(UUID, INTEGER, TEXT, TEXT, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.fail_accounting_document(UUID, INTEGER, TEXT, TIMESTAMPTZ, JSONB, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fail_accounting_document(UUID, INTEGER, TEXT, TIMESTAMPTZ, JSONB, TEXT, TEXT, TEXT) TO service_role;
 
 COMMENT ON TABLE public.accounting_customers IS
   'Provider-neutral external accounting customer identities. Rivhit is the first provider.';

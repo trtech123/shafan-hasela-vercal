@@ -28,7 +28,7 @@ async function mappedSource() {
     num_participants: 2,
     price_per_person: 50,
     total_price: 100,
-  }, "Sandbox Activity", "sandbox_test", mapping);
+  }, "Sandbox Activity", "sandbox_test", mapping, "official-sandbox");
 }
 
 class RecordingRepository implements AccountingRepository {
@@ -55,18 +55,22 @@ class RecordingRepository implements AccountingRepository {
   documentFailures: PersistedFailure[] = [];
 
   async claimCustomer() { return this.customerClaim; }
-  async succeedCustomer(id: string, externalCustomerId: string) {
-    this.customerSuccesses.push({ id, externalCustomerId });
+  customerFailureResults: unknown[] = [];
+  documentFailureResults: unknown[] = [];
+  async succeedCustomer(id: string, attemptCount: number, externalCustomerId: string) {
+    this.customerSuccesses.push({ id, attemptCount, externalCustomerId });
   }
-  async failCustomer(_id: string, failure: PersistedFailure) {
+  async failCustomer(_id: string, _attemptCount: number, failure: PersistedFailure, result?: unknown) {
     this.customerFailures.push(failure);
+    this.customerFailureResults.push(result);
   }
   async claimDocument() { return this.documentClaim; }
-  async succeedDocument(id: string, result: unknown) {
-    this.documentSuccesses.push({ id, result });
+  async succeedDocument(id: string, attemptCount: number, result: unknown) {
+    this.documentSuccesses.push({ id, attemptCount, result });
   }
-  async failDocument(_id: string, failure: PersistedFailure) {
+  async failDocument(_id: string, _attemptCount: number, failure: PersistedFailure, result?: unknown) {
     this.documentFailures.push(failure);
+    this.documentFailureResults.push(result);
   }
 }
 
@@ -98,7 +102,7 @@ describe("Rivhit accounting workflow", () => {
     expect(client.findCustomerByAccRef).toHaveBeenCalledOnce();
     expect(client.createCustomer).not.toHaveBeenCalled();
     expect(repository.customerSuccesses).toEqual([
-      { id: "customer-row", externalCustomerId: "1234" },
+      { id: "customer-row", attemptCount: 1, externalCustomerId: "1234" },
     ]);
     expect(client.createDocument).toHaveBeenCalledWith(expect.objectContaining({
       customer_id: 1234,
@@ -128,7 +132,7 @@ describe("Rivhit accounting workflow", () => {
 
     expect(client.createCustomer).toHaveBeenCalledOnce();
     expect(repository.customerSuccesses).toEqual([
-      { id: "customer-row", externalCustomerId: "1234" },
+      { id: "customer-row", attemptCount: 1, externalCustomerId: "1234" },
     ]);
   });
 
@@ -266,5 +270,49 @@ describe("Rivhit accounting workflow", () => {
     expect(repository.customerFailures).toEqual([
       expect.objectContaining({ status: "retryable_error" }),
     ]);
+  });
+
+  test("marks a provider success for reconciliation when document persistence fails", async () => {
+    const repository = new RecordingRepository();
+    repository.customerClaim = {
+      ...repository.customerClaim,
+      status: "succeeded",
+      externalCustomerId: "1234",
+      claimed: false,
+    };
+    repository.succeedDocument = async () => {
+      throw new Error("database unavailable");
+    };
+    const client = successfulClient();
+
+    await expect(runRivhitAccounting({
+      source: await mappedSource(), repository, client, now: () => now,
+    })).rejects.toMatchObject({ reconciliationRequired: true });
+
+    expect(repository.documentFailures).toEqual([
+      expect.objectContaining({ status: "reconciliation_required" }),
+    ]);
+    expect(repository.documentFailureResults[0]).toMatchObject({
+      documentId: "document-identity",
+      documentNumber: "42",
+    });
+  });
+
+  test("retains the Rivhit customer ID when customer persistence needs reconciliation", async () => {
+    const repository = new RecordingRepository();
+    repository.succeedCustomer = async () => {
+      throw new Error("database unavailable");
+    };
+    const client = successfulClient();
+
+    await expect(runRivhitAccounting({
+      source: await mappedSource(), repository, client, now: () => now,
+    })).rejects.toMatchObject({ reconciliationRequired: true });
+
+    expect(repository.customerFailures).toEqual([
+      expect.objectContaining({ status: "reconciliation_required" }),
+    ]);
+    expect(repository.customerFailureResults).toEqual(["1234"]);
+    expect(client.createDocument).not.toHaveBeenCalled();
   });
 });

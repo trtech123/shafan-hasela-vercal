@@ -9,6 +9,7 @@ import type {
 
 export interface ClaimCustomerInput {
   provider: string;
+  accountNamespace: string;
   identityKey: string;
   externalReference: string;
 }
@@ -24,6 +25,7 @@ export interface CustomerClaim {
 
 export interface ClaimDocumentInput {
   provider: string;
+  accountNamespace: string;
   accountingCustomerId: string;
   sourceType: string;
   sourceId: string;
@@ -60,11 +62,21 @@ export interface PersistedFailure {
 
 export interface AccountingRepository {
   claimCustomer(input: ClaimCustomerInput): Promise<CustomerClaim>;
-  succeedCustomer(id: string, externalCustomerId: string): Promise<void>;
-  failCustomer(id: string, failure: PersistedFailure): Promise<void>;
+  succeedCustomer(id: string, attemptCount: number, externalCustomerId: string): Promise<void>;
+  failCustomer(
+    id: string,
+    attemptCount: number,
+    failure: PersistedFailure,
+    externalCustomerId?: string,
+  ): Promise<void>;
   claimDocument(input: ClaimDocumentInput): Promise<DocumentClaim>;
-  succeedDocument(id: string, result: RivhitDocumentResult): Promise<void>;
-  failDocument(id: string, failure: PersistedFailure): Promise<void>;
+  succeedDocument(id: string, attemptCount: number, result: RivhitDocumentResult): Promise<void>;
+  failDocument(
+    id: string,
+    attemptCount: number,
+    failure: PersistedFailure,
+    result?: RivhitDocumentResult,
+  ): Promise<void>;
 }
 
 export interface RivhitAccountingClient {
@@ -87,6 +99,15 @@ export type WorkflowResult =
     duplicate: true;
     retryAfter: string | null;
   };
+
+class LocalPersistenceReconciliationError extends RivhitError {
+  constructor(kind: "customer" | "document") {
+    super(
+      `Rivhit ${kind} succeeded but local persistence requires reconciliation`,
+      { reconciliationRequired: true },
+    );
+  }
+}
 
 function persistedError(error: unknown): PersistedError {
   if (error instanceof RivhitError) {
@@ -141,6 +162,7 @@ export async function runRivhitAccounting(options: RunOptions): Promise<Workflow
 
   const customerClaim = await repository.claimCustomer({
     provider: source.provider,
+    accountNamespace: source.accountNamespace,
     identityKey: source.identityKey,
     externalReference: source.externalCustomerReference,
   });
@@ -158,10 +180,32 @@ export async function runRivhitAccounting(options: RunOptions): Promise<Workflow
       const found = await client.findCustomerByAccRef(source.externalCustomerReference);
       const customer = found ?? await client.createCustomer(source.customer);
       externalCustomerId = customer.customerId;
-      await repository.succeedCustomer(customerClaim.id, externalCustomerId);
+      try {
+        await repository.succeedCustomer(
+          customerClaim.id,
+          customerClaim.attemptCount,
+          externalCustomerId,
+        );
+      } catch {
+        const reconciliationError = new LocalPersistenceReconciliationError("customer");
+        try {
+          await repository.failCustomer(
+            customerClaim.id,
+            customerClaim.attemptCount,
+            failureFor(reconciliationError, customerClaim.attemptCount, now()),
+            externalCustomerId,
+          );
+        } catch {
+          // The original persistence error may mean the success already committed,
+          // or the lease was superseded. Never overwrite a newer attempt.
+        }
+        throw reconciliationError;
+      }
     } catch (error) {
+      if (error instanceof LocalPersistenceReconciliationError) throw error;
       await repository.failCustomer(
         customerClaim.id,
+        customerClaim.attemptCount,
         failureFor(error, customerClaim.attemptCount, now()),
       );
       throw error;
@@ -174,6 +218,7 @@ export async function runRivhitAccounting(options: RunOptions): Promise<Workflow
 
   const documentClaim = await repository.claimDocument({
     provider: source.provider,
+    accountNamespace: source.accountNamespace,
     accountingCustomerId: customerClaim.id,
     sourceType: source.sourceType,
     sourceId: source.sourceId,
@@ -210,7 +255,26 @@ export async function runRivhitAccounting(options: RunOptions): Promise<Workflow
       ...source.document,
       customer_id: Number(externalCustomerId),
     });
-    await repository.succeedDocument(documentClaim.id, result);
+    try {
+      await repository.succeedDocument(
+        documentClaim.id,
+        documentClaim.attemptCount,
+        result,
+      );
+    } catch {
+      const reconciliationError = new LocalPersistenceReconciliationError("document");
+      try {
+        await repository.failDocument(
+          documentClaim.id,
+          documentClaim.attemptCount,
+          failureFor(reconciliationError, documentClaim.attemptCount, now()),
+          result,
+        );
+      } catch {
+        // See customer persistence note above. The attempt fence prevents stale writes.
+      }
+      throw reconciliationError;
+    }
     return {
       status: "succeeded",
       duplicate: false,
@@ -220,8 +284,10 @@ export async function runRivhitAccounting(options: RunOptions): Promise<Workflow
       documentUrl: result.documentUrl,
     };
   } catch (error) {
+    if (error instanceof LocalPersistenceReconciliationError) throw error;
     await repository.failDocument(
       documentClaim.id,
+      documentClaim.attemptCount,
       failureFor(error, documentClaim.attemptCount, now()),
     );
     throw error;

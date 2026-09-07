@@ -13,12 +13,13 @@ describe("021 Rivhit accounting migration", () => {
   });
 
   test("enforces customer and document idempotency", () => {
-    expect(sql).toContain("UNIQUE (provider, identity_key)");
-    expect(sql).toContain("UNIQUE (provider, external_reference)");
+    expect(sql).toContain("account_namespace");
+    expect(sql).toContain("UNIQUE (provider, account_namespace, identity_key)");
+    expect(sql).toContain("UNIQUE (provider, account_namespace, external_reference)");
     expect(sql).toContain(
-      "UNIQUE (provider, source_type, source_id, document_type_key)",
+      "UNIQUE (provider, account_namespace, source_type, source_id, document_type_key)",
     );
-    expect(sql).toContain("UNIQUE (provider, request_reference)");
+    expect(sql).toContain("UNIQUE (provider, account_namespace, request_reference)");
     expect(sql).toContain("payload_hash");
   });
 
@@ -60,5 +61,19 @@ describe("021 Rivhit accounting migration", () => {
     )?.[0];
     expect(customerClaim).toContain("retry_after TIMESTAMPTZ");
     expect(documentClaim).toContain("retry_after TIMESTAMPTZ");
+  });
+
+  test("fences finalization by attempt generation", () => {
+    expect(sql).toContain("complete_accounting_customer");
+    expect(sql).toContain("fail_accounting_customer");
+    expect(sql).toContain("complete_accounting_document");
+    expect(sql).toContain("fail_accounting_document");
+    expect(sql).toMatch(/attempt_count = p_attempt_count[\s\S]+status = 'processing'/i);
+  });
+
+  test("prevents non-admin users from changing profile roles", () => {
+    expect(sql).toContain("protect_profile_role_updates");
+    expect(sql).toContain("BEFORE UPDATE OF role ON public.profiles");
+    expect(sql).toMatch(/role = 'admin'/i);
   });
 });

@@ -55,7 +55,11 @@ export async function mapOrderToAccountingSource(
   activityName: string | null,
   documentTypeKey: string,
   mapping: DocumentMapping,
+  accountNamespace: string,
 ): Promise<MappedAccountingSource> {
+  if (!accountNamespace.trim()) {
+    throw new Error("RIVHIT_ACCOUNT_NAMESPACE is not configured");
+  }
   const customerName = truncate(
     order.billing_institution_name || order.organization || order.client_name || "Shafan customer",
     30,
@@ -112,6 +116,7 @@ export async function mapOrderToAccountingSource(
     send_mail: mapping.send_mail,
   };
   const payloadHash = await sha256Hex(stableStringify({
+    accountNamespace,
     documentTypeKey,
     externalCustomerReference,
     document,
@@ -119,6 +124,7 @@ export async function mapOrderToAccountingSource(
 
   return {
     provider: "rivhit",
+    accountNamespace,
     sourceType: "order",
     sourceId: order.id,
     documentTypeKey,

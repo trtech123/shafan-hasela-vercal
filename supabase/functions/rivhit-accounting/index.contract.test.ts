@@ -8,6 +8,7 @@ describe("rivhit-accounting Edge Function contract", () => {
     expect(source).toContain('Deno.env.get("RIVHIT_API_TOKEN")');
     expect(source).toContain('Deno.env.get("RIVHIT_DOCUMENT_TYPE_MAP")');
     expect(source).toContain('Deno.env.get("RIVHIT_ACCOUNTING_MODE")');
+    expect(source).toContain('Deno.env.get("RIVHIT_ACCOUNT_NAMESPACE")');
     expect(source).not.toMatch(/body\??\.(apiToken|api_token|token)/);
   });
 
@@ -29,5 +30,11 @@ describe("rivhit-accounting Edge Function contract", () => {
   test("does not couple payment providers or expose a frontend integration", () => {
     expect(source).not.toMatch(/pelecard|icredit/i);
     expect(source).not.toMatch(/VITE_/);
+  });
+
+  test("reports terminal ledger states as conflicts", () => {
+    expect(source).toContain('result.status === "permanent_error"');
+    expect(source).toContain('result.status === "reconciliation_required"');
+    expect(source).toContain("}, 409)");
   });
 });

@@ -54,6 +54,7 @@ interface RivhitClientOptions {
   apiToken: string;
   fetchImpl?: typeof fetch;
   baseUrl?: string;
+  timeoutMs?: number;
 }
 
 interface RivhitEnvelope {
@@ -73,6 +74,7 @@ export class RivhitClient {
   private readonly apiToken: string;
   private readonly fetchImpl: typeof fetch;
   private readonly baseUrl: string;
+  private readonly timeoutMs: number;
 
   constructor(options: RivhitClientOptions) {
     if (!options.apiToken) {
@@ -81,6 +83,7 @@ export class RivhitClient {
     this.apiToken = options.apiToken;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
+    this.timeoutMs = options.timeoutMs ?? 20_000;
   }
 
   private sanitize(value: unknown): string | null {
@@ -95,6 +98,7 @@ export class RivhitClient {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ api_token: this.apiToken, ...request }),
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch {
       throw new RivhitError("Rivhit network request failed", { retryable: true });
@@ -107,6 +111,7 @@ export class RivhitClient {
     } catch {
       throw new RivhitError("Rivhit returned an invalid JSON response", {
         retryable: response.status >= 500 || response.status === 408 || response.status === 429,
+        reconciliationRequired: method === "Document.New" && response.ok,
         httpStatus: response.status,
       });
     }
@@ -114,9 +119,12 @@ export class RivhitClient {
     const errorCode = numberOrNull(envelope.error_code);
     if (!response.ok || (errorCode !== null && errorCode !== 0)) {
       const reconciliationRequired = errorCode === -107;
-      const retryable = errorCode !== null
+      const transientHttp = response.status >= 500
+        || response.status === 408
+        || response.status === 429;
+      const retryable = errorCode !== null && errorCode < 0
         ? RETRYABLE_CODES.has(errorCode)
-        : response.status >= 500 || response.status === 408 || response.status === 429;
+        : transientHttp || (errorCode !== null && RETRYABLE_CODES.has(errorCode));
       const clientMessage = this.sanitize(envelope.client_message);
       const debugMessage = this.sanitize(envelope.debug_message);
       throw new RivhitError(
@@ -180,7 +188,9 @@ export class RivhitClient {
       || !data.document_identity
       || !data.document_link
     ) {
-      throw new RivhitError("Rivhit document response is missing required fields");
+      throw new RivhitError("Rivhit document response is missing required fields", {
+        reconciliationRequired: true,
+      });
     }
 
     return {

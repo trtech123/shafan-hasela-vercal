@@ -27,6 +27,9 @@ class RecordingSupabase {
 
   async rpc(name: string, args: unknown) {
     this.calls.push({ kind: "rpc", name, args });
+    if (name.startsWith("complete_") || name.startsWith("fail_")) {
+      return { data: true, error: null };
+    }
     return { data: this.rpcData[name], error: null };
   }
 
@@ -61,6 +64,7 @@ describe("SupabaseAccountingRepository", () => {
 
     await expect(repository.claimCustomer({
       provider: "rivhit",
+      accountNamespace: "sandbox-account",
       identityKey: "identity",
       externalReference: "shreference",
     })).resolves.toEqual({
@@ -73,6 +77,7 @@ describe("SupabaseAccountingRepository", () => {
     });
     await expect(repository.claimDocument({
       provider: "rivhit",
+      accountNamespace: "sandbox-account",
       accountingCustomerId: "customer-row",
       sourceType: "order",
       sourceId: "source-id",
@@ -88,6 +93,7 @@ describe("SupabaseAccountingRepository", () => {
         name: "claim_accounting_customer",
         args: {
           p_provider: "rivhit",
+          p_account_namespace: "sandbox-account",
           p_identity_key: "identity",
           p_external_reference: "shreference",
           p_stale_after_seconds: 300,
@@ -98,6 +104,7 @@ describe("SupabaseAccountingRepository", () => {
         name: "claim_accounting_document",
         args: {
           p_provider: "rivhit",
+          p_account_namespace: "sandbox-account",
           p_accounting_customer_id: "customer-row",
           p_source_type: "order",
           p_source_id: "source-id",
@@ -115,9 +122,9 @@ describe("SupabaseAccountingRepository", () => {
     const client = new RecordingSupabase();
     const repository = new SupabaseAccountingRepository(client);
 
-    await repository.succeedCustomer("customer-row", "1234");
-    await repository.failCustomer("customer-row", retryFailure);
-    await repository.succeedDocument("document-row", {
+    await repository.succeedCustomer("customer-row", 1, "1234");
+    await repository.failCustomer("customer-row", 1, retryFailure);
+    await repository.succeedDocument("document-row", 1, {
       customerId: "1234",
       documentType: 1,
       documentId: "doc-id",
@@ -125,44 +132,43 @@ describe("SupabaseAccountingRepository", () => {
       documentUrl: "https://api.rivhit.co.il/pdf/test",
       amount: 100,
     });
-    await repository.failDocument("document-row", retryFailure);
+    await repository.failDocument("document-row", 1, retryFailure);
 
     expect(client.calls).toEqual([
       expect.objectContaining({
-        kind: "update",
-        table: "accounting_customers",
-        payload: expect.objectContaining({
-          status: "succeeded",
-          external_customer_id: "1234",
-          last_error: null,
+        kind: "rpc",
+        name: "complete_accounting_customer",
+        args: expect.objectContaining({
+          p_attempt_count: 1,
+          p_external_customer_id: "1234",
         }),
       }),
       expect.objectContaining({
-        kind: "update",
-        table: "accounting_customers",
-        payload: expect.objectContaining({
-          status: "retryable_error",
-          retry_after: retryFailure.retryAfter,
-          last_error: retryFailure.error,
+        kind: "rpc",
+        name: "fail_accounting_customer",
+        args: expect.objectContaining({
+          p_attempt_count: 1,
+          p_status: "retryable_error",
+          p_retry_after: retryFailure.retryAfter,
         }),
       }),
       expect.objectContaining({
-        kind: "update",
-        table: "accounting_documents",
-        payload: expect.objectContaining({
-          status: "succeeded",
-          external_document_id: "doc-id",
-          external_document_number: "42",
-          document_url: "https://api.rivhit.co.il/pdf/test",
+        kind: "rpc",
+        name: "complete_accounting_document",
+        args: expect.objectContaining({
+          p_attempt_count: 1,
+          p_external_document_id: "doc-id",
+          p_external_document_number: "42",
+          p_document_url: "https://api.rivhit.co.il/pdf/test",
         }),
       }),
       expect.objectContaining({
-        kind: "update",
-        table: "accounting_documents",
-        payload: expect.objectContaining({
-          status: "retryable_error",
-          retry_after: retryFailure.retryAfter,
-          last_error: retryFailure.error,
+        kind: "rpc",
+        name: "fail_accounting_document",
+        args: expect.objectContaining({
+          p_attempt_count: 1,
+          p_status: "retryable_error",
+          p_retry_after: retryFailure.retryAfter,
         }),
       }),
     ]);
@@ -176,8 +182,18 @@ describe("SupabaseAccountingRepository", () => {
 
     await expect(repository.claimCustomer({
       provider: "rivhit",
+      accountNamespace: "sandbox-account",
       identityKey: "identity",
       externalReference: "reference",
     })).rejects.toThrow("claim_accounting_customer failed: database unavailable");
+  });
+
+  test("rejects stale finalization attempts", async () => {
+    const client = new RecordingSupabase();
+    client.rpc = async () => ({ data: false, error: null });
+    const repository = new SupabaseAccountingRepository(client);
+
+    await expect(repository.succeedCustomer("customer-row", 1, "1234"))
+      .rejects.toThrow("stale accounting finalization");
   });
 });

@@ -21,12 +21,14 @@ async function statePath() {
 
 const customerInput = {
   provider: "rivhit",
+  accountNamespace: "official-sandbox",
   identityKey: "identity",
   externalReference: "shreference",
 };
 
 const documentInput = {
   provider: "rivhit",
+  accountNamespace: "official-sandbox",
   accountingCustomerId: "customer-row",
   sourceType: "order",
   sourceId: "11111111-1111-4111-8111-111111111111",
@@ -42,14 +44,14 @@ describe("FileAccountingRepository", () => {
     const first = new FileAccountingRepository(path);
     const customer = await first.claimCustomer(customerInput);
     expect(customer).toMatchObject({ claimed: true, status: "processing", attemptCount: 1 });
-    await first.succeedCustomer(customer.id, "1234");
+    await first.succeedCustomer(customer.id, customer.attemptCount, "1234");
 
     const document = await first.claimDocument({
       ...documentInput,
       accountingCustomerId: customer.id,
     });
     expect(document).toMatchObject({ claimed: true, status: "processing", attemptCount: 1 });
-    await first.succeedDocument(document.id, {
+    await first.succeedDocument(document.id, document.attemptCount, {
       customerId: "1234",
       documentType: 1,
       documentId: "doc-id",
@@ -81,12 +83,12 @@ describe("FileAccountingRepository", () => {
     let now = new Date("2026-09-07T12:00:00.000Z");
     const repository = new FileAccountingRepository(path, () => now);
     const customer = await repository.claimCustomer(customerInput);
-    await repository.succeedCustomer(customer.id, "1234");
+    await repository.succeedCustomer(customer.id, customer.attemptCount, "1234");
     const document = await repository.claimDocument({
       ...documentInput,
       accountingCustomerId: customer.id,
     });
-    await repository.failDocument(document.id, {
+    await repository.failDocument(document.id, document.attemptCount, {
       status: "retryable_error",
       retryAfter: "2026-09-07T12:01:00.000Z",
       error: {
@@ -114,7 +116,7 @@ describe("FileAccountingRepository", () => {
     const path = await statePath();
     const repository = new FileAccountingRepository(path);
     const customer = await repository.claimCustomer(customerInput);
-    await repository.succeedCustomer(customer.id, "1234");
+    await repository.succeedCustomer(customer.id, customer.attemptCount, "1234");
     await repository.claimDocument({
       ...documentInput,
       accountingCustomerId: customer.id,
@@ -125,5 +127,48 @@ describe("FileAccountingRepository", () => {
       accountingCustomerId: customer.id,
       payloadHash: "changed",
     })).rejects.toThrow("accounting document idempotency mismatch");
+  });
+
+  test("rejects finalization from a stale attempt", async () => {
+    const path = await statePath();
+    let now = new Date("2026-09-07T12:00:00.000Z");
+    const repository = new FileAccountingRepository(path, () => now, 60);
+    const customer = await repository.claimCustomer(customerInput);
+    await repository.succeedCustomer(customer.id, customer.attemptCount, "1234");
+    const first = await repository.claimDocument({
+      ...documentInput,
+      accountingCustomerId: customer.id,
+    });
+    now = new Date("2026-09-07T12:01:01.000Z");
+    const second = await repository.claimDocument({
+      ...documentInput,
+      accountingCustomerId: customer.id,
+    });
+
+    expect(second.attemptCount).toBe(2);
+    await expect(repository.failDocument(first.id, first.attemptCount, {
+      status: "retryable_error",
+      retryAfter: null,
+      error: {
+        message: "old worker",
+        errorCode: null,
+        httpStatus: null,
+        clientMessage: null,
+        debugMessage: null,
+      },
+    })).rejects.toThrow("stale accounting finalization");
+  });
+
+  test("keeps sandbox and production accounting identities separate", async () => {
+    const path = await statePath();
+    const repository = new FileAccountingRepository(path);
+    const sandbox = await repository.claimCustomer(customerInput);
+    const production = await repository.claimCustomer({
+      ...customerInput,
+      accountNamespace: "production-account",
+    });
+
+    expect(production.claimed).toBe(true);
+    expect(production.id).not.toBe(sandbox.id);
   });
 });

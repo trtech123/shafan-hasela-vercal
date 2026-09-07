@@ -6,6 +6,7 @@ This server-side function creates standalone Rivhit accounting state for an exis
 
 - `RIVHIT_API_TOKEN`: Rivhit Online/Invoice Online account API token.
 - `RIVHIT_ACCOUNTING_MODE`: exactly `sandbox` or `production`.
+- `RIVHIT_ACCOUNT_NAMESPACE`: stable, non-secret identifier for the Rivhit account and environment. Sandbox and Production must use different values.
 - `RIVHIT_DOCUMENT_TYPE_MAP`: reviewed JSON mappings keyed by business purpose.
 - Standard Supabase function variables: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
 

@@ -14,24 +14,26 @@ interface SupabaseResult<T = unknown> {
 }
 
 interface SupabaseClientLike {
-  rpc(name: string, args: Record<string, unknown>): Promise<SupabaseResult<unknown[]>>;
-  from(table: string): {
-    update(payload: Record<string, unknown>): {
-      eq(column: string, value: string): Promise<SupabaseResult>;
-    };
-  };
+  rpc(name: string, args: Record<string, unknown>): PromiseLike<SupabaseResult>;
 }
 
 function failureMessage(operation: string, error: { message?: string } | null | undefined): Error {
   return new Error(`${operation} failed: ${error?.message || "unknown Supabase error"}`);
 }
 
-function firstRow(operation: string, result: SupabaseResult<unknown[]>): Record<string, unknown> {
+function firstRow(operation: string, result: SupabaseResult): Record<string, unknown> {
   if (result.error) throw failureMessage(operation, result.error);
   if (!Array.isArray(result.data) || !result.data[0]) {
     throw new Error(`${operation} failed: no claim row returned`);
   }
   return result.data[0] as Record<string, unknown>;
+}
+
+function requireFinalized(operation: string, result: SupabaseResult): void {
+  if (result.error) throw failureMessage(operation, result.error);
+  if (result.data !== true) {
+    throw new Error(`${operation} failed: stale accounting finalization`);
+  }
 }
 
 export class SupabaseAccountingRepository implements AccountingRepository {
@@ -43,6 +45,7 @@ export class SupabaseAccountingRepository implements AccountingRepository {
   async claimCustomer(input: ClaimCustomerInput): Promise<CustomerClaim> {
     const result = await this.client.rpc("claim_accounting_customer", {
       p_provider: input.provider,
+      p_account_namespace: input.accountNamespace,
       p_identity_key: input.identityKey,
       p_external_reference: input.externalReference,
       p_stale_after_seconds: this.staleAfterSeconds,
@@ -60,26 +63,40 @@ export class SupabaseAccountingRepository implements AccountingRepository {
     };
   }
 
-  async succeedCustomer(id: string, externalCustomerId: string): Promise<void> {
-    await this.update("accounting_customers", id, {
-      status: "succeeded",
-      external_customer_id: externalCustomerId,
-      retry_after: null,
-      last_error: null,
+  async succeedCustomer(
+    id: string,
+    attemptCount: number,
+    externalCustomerId: string,
+  ): Promise<void> {
+    const result = await this.client.rpc("complete_accounting_customer", {
+      p_id: id,
+      p_attempt_count: attemptCount,
+      p_external_customer_id: externalCustomerId,
     });
+    requireFinalized("complete_accounting_customer", result);
   }
 
-  async failCustomer(id: string, failure: PersistedFailure): Promise<void> {
-    await this.update("accounting_customers", id, {
-      status: failure.status,
-      retry_after: failure.retryAfter,
-      last_error: failure.error,
+  async failCustomer(
+    id: string,
+    attemptCount: number,
+    failure: PersistedFailure,
+    externalCustomerId?: string,
+  ): Promise<void> {
+    const result = await this.client.rpc("fail_accounting_customer", {
+      p_id: id,
+      p_attempt_count: attemptCount,
+      p_status: failure.status,
+      p_retry_after: failure.retryAfter,
+      p_last_error: failure.error,
+      p_external_customer_id: externalCustomerId ?? null,
     });
+    requireFinalized("fail_accounting_customer", result);
   }
 
   async claimDocument(input: ClaimDocumentInput): Promise<DocumentClaim> {
     const result = await this.client.rpc("claim_accounting_document", {
       p_provider: input.provider,
+      p_account_namespace: input.accountNamespace,
       p_accounting_customer_id: input.accountingCustomerId,
       p_source_type: input.sourceType,
       p_source_id: input.sourceId,
@@ -106,31 +123,37 @@ export class SupabaseAccountingRepository implements AccountingRepository {
     };
   }
 
-  async succeedDocument(id: string, result: RivhitDocumentResult): Promise<void> {
-    await this.update("accounting_documents", id, {
-      status: "succeeded",
-      external_document_id: result.documentId,
-      external_document_number: result.documentNumber,
-      document_url: result.documentUrl,
-      retry_after: null,
-      last_error: null,
-    });
-  }
-
-  async failDocument(id: string, failure: PersistedFailure): Promise<void> {
-    await this.update("accounting_documents", id, {
-      status: failure.status,
-      retry_after: failure.retryAfter,
-      last_error: failure.error,
-    });
-  }
-
-  private async update(
-    table: string,
+  async succeedDocument(
     id: string,
-    payload: Record<string, unknown>,
+    attemptCount: number,
+    document: RivhitDocumentResult,
   ): Promise<void> {
-    const result = await this.client.from(table).update(payload).eq("id", id);
-    if (result.error) throw failureMessage(`${table} update`, result.error);
+    const result = await this.client.rpc("complete_accounting_document", {
+      p_id: id,
+      p_attempt_count: attemptCount,
+      p_external_document_id: document.documentId,
+      p_external_document_number: document.documentNumber,
+      p_document_url: document.documentUrl,
+    });
+    requireFinalized("complete_accounting_document", result);
+  }
+
+  async failDocument(
+    id: string,
+    attemptCount: number,
+    failure: PersistedFailure,
+    document?: RivhitDocumentResult,
+  ): Promise<void> {
+    const result = await this.client.rpc("fail_accounting_document", {
+      p_id: id,
+      p_attempt_count: attemptCount,
+      p_status: failure.status,
+      p_retry_after: failure.retryAfter,
+      p_last_error: failure.error,
+      p_external_document_id: document?.documentId ?? null,
+      p_external_document_number: document?.documentNumber ?? null,
+      p_document_url: document?.documentUrl ?? null,
+    });
+    requireFinalized("fail_accounting_document", result);
   }
 }
