@@ -50,4 +50,15 @@ describe("021 Rivhit accounting migration", () => {
     expect(sql).toMatch(/REVOKE ALL ON FUNCTION[\s\S]+FROM authenticated/i);
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]+TO service_role/i);
   });
+
+  test("returns retry timing from both atomic claim functions", () => {
+    const customerClaim = sql.match(
+      /CREATE OR REPLACE FUNCTION public\.claim_accounting_customer[\s\S]+?\n\$\$;/i,
+    )?.[0];
+    const documentClaim = sql.match(
+      /CREATE OR REPLACE FUNCTION public\.claim_accounting_document[\s\S]+?\n\$\$;/i,
+    )?.[0];
+    expect(customerClaim).toContain("retry_after TIMESTAMPTZ");
+    expect(documentClaim).toContain("retry_after TIMESTAMPTZ");
+  });
 });

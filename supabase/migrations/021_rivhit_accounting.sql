@@ -119,6 +119,7 @@ RETURNS TABLE (
   id UUID,
   status TEXT,
   external_customer_id TEXT,
+  retry_after TIMESTAMPTZ,
   claimed BOOLEAN,
   attempt_count INTEGER
 )
@@ -154,7 +155,7 @@ BEGIN
     FROM public.accounting_customers ac
     WHERE ac.id = v_inserted_id;
 
-    RETURN QUERY SELECT v_row.id, v_row.status, v_row.external_customer_id, TRUE, v_row.attempt_count;
+    RETURN QUERY SELECT v_row.id, v_row.status, v_row.external_customer_id, v_row.retry_after, TRUE, v_row.attempt_count;
     RETURN;
   END IF;
 
@@ -179,7 +180,7 @@ BEGIN
        AND v_row.retry_after IS NOT NULL
        AND v_row.retry_after > NOW()
      ) THEN
-    RETURN QUERY SELECT v_row.id, v_row.status, v_row.external_customer_id, FALSE, v_row.attempt_count;
+    RETURN QUERY SELECT v_row.id, v_row.status, v_row.external_customer_id, v_row.retry_after, FALSE, v_row.attempt_count;
     RETURN;
   END IF;
 
@@ -192,7 +193,7 @@ BEGIN
   WHERE ac.id = v_row.id
   RETURNING ac.* INTO v_row;
 
-  RETURN QUERY SELECT v_row.id, v_row.status, v_row.external_customer_id, TRUE, v_row.attempt_count;
+  RETURN QUERY SELECT v_row.id, v_row.status, v_row.external_customer_id, v_row.retry_after, TRUE, v_row.attempt_count;
 END;
 $$;
 
@@ -214,6 +215,7 @@ RETURNS TABLE (
   external_document_id TEXT,
   external_document_number TEXT,
   document_url TEXT,
+  retry_after TIMESTAMPTZ,
   claimed BOOLEAN,
   attempt_count INTEGER
 )
@@ -265,6 +267,7 @@ BEGIN
       v_row.external_document_id,
       v_row.external_document_number,
       v_row.document_url,
+      v_row.retry_after,
       TRUE,
       v_row.attempt_count;
     RETURN;
@@ -302,6 +305,7 @@ BEGIN
       v_row.external_document_id,
       v_row.external_document_number,
       v_row.document_url,
+      v_row.retry_after,
       FALSE,
       v_row.attempt_count;
     RETURN;
@@ -322,6 +326,7 @@ BEGIN
     v_row.external_document_id,
     v_row.external_document_number,
     v_row.document_url,
+    v_row.retry_after,
     TRUE,
     v_row.attempt_count;
 END;
