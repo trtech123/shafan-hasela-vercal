@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { normalizeIpn, prepareVerifiedIpn } from "../_shared/icredit.ts";
+import { cancelRecurringSale, normalizeIpn, prepareVerifiedIpn } from "../_shared/icredit.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -50,7 +50,6 @@ Deno.serve(async (req: Request) => {
       .single();
     if (agreementError || !agreement) return json({ ok: false, error: "agreement not found" }, 404);
     if (agreement.provider_environment !== "test") return json({ ok: false, error: "TEST agreement required" }, 409);
-    if (agreement.status === "cancelled") return json({ ok: false, error: "agreement is cancelled" }, 409);
     if (agreement.provider_recurring_id && agreement.provider_recurring_id !== event.recurringId) {
       return json({ ok: false, error: "recurring agreement mismatch" }, 409);
     }
@@ -84,6 +83,20 @@ Deno.serve(async (req: Request) => {
       },
     );
     if (processError) return json({ ok: false, error: "could not reconcile verified IPN" }, 500);
+
+    if (result?.compensation_required) {
+      await cancelRecurringSale(fetch, prepared.event.recurringId);
+      const { data: compensation, error: compensationError } = await adminClient.rpc(
+        "complete_icredit_enrollment_compensation",
+        {
+          p_agreement_id: agreement.id,
+          p_provider_recurring_id: prepared.event.recurringId,
+        },
+      );
+      if (compensationError || !compensation?.compensated) {
+        return json({ ok: false, error: "provider cancellation compensation could not be recorded" }, 500);
+      }
+    }
 
     return json({ ok: true, duplicate: Boolean(result?.duplicate) });
   } catch (error) {

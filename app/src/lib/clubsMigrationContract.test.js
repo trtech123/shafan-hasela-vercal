@@ -82,5 +82,29 @@ describe("Clubs recurring billing migration contract", () => {
     expect(sql).toMatch(
       /SUM\(amount\).*status = 'failed'/is,
     );
+    expect(sql).toMatch(
+      /CREATE OR REPLACE FUNCTION public\.cancel_icredit_recurring_membership[\s\S]*?UPDATE public\.club_memberships[\s\S]*?status = 'cancelled',[\s\S]*?payment_status = 'cancelled'/i,
+    );
+    expect(sql).toMatch(/CREATE OR REPLACE FUNCTION public\.prepare_icredit_recurring_enrollment/i);
+    expect(sql).toMatch(/CREATE OR REPLACE FUNCTION public\.save_club_with_schedule/i);
+    expect(sql).toMatch(/processing_status[\s\S]*?v_agreement\.status = 'cancelled'[\s\S]*?THEN 'ignored'/i);
+    expect(sql).toMatch(/compensation_required_at\s+TIMESTAMPTZ/i);
+    expect(sql).toMatch(/compensated_at\s+TIMESTAMPTZ/i);
+    expect(sql).toMatch(
+      /v_inserted_event IS NULL[\s\S]*?compensation_required_at IS NOT NULL[\s\S]*?compensated_at IS NULL/i,
+    );
+    expect(sql).toMatch(
+      /v_agreement\.status = 'cancelled'[\s\S]*?SET[\s\S]*?compensation_required_at = COALESCE/i,
+    );
+    expect(sql).toMatch(
+      /p_event_kind = 'agreement_created'[\s\S]*?v_agreement\.status <> 'pending_enrollment'[\s\S]*?RETURN jsonb_build_object[\s\S]*?'ignored', true/i,
+    );
+    expect(sql).toMatch(
+      /CREATE OR REPLACE FUNCTION public\.complete_icredit_enrollment_compensation/i,
+    );
+    expect(sql).toMatch(
+      /CREATE OR REPLACE FUNCTION public\.cancel_icredit_recurring_membership[\s\S]*?pending_enrollment[\s\S]*?provider_recurring_id IS NULL[\s\S]*?provider cancellation confirmation required/i,
+    );
+    expect(sql).not.toMatch(/\benrollment_url\b/i);
   });
 });

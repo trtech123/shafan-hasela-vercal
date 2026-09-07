@@ -59,43 +59,15 @@ Deno.serve(async (req: Request) => {
       throw new HttpError(409, "membership cannot be enrolled");
     }
 
-    const { data: existing, error: existingError } = await adminClient
-      .from("recurring_agreements")
-      .select("id, status, enrollment_url")
-      .eq("membership_id", membershipId)
-      .maybeSingle();
-    if (existingError) throw new HttpError(500, "could not load recurring agreement");
-    if (existing?.status === "active") {
-      throw new HttpError(409, "recurring agreement is already active");
+    const proposedAgreementId = crypto.randomUUID();
+    const { data: prepared, error: prepareError } = await adminClient.rpc(
+      "prepare_icredit_recurring_enrollment",
+      { p_membership_id: membership.id, p_agreement_id: proposedAgreementId },
+    );
+    if (prepareError || !prepared?.agreement_id) {
+      throw new HttpError(409, "membership cannot start recurring enrollment");
     }
-    if (existing?.status === "cancelled") {
-      throw new HttpError(409, "cancelled recurring agreements cannot be restarted");
-    }
-    if (existing?.enrollment_url) {
-      const existingUrl = readEnrollmentResponse({ Status: 0, URL: existing.enrollment_url });
-      return json({ ok: true, agreementId: existing.id, url: existingUrl, reused: true });
-    }
-
-    const agreementId = existing?.id || crypto.randomUUID();
-    if (!existing) {
-      const { error: agreementError } = await adminClient
-        .from("recurring_agreements")
-        .insert({
-          id: agreementId,
-          membership_id: membership.id,
-          provider_environment: "test",
-          provider_request_reference: `club:${agreementId}`,
-          recurring_day: membership.billing_day,
-          starts_on: membership.starts_on,
-        });
-      if (agreementError) throw new HttpError(500, "could not create recurring agreement");
-
-      const { error: membershipUpdateError } = await adminClient
-        .from("club_memberships")
-        .update({ payment_status: "enrollment_pending" })
-        .eq("id", membership.id);
-      if (membershipUpdateError) throw new HttpError(500, "could not mark enrollment pending");
-    }
+    const agreementId = String(prepared.agreement_id);
 
     const participant = membership.participant;
     const payload = buildEnrollmentRequest({
@@ -131,14 +103,7 @@ Deno.serve(async (req: Request) => {
     if (!providerResponse.ok) throw new HttpError(502, "iCredit enrollment request failed");
     const url = readEnrollmentResponse(providerData);
 
-    const { error: saveUrlError } = await adminClient
-      .from("recurring_agreements")
-      .update({ enrollment_url: url })
-      .eq("id", agreementId)
-      .eq("status", "pending_enrollment");
-    if (saveUrlError) throw new HttpError(500, "could not save enrollment reference");
-
-    return json({ ok: true, agreementId, url, reused: false });
+    return json({ ok: true, agreementId, url });
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
     const message = error instanceof Error ? error.message : "unexpected enrollment error";

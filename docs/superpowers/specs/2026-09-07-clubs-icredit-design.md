@@ -101,7 +101,7 @@ The webhook ledger insert, agreement/charge upsert and membership debt recomputa
    - success/failure IPN URLs using POST;
    - the local agreement UUID in `Custom1`;
    - a stable request reference/unique number.
-4. The function stores only safe response references and returns the hosted URL to the browser.
+4. The function returns the one-time hosted URL to the browser but never stores or reuses that capability URL. Only the stable local request reference is retained.
 5. Card data is entered only on iCredit's hosted page.
 
 Official sources: [GetUrl](https://rivhit-api.readme.io/reference/post_api-paymentpagerequest-svc-geturl), [recurring parameters](https://rivhit-api.readme.io/docs/recurring-methods-values), and [TEST environment](https://rivhit-api.readme.io/docs/test-enviornment-icredit).
@@ -124,7 +124,9 @@ All logged diagnostic objects are sanitized. Card/token fields and raw request b
 
 ### Cancellation
 
-An authenticated admin-only Edge Function loads the local active agreement and calls TEST `RecurringSaleCancel` with the stored `RecurringSaleId`. Only a successful provider response (`Status=0`) invokes the atomic local cancellation function. A provider failure leaves membership/agreement active and returns an explicit error to the UI.
+An authenticated admin-only Edge Function loads the agreement and calls TEST `RecurringSaleCancel` with the stored `RecurringSaleId`. Only a successful provider response (`Status=0`) permits final local cancellation. Provider confirmation is recorded as an intermediate state, so a retry can finish local cancellation after an RPC failure. A definitive provider rejection restores a newly-pending cancellation to active; an ambiguous transport result remains visibly pending for reconciliation.
+
+A pending enrollment with no provider `RecurringId` can be cancelled locally because no provider agreement exists. If an already-open hosted page completes later, the locked reconciliation transaction records the verified creation as ignored and persists a compensation requirement before the Edge Function cancels the new provider agreement. Provider success completes that marker; duplicate IPNs retry unfinished compensation. It can never reactivate the membership.
 
 Source: [RecurringSaleCancel](https://rivhit-api.readme.io/reference/post_api-paymentpagerequest-svc-recurringsalecancel).
 

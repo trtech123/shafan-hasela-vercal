@@ -1,5 +1,18 @@
 # PROGRESS — Shafan Hasela / Adventure Ops Pro
 
+## Isolated Clubs + iCredit workstream (code complete; not deployed)
+
+**Date:** 2026-09-08
+**Branch/base:** `workstream/clubs-icredit` from `c8a0663a35ae8254211194e3712519b79a1afe54`
+
+- Added additive migration `021` for Clubs, weekly rules, sparse sessions, participants, memberships, recurring agreements/charges, attendance, and a safe webhook ledger. Billing identity/debt reconciliation, enrollment preparation, and club/schedule replacement are atomic; provider tables are browser-read-only.
+- Added admin-only `/clubs` list/create/edit/registration UI, price snapshots, payment/debt state, hosted TEST enrollment, and provider-first cancellation.
+- Added TEST-only enrollment, verified/idempotent IPN, and cancellation Edge Functions. Hosted capability URLs are not stored; cancelled pending enrollments cannot be reactivated by a late IPN. No Rivhit accounting API or card/token storage was added.
+- Official TEST `GetUrl` smoke returned HTTP 200/provider status 0 and a hosted TEST page. No card was submitted and no recurring agreement was activated.
+- Shared TEST recurring-page inspection found Rivhit synchronization enabled. A dedicated exact page with `ללא סנכרון ריווחית` enabled plus a witnessed no-document TEST charge is required before enrollment use; see `docs/icredit-clubs-operations.md`.
+- Verification: 9 Vitest files/45 tests passed; Vite build passed; all three Edge Functions passed Deno type-check. ESLint remains at the pre-existing 10-error baseline with no new Clubs errors. Project-wide type-check still has broad pre-existing JSX component typing failures.
+- Migration `021` was not applied anywhere. No function was deployed, no Production credential/configuration was used, and nothing was pushed.
+
 > Single source of truth for the Base44 → Supabase MVP recovery.
 > Update at the **end of every phase** before reporting to the user.
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.

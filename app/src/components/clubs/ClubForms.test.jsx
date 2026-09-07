@@ -7,11 +7,12 @@ import ClubFormDialog from "./ClubFormDialog";
 import MemberRegistrationDialog from "./MemberRegistrationDialog";
 
 const fromMock = vi.fn();
+const rpcMock = vi.fn();
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 
 vi.mock("@/api/supabaseClient", () => ({
-  supabase: { from: (...args) => fromMock(...args) },
+  supabase: { from: (...args) => fromMock(...args), rpc: (...args) => rpcMock(...args) },
 }));
 
 vi.mock("sonner", () => ({
@@ -20,6 +21,8 @@ vi.mock("sonner", () => ({
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockReset();
+  rpcMock.mockResolvedValue({ data: "club-1", error: null });
   toastSuccess.mockReset();
   toastError.mockReset();
 });
@@ -28,16 +31,6 @@ afterEach(cleanup);
 
 describe("ClubFormDialog", () => {
   test("creates a club with multiple weekly schedule rules", async () => {
-    const clubInsert = vi.fn(() => ({
-      select: () => ({ single: async () => ({ data: { id: "club-1" }, error: null }) }),
-    }));
-    const rulesInsert = vi.fn(async () => ({ error: null }));
-    fromMock.mockImplementation((table) => {
-      if (table === "clubs") return { insert: clubInsert };
-      if (table === "club_schedule_rules") return { insert: rulesInsert };
-      throw new Error(`Unexpected table ${table}`);
-    });
-
     render(
       <ClubFormDialog
         open
@@ -61,11 +54,15 @@ describe("ClubFormDialog", () => {
     fireEvent.change(screen.getByLabelText("שעת סיום 2"), { target: { value: "18:00" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת חוג" }));
 
-    await waitFor(() => expect(clubInsert).toHaveBeenCalled());
-    expect(rulesInsert).toHaveBeenCalledWith([
-      expect.objectContaining({ club_id: "club-1", start_time: "16:00", end_time: "17:30" }),
-      expect.objectContaining({ club_id: "club-1", start_time: "17:00", end_time: "18:00" }),
-    ]);
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith("save_club_with_schedule", expect.objectContaining({
+      p_club_id: null,
+      p_name: "חוג נוער",
+      p_monthly_price: 245,
+      p_rules: [
+        expect.objectContaining({ start_time: "16:00", end_time: "17:30" }),
+        expect.objectContaining({ start_time: "17:00", end_time: "18:00" }),
+      ],
+    })));
   });
 
   test("prefills edit mode with existing rules", () => {
@@ -99,17 +96,6 @@ describe("ClubFormDialog", () => {
   });
 
   test("updates a club and replaces its recurring schedule rules", async () => {
-    const clubEq = vi.fn(async () => ({ error: null }));
-    const clubUpdate = vi.fn(() => ({ eq: clubEq }));
-    const rulesEq = vi.fn(async () => ({ error: null }));
-    const rulesDelete = vi.fn(() => ({ eq: rulesEq }));
-    const rulesInsert = vi.fn(async () => ({ error: null }));
-    fromMock.mockImplementation((table) => {
-      if (table === "clubs") return { update: clubUpdate };
-      if (table === "club_schedule_rules") return { delete: rulesDelete, insert: rulesInsert };
-      throw new Error(`Unexpected table ${table}`);
-    });
-
     render(
       <ClubFormDialog
         open
@@ -129,15 +115,12 @@ describe("ClubFormDialog", () => {
     fireEvent.change(screen.getByLabelText("מחיר חודשי"), { target: { value: "225" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת חוג" }));
 
-    await waitFor(() => expect(clubUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      name: "חוג מעודכן",
-      monthly_price: 225,
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith("save_club_with_schedule", expect.objectContaining({
+      p_club_id: "club-1",
+      p_name: "חוג מעודכן",
+      p_monthly_price: 225,
+      p_rules: [expect.objectContaining({ weekday: 1 })],
     })));
-    expect(clubEq).toHaveBeenCalledWith("id", "club-1");
-    expect(rulesEq).toHaveBeenCalledWith("club_id", "club-1");
-    expect(rulesInsert).toHaveBeenCalledWith([
-      expect.objectContaining({ club_id: "club-1", weekday: 1 }),
-    ]);
   });
 });
 

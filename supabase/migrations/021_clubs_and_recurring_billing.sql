@@ -107,12 +107,11 @@ CREATE TABLE public.recurring_agreements (
   provider                  TEXT NOT NULL DEFAULT 'icredit' CHECK (provider = 'icredit'),
   provider_environment      TEXT NOT NULL DEFAULT 'test' CHECK (provider_environment IN ('test', 'production')),
   status                    TEXT NOT NULL DEFAULT 'pending_enrollment' CHECK (
-    status IN ('pending_enrollment', 'active', 'cancellation_pending', 'cancelled', 'failed')
+    status IN ('pending_enrollment', 'active', 'cancellation_pending', 'provider_cancelled', 'cancelled', 'failed')
   ),
   provider_recurring_id     UUID,
   provider_sale_id          UUID,
   provider_request_reference TEXT NOT NULL UNIQUE,
-  enrollment_url            TEXT,
   recurring_cycle           SMALLINT NOT NULL DEFAULT 3 CHECK (recurring_cycle = 3),
   recurring_step            SMALLINT NOT NULL DEFAULT 1 CHECK (recurring_step = 1),
   recurring_day             SMALLINT NOT NULL CHECK (recurring_day BETWEEN 1 AND 28),
@@ -122,6 +121,8 @@ CREATE TABLE public.recurring_agreements (
   activated_at              TIMESTAMPTZ,
   cancellation_requested_at TIMESTAMPTZ,
   cancelled_at              TIMESTAMPTZ,
+  compensation_required_at  TIMESTAMPTZ,
+  compensated_at            TIMESTAMPTZ,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (provider, provider_recurring_id),
@@ -255,6 +256,131 @@ REVOKE ALL ON public.recurring_charges FROM anon, authenticated;
 REVOKE ALL ON public.payment_webhook_events FROM anon, authenticated;
 GRANT SELECT ON public.recurring_agreements, public.recurring_charges, public.payment_webhook_events TO authenticated;
 
+CREATE OR REPLACE FUNCTION public.save_club_with_schedule(
+  p_club_id UUID,
+  p_name TEXT,
+  p_description TEXT,
+  p_instructor_id UUID,
+  p_site TEXT,
+  p_capacity INTEGER,
+  p_monthly_price NUMERIC,
+  p_default_billing_day SMALLINT,
+  p_status TEXT,
+  p_notes TEXT,
+  p_rules JSONB
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_club_id UUID;
+  v_rule JSONB;
+BEGIN
+  IF NOT public.is_admin() THEN RAISE EXCEPTION 'admin required'; END IF;
+  IF p_rules IS NULL OR jsonb_typeof(p_rules) <> 'array' OR jsonb_array_length(p_rules) = 0 THEN
+    RAISE EXCEPTION 'at least one schedule rule is required';
+  END IF;
+
+  IF p_club_id IS NULL THEN
+    INSERT INTO public.clubs (
+      name, description, instructor_id, site, capacity, monthly_price,
+      default_billing_day, status, notes
+    ) VALUES (
+      p_name, p_description, p_instructor_id, p_site, p_capacity, p_monthly_price,
+      p_default_billing_day, p_status, p_notes
+    ) RETURNING id INTO v_club_id;
+  ELSE
+    UPDATE public.clubs
+    SET name = p_name,
+        description = p_description,
+        instructor_id = p_instructor_id,
+        site = p_site,
+        capacity = p_capacity,
+        monthly_price = p_monthly_price,
+        default_billing_day = p_default_billing_day,
+        status = p_status,
+        notes = p_notes
+    WHERE id = p_club_id
+    RETURNING id INTO v_club_id;
+    IF v_club_id IS NULL THEN RAISE EXCEPTION 'club not found'; END IF;
+    DELETE FROM public.club_schedule_rules WHERE club_id = v_club_id;
+  END IF;
+
+  FOR v_rule IN SELECT value FROM jsonb_array_elements(p_rules)
+  LOOP
+    INSERT INTO public.club_schedule_rules (
+      club_id, weekday, start_time, end_time, effective_from, effective_until,
+      timezone, is_active
+    ) VALUES (
+      v_club_id,
+      (v_rule->>'weekday')::SMALLINT,
+      (v_rule->>'start_time')::TIME,
+      (v_rule->>'end_time')::TIME,
+      NULLIF(v_rule->>'effective_from', '')::DATE,
+      NULLIF(v_rule->>'effective_until', '')::DATE,
+      COALESCE(NULLIF(v_rule->>'timezone', ''), 'Asia/Jerusalem'),
+      COALESCE((v_rule->>'is_active')::BOOLEAN, TRUE)
+    );
+  END LOOP;
+
+  RETURN v_club_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.prepare_icredit_recurring_enrollment(
+  p_membership_id UUID,
+  p_agreement_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_membership public.club_memberships%ROWTYPE;
+  v_agreement public.recurring_agreements%ROWTYPE;
+BEGIN
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'service_role required';
+  END IF;
+
+  SELECT * INTO v_membership
+  FROM public.club_memberships
+  WHERE id = p_membership_id
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'membership not found'; END IF;
+  IF v_membership.status IN ('cancelled', 'ended') THEN
+    RAISE EXCEPTION 'membership cannot be enrolled';
+  END IF;
+
+  SELECT * INTO v_agreement
+  FROM public.recurring_agreements
+  WHERE membership_id = p_membership_id
+  FOR UPDATE;
+
+  IF FOUND THEN
+    IF v_agreement.status <> 'pending_enrollment' THEN
+      RAISE EXCEPTION 'recurring agreement cannot be enrolled';
+    END IF;
+  ELSE
+    INSERT INTO public.recurring_agreements (
+      id, membership_id, provider_environment, provider_request_reference,
+      recurring_day, starts_on
+    ) VALUES (
+      p_agreement_id, p_membership_id, 'test', 'club:' || p_agreement_id::TEXT,
+      v_membership.billing_day, v_membership.starts_on
+    ) RETURNING * INTO v_agreement;
+  END IF;
+
+  UPDATE public.club_memberships
+  SET payment_status = 'enrollment_pending'
+  WHERE id = p_membership_id;
+
+  RETURN jsonb_build_object('agreement_id', v_agreement.id, 'status', v_agreement.status);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.process_icredit_recurring_event(
   p_agreement_id UUID,
   p_event_digest TEXT,
@@ -285,6 +411,9 @@ BEGIN
   IF p_event_kind NOT IN ('agreement_created', 'charge_succeeded', 'charge_failed') THEN
     RAISE EXCEPTION 'invalid event kind';
   END IF;
+  IF p_event_kind = 'agreement_created' AND p_provider_charge_number <> 0 THEN
+    RAISE EXCEPTION 'creation charge number must be zero';
+  END IF;
 
   SELECT * INTO v_agreement
   FROM public.recurring_agreements
@@ -304,32 +433,62 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND THEN RAISE EXCEPTION 'membership not found'; END IF;
+  IF v_membership.status IN ('cancelled', 'ended') AND v_agreement.status <> 'cancelled' THEN
+    RAISE EXCEPTION 'terminal membership cannot be activated';
+  END IF;
   IF round(v_membership.monthly_price, 2) <> round(p_amount, 2) THEN
     RAISE EXCEPTION 'amount mismatch';
+  END IF;
+  IF v_agreement.status = 'cancelled' AND p_event_kind <> 'agreement_created' THEN
+    RAISE EXCEPTION 'cancelled agreement cannot accept charge events';
   END IF;
 
   INSERT INTO public.payment_webhook_events (
     event_digest, agreement_id, event_kind, provider_sale_id,
-    provider_recurring_id, provider_charge_number
+    provider_recurring_id, provider_charge_number, processing_status
   ) VALUES (
     p_event_digest, p_agreement_id, p_event_kind, p_provider_sale_id,
-    p_provider_recurring_id, p_provider_charge_number
+    p_provider_recurring_id, p_provider_charge_number,
+    CASE WHEN p_event_kind = 'agreement_created' AND v_agreement.status <> 'pending_enrollment'
+      THEN 'ignored' ELSE 'processed' END
   )
   ON CONFLICT (event_digest) DO NOTHING
   RETURNING id INTO v_inserted_event;
 
   IF v_inserted_event IS NULL THEN
-    RETURN jsonb_build_object('duplicate', true, 'agreement_id', p_agreement_id);
+    RETURN jsonb_build_object(
+      'duplicate', true,
+      'agreement_id', p_agreement_id,
+      'compensation_required',
+        v_agreement.compensation_required_at IS NOT NULL
+        AND v_agreement.compensated_at IS NULL
+    );
+  END IF;
+
+  IF p_event_kind = 'agreement_created' AND v_agreement.status <> 'pending_enrollment' THEN
+    IF v_agreement.status = 'cancelled' AND v_agreement.activated_at IS NULL THEN
+      UPDATE public.recurring_agreements
+      SET provider_recurring_id = COALESCE(provider_recurring_id, p_provider_recurring_id),
+          provider_sale_id = COALESCE(provider_sale_id, p_provider_sale_id),
+          compensation_required_at = COALESCE(compensation_required_at, NOW())
+      WHERE id = p_agreement_id;
+    END IF;
+    RETURN jsonb_build_object(
+      'duplicate', false,
+      'ignored', true,
+      'agreement_id', p_agreement_id,
+      'compensation_required',
+        v_agreement.status = 'cancelled'
+        AND v_agreement.activated_at IS NULL
+        AND v_agreement.compensated_at IS NULL
+    );
   END IF;
 
   IF p_event_kind = 'agreement_created' THEN
-    IF p_provider_charge_number <> 0 THEN RAISE EXCEPTION 'creation charge number must be zero'; END IF;
-
     UPDATE public.recurring_agreements
     SET provider_recurring_id = p_provider_recurring_id,
         provider_sale_id = COALESCE(provider_sale_id, p_provider_sale_id),
-        status = 'active', activated_at = COALESCE(activated_at, NOW()),
-        enrollment_url = NULL
+        status = 'active', activated_at = COALESCE(activated_at, NOW())
     WHERE id = p_agreement_id;
 
     UPDATE public.club_memberships
@@ -391,8 +550,12 @@ BEGIN
 
   UPDATE public.club_memberships
   SET debt_amount = v_debt,
-      payment_status = CASE WHEN v_debt > 0 THEN 'past_due' ELSE 'current' END
-  WHERE id = v_membership.id AND status <> 'cancelled';
+      payment_status = CASE
+        WHEN status = 'cancelled' THEN 'cancelled'
+        WHEN v_debt > 0 THEN 'past_due'
+        ELSE 'current'
+      END
+  WHERE id = v_membership.id;
 
   RETURN jsonb_build_object(
     'duplicate', false,
@@ -400,6 +563,48 @@ BEGIN
     'charge_id', v_charge_id,
     'debt_amount', v_debt,
     'kind', p_event_kind
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.complete_icredit_enrollment_compensation(
+  p_agreement_id UUID,
+  p_provider_recurring_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_agreement public.recurring_agreements%ROWTYPE;
+BEGIN
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'service_role required';
+  END IF;
+
+  SELECT * INTO v_agreement
+  FROM public.recurring_agreements
+  WHERE id = p_agreement_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN RAISE EXCEPTION 'agreement not found'; END IF;
+  IF v_agreement.status <> 'cancelled' THEN RAISE EXCEPTION 'agreement is not cancelled'; END IF;
+  IF v_agreement.provider_recurring_id IS DISTINCT FROM p_provider_recurring_id THEN
+    RAISE EXCEPTION 'provider recurring id mismatch';
+  END IF;
+  IF v_agreement.compensation_required_at IS NULL THEN
+    RAISE EXCEPTION 'compensation is not required';
+  END IF;
+
+  UPDATE public.recurring_agreements
+  SET compensated_at = COALESCE(compensated_at, NOW())
+  WHERE id = p_agreement_id;
+
+  RETURN jsonb_build_object(
+    'agreement_id', p_agreement_id,
+    'compensated', true,
+    'reused', v_agreement.compensated_at IS NOT NULL
   );
 END;
 $$;
@@ -426,12 +631,25 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND THEN RAISE EXCEPTION 'agreement not found'; END IF;
+  IF v_agreement.status = 'cancelled' THEN
+    RETURN jsonb_build_object(
+      'membership_id', p_membership_id,
+      'agreement_id', p_agreement_id,
+      'cancelled', true,
+      'reused', true
+    );
+  END IF;
+  IF NOT (
+    (v_agreement.status = 'pending_enrollment' AND v_agreement.provider_recurring_id IS NULL)
+    OR v_agreement.status = 'provider_cancelled'
+  ) THEN
+    RAISE EXCEPTION 'provider cancellation confirmation required';
+  END IF;
 
   UPDATE public.recurring_agreements
   SET status = 'cancelled',
       cancellation_requested_at = COALESCE(cancellation_requested_at, NOW()),
-      cancelled_at = COALESCE(cancelled_at, NOW()),
-      enrollment_url = NULL
+      cancelled_at = COALESCE(cancelled_at, NOW())
   WHERE id = p_agreement_id;
 
   UPDATE public.club_memberships
@@ -451,3 +669,12 @@ GRANT EXECUTE ON FUNCTION public.process_icredit_recurring_event(UUID, TEXT, TEX
 
 REVOKE ALL ON FUNCTION public.cancel_icredit_recurring_membership(UUID, UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.cancel_icredit_recurring_membership(UUID, UUID) TO service_role;
+
+REVOKE ALL ON FUNCTION public.complete_icredit_enrollment_compensation(UUID, UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_icredit_enrollment_compensation(UUID, UUID) TO service_role;
+
+REVOKE ALL ON FUNCTION public.prepare_icredit_recurring_enrollment(UUID, UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.prepare_icredit_recurring_enrollment(UUID, UUID) TO service_role;
+
+REVOKE ALL ON FUNCTION public.save_club_with_schedule(UUID, TEXT, TEXT, UUID, TEXT, INTEGER, NUMERIC, SMALLINT, TEXT, TEXT, JSONB) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.save_club_with_schedule(UUID, TEXT, TEXT, UUID, TEXT, INTEGER, NUMERIC, SMALLINT, TEXT, TEXT, JSONB) TO authenticated;

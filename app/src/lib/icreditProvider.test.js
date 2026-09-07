@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ICREDIT_TEST_BASE_URL,
+  IcreditCancellationRejectedError,
   buildEnrollmentRequest,
   cancelRecurringSale,
   classifyIpn,
@@ -139,6 +140,7 @@ describe("iCredit TEST provider adapter", () => {
     };
 
     expect(classifyIpn({ ...base, chargeNumber: 0, transactionParamJ: 5, transactionStatus: 0 })).toBe("agreement_created");
+    expect(() => classifyIpn({ ...base, chargeNumber: 0, transactionParamJ: 5, transactionStatus: 4, failureMessage: "declined" })).toThrow(/unsupported/i);
     expect(classifyIpn({ ...base, chargeNumber: 1, transactionParamJ: 0, transactionStatus: 0 })).toBe("charge_succeeded");
     expect(classifyIpn({ ...base, chargeNumber: 2, transactionParamJ: 0, transactionStatus: 4, failureMessage: "declined" })).toBe("charge_failed");
     expect(() => classifyIpn({ ...base, chargeNumber: 0, transactionParamJ: 0, transactionStatus: 0 })).toThrow(/unsupported/i);
@@ -288,7 +290,7 @@ describe("iCredit TEST provider adapter", () => {
         headers: { "Content-Type": "application/json" },
       }),
     );
-    await expect(cancelRecurringSale(failedFetch, recurringId)).rejects.toThrow(/not cancelled/i);
+    await expect(cancelRecurringSale(failedFetch, recurringId)).rejects.toBeInstanceOf(IcreditCancellationRejectedError);
 
     const successFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ Status: 0 }), {
@@ -319,8 +321,11 @@ describe("recurring Edge Function security boundaries", () => {
 
     expect(ipn).toMatch(/normalizeIpn/);
     expect(ipn).toMatch(/prepareVerifiedIpn/);
+    expect(ipn).toMatch(/cancelRecurringSale/);
     expect(ipn).toMatch(/process_icredit_recurring_event/);
+    expect(ipn).toMatch(/complete_icredit_enrollment_compensation/);
     expect(ipn.indexOf("prepareVerifiedIpn")).toBeLessThan(ipn.indexOf("process_icredit_recurring_event"));
+    expect(ipn.indexOf("process_icredit_recurring_event")).toBeLessThan(ipn.lastIndexOf("cancelRecurringSale"));
     expect(ipn).not.toMatch(/console\.(?:log|info).*body/i);
   });
 
@@ -331,9 +336,19 @@ describe("recurring Edge Function security boundaries", () => {
     expect(cancel).toMatch(/cancelRecurringSale/);
     expect(cancel).toMatch(/cancel_icredit_recurring_membership/);
     expect(cancel).toMatch(/status:\s*"cancellation_pending"/);
-    expect(cancel).toMatch(/status:\s*"active"/);
+    expect(cancel).toMatch(/status:\s*"provider_cancelled"/);
+    expect(cancel).toMatch(/pending_enrollment/);
+    expect(cancel).toMatch(/\.in\("status", \["active", "cancellation_pending"\]\)/);
+    expect(cancel).toMatch(/provider confirmation state changed concurrently/);
     expect(cancel.indexOf("cancelRecurringSale")).toBeLessThan(
       cancel.indexOf("cancel_icredit_recurring_membership"),
     );
+  });
+
+  test("does not persist or reuse the hosted enrollment capability URL", () => {
+    const enroll = readFileSync(resolve(repoRoot, "supabase/functions/club-recurring-enroll/index.ts"), "utf8");
+
+    expect(enroll).not.toMatch(/enrollment_url/);
+    expect(enroll).toMatch(/prepare_icredit_recurring_enrollment/);
   });
 });

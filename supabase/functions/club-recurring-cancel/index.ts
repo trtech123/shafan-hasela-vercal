@@ -1,4 +1,4 @@
-import { cancelRecurringSale } from "../_shared/icredit.ts";
+import { cancelRecurringSale, IcreditCancellationRejectedError } from "../_shared/icredit.ts";
 import { corsHeaders, HttpError, json, requireAdmin } from "../_shared/admin.ts";
 
 Deno.serve(async (req: Request) => {
@@ -26,27 +26,53 @@ Deno.serve(async (req: Request) => {
     if (agreement.status === "cancelled") {
       return json({ ok: true, membershipId, agreementId: agreement.id, reused: true });
     }
-    if (!agreement.provider_recurring_id || agreement.status !== "active") {
-      throw new HttpError(409, "recurring agreement is not active");
+
+    const finalizeLocalCancellation = async () => {
+      const { data: cancelled, error: cancelError } = await adminClient.rpc(
+        "cancel_icredit_recurring_membership",
+        { p_membership_id: membershipId, p_agreement_id: agreement.id },
+      );
+      if (cancelError || !cancelled?.cancelled) {
+        throw new HttpError(500, "provider cancelled but local finalization failed");
+      }
+      return cancelled;
+    };
+
+    if (agreement.status === "provider_cancelled") {
+      await finalizeLocalCancellation();
+      return json({ ok: true, membershipId, agreementId: agreement.id, recovered: true });
     }
 
-    const { error: pendingError } = await adminClient
-      .from("recurring_agreements")
-      .update({ status: "cancellation_pending", cancellation_requested_at: new Date().toISOString() })
-      .eq("id", agreement.id)
-      .eq("status", "active");
-    if (pendingError) throw new HttpError(500, "could not prepare recurring cancellation");
+    if (agreement.status === "pending_enrollment" && !agreement.provider_recurring_id) {
+      await finalizeLocalCancellation();
+      return json({ ok: true, membershipId, agreementId: agreement.id, pendingEnrollment: true });
+    }
+
+    if (!agreement.provider_recurring_id || !["active", "cancellation_pending"].includes(agreement.status)) {
+      throw new HttpError(409, "recurring agreement cannot be cancelled");
+    }
+
+    if (agreement.status === "active") {
+      const { error: pendingError } = await adminClient
+        .from("recurring_agreements")
+        .update({ status: "cancellation_pending", cancellation_requested_at: new Date().toISOString() })
+        .eq("id", agreement.id)
+        .eq("status", "active");
+      if (pendingError) throw new HttpError(500, "could not prepare recurring cancellation");
+    }
 
     try {
       await cancelRecurringSale(fetch, agreement.provider_recurring_id);
     } catch (providerError) {
-      const { error: restoreError } = await adminClient
-        .from("recurring_agreements")
-        .update({ status: "active", cancellation_requested_at: null })
-        .eq("id", agreement.id)
-        .eq("status", "cancellation_pending");
-      if (restoreError) {
-        throw new HttpError(500, "provider cancellation failed and local pending state could not be restored");
+      if (providerError instanceof IcreditCancellationRejectedError && agreement.status === "active") {
+        const { error: restoreError } = await adminClient
+          .from("recurring_agreements")
+          .update({ status: "active", cancellation_requested_at: null })
+          .eq("id", agreement.id)
+          .eq("status", "cancellation_pending");
+        if (restoreError) {
+          throw new HttpError(500, "provider cancellation failed and local pending state could not be restored");
+        }
       }
       const message = providerError instanceof Error
         ? providerError.message
@@ -54,13 +80,30 @@ Deno.serve(async (req: Request) => {
       throw new HttpError(502, message);
     }
 
-    const { data: cancelled, error: cancelError } = await adminClient.rpc(
-      "cancel_icredit_recurring_membership",
-      { p_membership_id: membershipId, p_agreement_id: agreement.id },
-    );
-    if (cancelError || !cancelled?.cancelled) {
-      throw new HttpError(500, "provider cancelled but local finalization failed");
+    const { data: providerConfirmed, error: providerConfirmedError } = await adminClient
+      .from("recurring_agreements")
+      .update({ status: "provider_cancelled" })
+      .eq("id", agreement.id)
+      .in("status", ["active", "cancellation_pending"])
+      .select("id")
+      .maybeSingle();
+    if (providerConfirmedError) {
+      throw new HttpError(500, "provider cancelled but confirmation could not be recorded");
     }
+    if (!providerConfirmed) {
+      const { data: current, error: currentError } = await adminClient
+        .from("recurring_agreements")
+        .select("status")
+        .eq("id", agreement.id)
+        .single();
+      if (currentError || !["provider_cancelled", "cancelled"].includes(current?.status)) {
+        throw new HttpError(409, "provider confirmation state changed concurrently");
+      }
+      if (current.status === "cancelled") {
+        return json({ ok: true, membershipId, agreementId: agreement.id, reused: true });
+      }
+    }
+    await finalizeLocalCancellation();
 
     return json({ ok: true, membershipId, agreementId: agreement.id, reused: false });
   } catch (error) {

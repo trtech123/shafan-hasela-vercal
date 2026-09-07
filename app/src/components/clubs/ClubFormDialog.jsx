@@ -89,29 +89,20 @@ export default function ClubFormDialog({
     setSaving(true);
     try {
       const normalized = normalizeClubPayload(form);
-      let clubId = club?.id;
-      if (clubId) {
-        const { error } = await supabase.from("clubs").update(normalized.club).eq("id", clubId);
-        if (error) throw error;
-        const { error: deleteError } = await supabase
-          .from("club_schedule_rules")
-          .delete()
-          .eq("club_id", clubId);
-        if (deleteError) throw deleteError;
-      } else {
-        const { data, error } = await supabase
-          .from("clubs")
-          .insert(normalized.club)
-          .select("id")
-          .single();
-        if (error || !data) throw error || new Error("club insert returned no id");
-        clubId = data.id;
-      }
-
-      const { error: rulesError } = await supabase
-        .from("club_schedule_rules")
-        .insert(normalized.rules.map((rule) => ({ ...rule, club_id: clubId })));
-      if (rulesError) throw rulesError;
+      const { error } = await supabase.rpc("save_club_with_schedule", {
+        p_club_id: club?.id || null,
+        p_name: normalized.club.name,
+        p_description: normalized.club.description,
+        p_instructor_id: normalized.club.instructor_id,
+        p_site: normalized.club.site,
+        p_capacity: normalized.club.capacity,
+        p_monthly_price: normalized.club.monthly_price,
+        p_default_billing_day: normalized.club.default_billing_day,
+        p_status: normalized.club.status,
+        p_notes: normalized.club.notes,
+        p_rules: normalized.rules,
+      });
+      if (error) throw error;
 
       toast.success(club ? "החוג עודכן" : "החוג נוצר");
       await onSaved?.();

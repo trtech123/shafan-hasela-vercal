@@ -1,5 +1,7 @@
 export const ICREDIT_TEST_BASE_URL = "https://testicredit.rivhit.co.il";
 
+export class IcreditCancellationRejectedError extends Error {}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type IcreditEventKind =
@@ -148,7 +150,11 @@ export function normalizeIpn(input: Record<string, unknown>): NormalizedIcreditI
 }
 
 export function classifyIpn(event: NormalizedIcreditIpn): IcreditEventKind {
-  if (event.chargeNumber === 0 && event.transactionParamJ === 5) {
+  if (
+    event.chargeNumber === 0 &&
+    event.transactionParamJ === 5 &&
+    event.transactionStatus === 0
+  ) {
     return "agreement_created";
   }
   if (event.chargeNumber > 0 && event.transactionParamJ === 0 && event.transactionStatus === 0) {
@@ -287,7 +293,12 @@ export async function cancelRecurringSale(
   );
   const data = await readJson(response);
   if (!response.ok || Number(data.Status) !== 0) {
-    throw new Error(cleanText(data.DebugMessage, 500) ?? "iCredit recurring sale was not cancelled");
+    if (Number(data.Status) !== 0) {
+      throw new IcreditCancellationRejectedError(
+        cleanText(data.DebugMessage, 500) ?? "iCredit recurring sale was not cancelled",
+      );
+    }
+    throw new Error("iCredit cancellation response was not successful");
   }
   return true;
 }

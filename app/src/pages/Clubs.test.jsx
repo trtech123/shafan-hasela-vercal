@@ -52,7 +52,7 @@ const memberships = [
     payment_status: "not_enrolled",
     debt_amount: 0,
     participant: { id: "participant-1", first_name: "דן", last_name: "כהן", primary_contact_name: "רות כהן", primary_contact_phone: "0500000000" },
-    agreement: null,
+    agreement: { id: "agreement-1", status: "pending_enrollment", provider_recurring_id: null, last_charge_number: 0 },
   },
   {
     id: "membership-debt",
@@ -152,6 +152,17 @@ describe("Clubs admin workspace", () => {
       body: { membershipId: "membership-debt" },
     }));
     await waitFor(() => expect(fromMock.mock.calls.length).toBeGreaterThan(initialCalls));
+  });
+
+  test("cancels a pending hosted enrollment through the server boundary", async () => {
+    render(<Clubs />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "ביטול חברות עבור דן כהן" }));
+    fireEvent.click(screen.getByRole("button", { name: "אישור ביטול מיידי" }));
+
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("club-recurring-cancel", {
+      body: { membershipId: "membership-pending" },
+    }));
   });
 
   test("declares the Clubs route and navigation as admin-only", () => {

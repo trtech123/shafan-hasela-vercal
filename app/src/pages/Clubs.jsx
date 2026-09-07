@@ -34,9 +34,9 @@ const weekdays = ["ראשון", "שני", "שלישי", "רביעי", "חמיש�
 const membershipLabels = {
   pending_enrollment: "ממתינה להרשמה",
   active: "פעילה",
-  cancellation_pending: "ביטול בתהליך",
+  paused: "מוקפאת",
   cancelled: "בוטלה",
-  expired: "הסתיימה",
+  ended: "הסתיימה",
 };
 
 const paymentLabels = {
@@ -133,7 +133,7 @@ export default function Clubs() {
     setBusyId(membership.id);
     try {
       const agreement = relationOne(membership.agreement);
-      if (agreement?.provider_recurring_id) {
+      if (agreement?.id) {
         const { data, error } = await supabase.functions.invoke("club-recurring-cancel", {
           body: { membershipId: membership.id },
         });
