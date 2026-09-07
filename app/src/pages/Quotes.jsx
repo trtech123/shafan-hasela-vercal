@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, FileText, Eye, CheckCircle2, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Search, FileText, Eye, CheckCircle2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import moment from "moment";
 import QuoteFormDialog from "../components/quotes/QuoteFormDialog";
@@ -77,6 +77,14 @@ export default function Quotes() {
   };
 
   const handleConvertToOrder = async (quote) => {
+    const includesProducts = quote.selected_activities?.some(
+      item => item.item_type === 'product' || item.product_id
+    );
+    if (includesProducts) {
+      toast.error('לא ניתן להמיר הצעה הכוללת מוצרים להזמנה אוטומטית. יש ליצור את ההזמנה ידנית.');
+      return;
+    }
+
     setConverting(quote.id);
     try {
       // Use first selected activity's ID if available

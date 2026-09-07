@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/api/supabaseClient";
-import { Plus, Minus, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -20,31 +20,44 @@ const emptyForm = {
 
 export default function QuoteFormDialog({ open, onClose, quote, onSaved, prefill }) {
   const [form, setForm] = useState(emptyForm);
-  const [activities, setActivities] = useState([]);
+  const [catalogItems, setCatalogItems] = useState([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const fetchActivities = async () => {
-      const { data, error } = await supabase
-        .from('activities')
-        .select('*')
-        .eq('status', 'פעיל');
-      if (error) console.error('activities fetch error:', error);
-      else setActivities(data ?? []);
+    if (!open) return;
+
+    let cancelled = false;
+    const fetchCatalog = async () => {
+      setCatalogItems([]);
+      const [activitiesResult, productsResult] = await Promise.all([
+        supabase.from('activities').select('*').eq('status', 'פעיל'),
+        supabase.from('products').select('*').eq('status', 'פעיל'),
+      ]);
+
+      if (activitiesResult.error) console.error('activities fetch error:', activitiesResult.error);
+      if (productsResult.error) console.error('products fetch error:', productsResult.error);
+      if (cancelled) return;
+
+      const activities = (activitiesResult.data ?? []).map(activity => ({
+        ...activity,
+        catalog_type: 'activity',
+      }));
+      const products = (productsResult.data ?? []).map(product => ({
+        ...product,
+        catalog_type: 'product',
+        duration_hours: null,
+        price_per_person: product.price == null ? 0 : Number(product.price),
+        images: product.image_url ? [product.image_url] : [],
+      }));
+      setCatalogItems([...activities, ...products]);
     };
-    fetchActivities();
-  }, []);
+    fetchCatalog();
+
+    return () => { cancelled = true; };
+  }, [open]);
 
   useEffect(() => {
     if (quote) {
-      const enriched = (quote.selected_activities || []).map(sa => {
-        const found = activities.find(a => a.id === sa.activity_id);
-        return {
-          ...sa,
-          images: sa.images && sa.images.length > 0 ? sa.images : (found?.images || []),
-          image_url: sa.image_url || found?.image_url || "",
-        };
-      });
       setForm({
         client_name:          quote.client_name || "",
         client_phone:         quote.client_phone || "",
@@ -54,7 +67,7 @@ export default function QuoteFormDialog({ open, onClose, quote, onSaved, prefill
         site:                 quote.site || "",
         num_participants:     quote.num_participants || "",
         notes:                quote.notes || "",
-        selected_activities:  enriched,
+        selected_activities:  quote.selected_activities || [],
         discount:             quote.discount || "",
         status:               quote.status || "טיוטה",
       });
@@ -63,24 +76,31 @@ export default function QuoteFormDialog({ open, onClose, quote, onSaved, prefill
     } else {
       setForm(emptyForm);
     }
-  }, [quote, open, activities]);
+  }, [quote, open, prefill]);
 
   const toggleActivity = (activity) => {
     setForm(prev => {
-      const exists = prev.selected_activities.find(a => a.activity_id === activity.id);
+      const exists = prev.selected_activities.find(item => {
+        const itemType = item.item_type || 'activity';
+        const itemId = itemType === 'product' ? item.product_id : item.activity_id;
+        return itemType === activity.catalog_type && itemId === activity.id;
+      });
       if (exists) {
-        return { ...prev, selected_activities: prev.selected_activities.filter(a => a.activity_id !== activity.id) };
+        return { ...prev, selected_activities: prev.selected_activities.filter(item => item !== exists) };
       }
       return {
         ...prev,
         selected_activities: [...prev.selected_activities, {
-          activity_id:      activity.id,
+          item_type:        activity.catalog_type,
+          activity_id:      activity.catalog_type === 'activity' ? activity.id : null,
+          product_id:       activity.catalog_type === 'product' ? activity.id : null,
           activity_name:    activity.name,
           price_per_person: activity.price_per_person,
           duration_hours:   activity.duration_hours,
           image_url:        activity.image_url || "",
           images:           activity.images || [],
           description:      activity.description || "",
+          site:             activity.site || null,
         }],
       };
     });
@@ -178,14 +198,18 @@ export default function QuoteFormDialog({ open, onClose, quote, onSaved, prefill
 
           {/* Activities selection */}
           <div>
-            <Label className="text-base font-semibold">בחר פעילויות</Label>
+            <Label className="text-base font-semibold">בחר פעילויות ומוצרים</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-              {activities.map(activity => {
-                const selected = form.selected_activities.find(a => a.activity_id === activity.id);
+              {catalogItems.map(activity => {
+                const selected = form.selected_activities.find(item => {
+                  const itemType = item.item_type || 'activity';
+                  const itemId = itemType === 'product' ? item.product_id : item.activity_id;
+                  return itemType === activity.catalog_type && itemId === activity.id;
+                });
                 return (
                   <button
                     type="button"
-                    key={activity.id}
+                    key={`${activity.catalog_type}-${activity.id}`}
                     onClick={() => toggleActivity(activity)}
                     className={cn(
                       "flex items-start gap-3 p-3 rounded-xl border text-right transition-all",
@@ -197,7 +221,11 @@ export default function QuoteFormDialog({ open, onClose, quote, onSaved, prefill
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{activity.name}</p>
-                      <p className="text-xs text-muted-foreground">{activity.duration_hours} שע׳ • {activity.price_per_person}₪ לאדם</p>
+                      <p className="text-xs text-muted-foreground">
+                        {activity.duration_hours ? `${activity.duration_hours} שע׳ • ` : ""}
+                        {activity.price_per_person}₪ לאדם
+                        {activity.catalog_type === 'product' && activity.site ? ` • ${activity.site}` : ""}
+                      </p>
                       {participants > 0 && (
                         <p className="text-xs font-semibold text-primary mt-0.5">{(activity.price_per_person * participants).toLocaleString()}₪ סה״כ</p>
                       )}

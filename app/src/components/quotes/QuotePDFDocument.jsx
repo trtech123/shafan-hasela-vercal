@@ -49,7 +49,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
     try {
       const pdfBase64 = await generatePDFBase64();
       const activitiesList = (quote.selected_activities || [])
-        .map(a => `<li>${a.activity_name} — ${a.duration_hours} שע׳ — ${((a.price_per_person || 0) * (quote.num_participants || 0)).toLocaleString()}₪</li>`)
+        .map(a => `<li>${a.activity_name}${a.duration_hours ? ` — ${a.duration_hours} שע׳` : ""} — ${((a.price_per_person || 0) * (quote.num_participants || 0)).toLocaleString()}₪</li>`)
         .join("");
 
       const htmlBody = `
@@ -106,7 +106,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
       "",
       "*פעילויות:*",
       ...(quote.selected_activities || []).map(a =>
-        `• ${a.activity_name} — ${a.duration_hours} שע׳ — ${(a.price_per_person * (quote.num_participants || 0)).toLocaleString()}₪`
+        `• ${a.activity_name}${a.duration_hours ? ` — ${a.duration_hours} שע׳` : ""} — ${(a.price_per_person * (quote.num_participants || 0)).toLocaleString()}₪`
       ),
       "",
       quote.discount > 0 ? `סה״כ לפני הנחה: ${(quote.total_price || 0).toLocaleString()}₪` : "",
@@ -204,7 +204,9 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
                   <div key={i} className="flex items-center gap-4 border border-slate-100 rounded-xl p-4 bg-white">
                     <div className="flex-1">
                       <p className="font-semibold text-base">{act.activity_name}</p>
-                      <p className="text-sm text-slate-500">⏱ {act.duration_hours} שעות • {act.price_per_person}₪ לאדם</p>
+                      <p className="text-sm text-slate-500">
+                        {act.duration_hours ? `⏱ ${act.duration_hours} שעות • ` : ""}{act.price_per_person}₪ לאדם
+                      </p>
                       {act.description && <p className="text-sm text-slate-600 mt-1">{act.description}</p>}
                     </div>
                     <div className="text-left">
