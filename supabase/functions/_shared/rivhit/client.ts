@@ -20,6 +20,30 @@ const RETRYABLE_CODES = new Set([
   -9998,
 ]);
 const CUSTOMER_NOT_FOUND_CODES = new Set([-2, -20, -22]);
+// Documented validation/business errors must not be retried merely because
+// Rivhit commonly transports them with HTTP 500.
+const PERMANENT_CODES = new Set([
+  -2,
+  -3,
+  -4,
+  ...Array.from({ length: 41 }, (_, index) => -20 - index),
+  -72,
+  -107,
+  -109,
+  -115,
+  -116,
+  -117,
+  -121,
+  -122,
+  -123,
+  -126,
+  -127,
+  -128,
+  -130,
+  -131,
+  -997,
+  -998,
+]);
 
 interface RivhitErrorOptions {
   retryable?: boolean;
@@ -122,9 +146,8 @@ export class RivhitClient {
       const transientHttp = response.status >= 500
         || response.status === 408
         || response.status === 429;
-      const retryable = errorCode !== null && errorCode < 0
-        ? RETRYABLE_CODES.has(errorCode)
-        : transientHttp || (errorCode !== null && RETRYABLE_CODES.has(errorCode));
+      const retryable = (errorCode !== null && RETRYABLE_CODES.has(errorCode))
+        || (transientHttp && (errorCode === null || !PERMANENT_CODES.has(errorCode)));
       const clientMessage = this.sanitize(envelope.client_message);
       const debugMessage = this.sanitize(envelope.debug_message);
       throw new RivhitError(

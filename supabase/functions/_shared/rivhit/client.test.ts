@@ -153,6 +153,22 @@ describe("RivhitClient", () => {
     });
   });
 
+  test("treats transient HTTP status with an unknown negative code as retryable", async () => {
+    const client = new RivhitClient({
+      apiToken: token,
+      fetchImpl: vi.fn().mockResolvedValue(jsonResponse({
+        error_code: -54321,
+        debug_message: "unknown provider failure",
+      }, 503)),
+    });
+
+    await expect(client.findCustomerByAccRef("shabc")).rejects.toMatchObject({
+      retryable: true,
+      errorCode: -54321,
+      httpStatus: 503,
+    });
+  });
+
   test("adds a request timeout signal", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
       error_code: 0,
