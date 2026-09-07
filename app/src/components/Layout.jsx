@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
-import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, X, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText } from "lucide-react";
+import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, X, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText, Trophy } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -11,6 +11,7 @@ const allNavItems = [
 { path: "/schedule", label: "לוח זמנים", icon: CalendarDays, roles: ["admin", "אחמ\"ש", "מדריך", "קופאי"] },
 { path: "/activities", label: "פעילויות", icon: Mountain, roles: ["admin"] },
 { path: "/instructors", label: "מדריכים", icon: Users, roles: ["admin"] },
+{ path: "/clubs", label: "חוגים ומנויים", icon: Trophy, roles: ["admin"] },
 { path: "/quotes", label: "הצעות מחיר", icon: FileText, roles: ["admin"] },
 { path: "/leads", label: "לידים", icon: UserSearch, roles: ["admin"] },
 { path: "/cashregister", label: "קופה", icon: MonitorSmartphone, roles: ["admin", "אחמ\"ש", "קופאי"] },
