@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 
-const migrationUrl = new URL("../../../migrations/021_rivhit_accounting.sql", import.meta.url);
+const migrationUrl = new URL("../../../migrations/022_rivhit_accounting.sql", import.meta.url);
 
-describe("021 Rivhit accounting migration", () => {
+describe("022 Rivhit accounting migration", () => {
   const sql = readFileSync(migrationUrl, "utf8");
 
   test("creates generic accounting tables without changing orders or sales", () => {

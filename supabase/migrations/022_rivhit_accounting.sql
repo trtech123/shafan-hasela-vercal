@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration 021: External accounting state (Rivhit first)
+-- Migration 022: External accounting state (Rivhit first)
 --
 -- Expand-only migration. Existing orders, sales and local RCP-* receipts are
 -- unchanged. In particular, sales.receipt_number is not a Rivhit document ID.

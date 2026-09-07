@@ -33,7 +33,7 @@ This work does not connect payment providers to Rivhit, deploy an Edge Function,
 
 ### 1. Additive accounting ledger
 
-Migration `021_rivhit_accounting.sql` creates two generic tables without altering existing orders, sales, receipts, or storage:
+Migration `022_rivhit_accounting.sql` creates two generic tables without altering existing orders, sales, receipts, or storage:
 
 #### `accounting_customers`
 
@@ -172,7 +172,7 @@ Production remains disabled until all of the following are supplied and explicit
 - A reviewed `RIVHIT_DOCUMENT_TYPE_MAP` containing every approved business mapping.
 - Explicit `RIVHIT_ACCOUNTING_MODE=production`; local verification uses `sandbox`.
 - Confirmation that the Production Rivhit account's document types, sort codes, currency settings, VAT configuration, email defaults, and signature settings match the approved mapping.
-- A migration application window and explicit approval to apply `021_rivhit_accounting.sql`.
+- A migration application window and explicit approval to apply `022_rivhit_accounting.sql`.
 - Explicit approval to deploy the `rivhit-accounting` Edge Function.
 
 ## Business and Accountant Decisions Still Required

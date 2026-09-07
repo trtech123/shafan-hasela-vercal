@@ -13,20 +13,20 @@
 ### Task 1: Add the accounting ledger migration
 
 **Files:**
-- Create: `supabase/migrations/021_rivhit_accounting.sql`
+- Create: `supabase/migrations/022_rivhit_accounting.sql`
 - Create: `supabase/functions/_shared/rivhit/migration.test.ts`
 
 - [ ] **Step 1: Write the failing migration contract test**
 
-Create a Vitest test that reads `021_rivhit_accounting.sql` and asserts both table definitions, the customer/document uniqueness constraints, the document customer FK index, RLS enablement and read policies, atomic claim functions, execute revocation from `public`/`anon`/`authenticated`, and grant to `service_role`. Also assert that the SQL contains no `ALTER TABLE public.orders` or `ALTER TABLE public.sales` statement.
+Create a Vitest test that reads `022_rivhit_accounting.sql` and asserts both table definitions, the customer/document uniqueness constraints, the document customer FK index, RLS enablement and read policies, atomic claim functions, execute revocation from `public`/`anon`/`authenticated`, and grant to `service_role`. Also assert that the SQL contains no `ALTER TABLE public.orders` or `ALTER TABLE public.sales` statement.
 
 ```ts
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 
-const sql = readFileSync(new URL("../../../migrations/021_rivhit_accounting.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../../../migrations/022_rivhit_accounting.sql", import.meta.url), "utf8");
 
-describe("021 Rivhit accounting migration", () => {
+describe("022 Rivhit accounting migration", () => {
   test("is additive and creates the generic ledger", () => {
     expect(sql).toContain("CREATE TABLE public.accounting_customers");
     expect(sql).toContain("CREATE TABLE public.accounting_documents");
@@ -48,7 +48,7 @@ describe("021 Rivhit accounting migration", () => {
 - [ ] **Step 2: Run the test and verify RED**
 
 Run: `npm exec --prefix app vitest -- run --root .. supabase/functions/_shared/rivhit/migration.test.ts`
-Expected: FAIL because `021_rivhit_accounting.sql` does not exist.
+Expected: FAIL because `022_rivhit_accounting.sql` does not exist.
 
 - [ ] **Step 3: Implement the additive schema**
 
@@ -93,7 +93,7 @@ Expected: exit 0.
 Commit:
 
 ```powershell
-git add supabase/migrations/021_rivhit_accounting.sql supabase/functions/_shared/rivhit/migration.test.ts
+git add supabase/migrations/022_rivhit_accounting.sql supabase/functions/_shared/rivhit/migration.test.ts
 git commit -m "feat: add external accounting ledger"
 ```
 

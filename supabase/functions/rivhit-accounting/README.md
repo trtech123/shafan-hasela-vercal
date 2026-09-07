@@ -35,4 +35,4 @@ The function accepts an authenticated `admin` or `operations` request:
 }
 ```
 
-Do not deploy the function, apply migration `021_rivhit_accounting.sql`, or configure Production secrets without explicit approval and the accountant decisions listed in the design specification.
+Do not deploy the function, apply migration `022_rivhit_accounting.sql`, or configure Production secrets without explicit approval and the accountant decisions listed in the design specification.
