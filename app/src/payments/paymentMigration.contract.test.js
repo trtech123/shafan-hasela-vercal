@@ -52,11 +52,18 @@ describe("Pelecard payment ledger migration", () => {
       "card_expiry",
       "expiry_date",
       "card_token",
+      "raw_provider_response",
+      "provider_payload",
     ]) {
       expect(normalized).not.toMatch(
         new RegExp(`\\b${forbidden}\\s+(text|varchar|jsonb)`),
       );
     }
+
+    expect(normalized).toContain(
+      "public.payment_json_is_safe(checkout_snapshot)",
+    );
+    expect(normalized).toContain("public.payment_json_is_safe(metadata)");
   });
 
   test("keeps external credit distinct from verified Pelecard", () => {
