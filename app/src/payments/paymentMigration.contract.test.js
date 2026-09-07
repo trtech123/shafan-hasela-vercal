@@ -5,6 +5,9 @@ import { describe, expect, test } from "vitest";
 const migrationPath = fileURLToPath(
   new URL("../../../supabase/migrations/021_pelecard_payment_ledger.sql", import.meta.url),
 );
+const integrationTestPath = fileURLToPath(
+  new URL("../../../supabase/tests/pelecard_payment_ledger.sql", import.meta.url),
+);
 
 const readMigration = () =>
   existsSync(migrationPath) ? readFileSync(migrationPath, "utf8") : "";
@@ -61,9 +64,17 @@ describe("Pelecard payment ledger migration", () => {
     }
 
     expect(normalized).toContain(
-      "public.payment_json_is_safe(checkout_snapshot)",
+      "public.payment_checkout_snapshot_is_safe(checkout_snapshot)",
     );
-    expect(normalized).toContain("public.payment_json_is_safe(metadata)");
+    expect(normalized).toContain(
+      "public.payment_event_metadata_is_safe(metadata)",
+    );
+    expect(normalized).toContain(
+      "revoke all on function public.payment_checkout_snapshot_is_safe(jsonb) from public, anon, authenticated, service_role",
+    );
+    expect(normalized).toContain(
+      "revoke all on function public.payment_event_metadata_is_safe(jsonb) from public, anon, authenticated, service_role",
+    );
   });
 
   test("keeps external credit distinct from verified Pelecard", () => {
@@ -88,5 +99,60 @@ describe("Pelecard payment ledger migration", () => {
       "before update or delete on public.payment_transaction_events",
     );
     expect(normalized).toContain("before delete on public.payment_transactions");
+  });
+
+  test("denies truncate and grants service role only required operations", () => {
+    const normalized = normalize(readMigration());
+
+    expect(normalized).toContain(
+      "revoke all on public.payment_transactions from public, anon, authenticated, service_role",
+    );
+    expect(normalized).toContain(
+      "revoke all on public.payment_transaction_events from public, anon, authenticated, service_role",
+    );
+    expect(normalized).toContain(
+      "before truncate on public.payment_transactions",
+    );
+    expect(normalized).toContain(
+      "before truncate on public.payment_transaction_events",
+    );
+    expect(normalized).not.toContain(
+      "grant all on public.payment_transactions to service_role",
+    );
+    expect(normalized).not.toContain(
+      "grant all on public.payment_transaction_events to service_role",
+    );
+  });
+
+  test("rejects whitespace aliases for unique provider identifiers", () => {
+    const normalized = normalize(readMigration());
+
+    expect(normalized).toContain("idempotency_key = btrim(idempotency_key)");
+    expect(normalized).toContain(
+      "provider_transaction_id = btrim(provider_transaction_id)",
+    );
+    expect(normalized).toContain(
+      "length(provider_transaction_id) between 1 and 100",
+    );
+  });
+
+  test("requires refund and void parents to be original payments", () => {
+    const normalized = normalize(readMigration());
+
+    expect(normalized).toContain(
+      "create or replace function public.validate_payment_transaction_parent()",
+    );
+    expect(normalized).toContain("parent.operation <> 'payment'");
+  });
+
+  test("ships a disposable database behavior test", () => {
+    expect(existsSync(integrationTestPath)).toBe(true);
+
+    const integrationSql = normalize(readFileSync(integrationTestPath, "utf8"));
+    expect(integrationSql).toContain("select extensions.plan(12)");
+    expect(integrationSql).toContain("set local role anon");
+    expect(integrationSql).toContain("set local role authenticated");
+    expect(integrationSql).toContain("extensions.throws_ok");
+    expect(integrationSql).toContain("rollback");
   });
 });

@@ -120,9 +120,15 @@ git commit -m "test: define Pelecard ledger contract"
 
 **Files:**
 - Create: `supabase/migrations/021_pelecard_payment_ledger.sql`
+- Create: `supabase/tests/pelecard_payment_ledger.sql`
 - Test: `app/src/payments/paymentMigration.contract.test.js`
 
 - [ ] **Step 1: Create the migration with this structure**
+
+Define immutable `payment_checkout_snapshot_is_safe(jsonb)` and
+`payment_event_metadata_is_safe(jsonb)` validators first. They must allow only
+the explicitly documented business/event shapes and reject every unknown key;
+they are not provider-payload filters.
 
 ```sql
 create table public.payment_transactions (
@@ -141,12 +147,18 @@ create table public.payment_transactions (
     'initiated', 'pending_provider', 'succeeded', 'failed', 'timed_out',
     'refund_pending', 'refunded', 'void_pending', 'voided'
   )),
-  idempotency_key text not null check (length(idempotency_key) between 8 and 100),
+  idempotency_key text not null check (
+    idempotency_key = btrim(idempotency_key)
+    and length(idempotency_key) between 8 and 100
+  ),
   provider_status_code text,
   failure_code text,
   failure_message text,
-  checkout_snapshot jsonb not null default '{}'::jsonb check (jsonb_typeof(checkout_snapshot) = 'object'),
-  created_by uuid references public.profiles(id) on delete set null,
+  checkout_snapshot jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(checkout_snapshot) = 'object'
+    and public.payment_checkout_snapshot_is_safe(checkout_snapshot)
+  ),
+  created_by uuid,
   verified_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -179,7 +191,10 @@ create table public.payment_transaction_events (
   payment_transaction_id uuid not null references public.payment_transactions(id) on delete restrict,
   event_type text not null,
   status text not null,
-  metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
+  metadata jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(metadata) = 'object'
+    and public.payment_event_metadata_is_safe(metadata)
+  ),
   actor_id uuid,
   created_at timestamptz not null default now()
 );
@@ -302,6 +317,12 @@ create trigger trg_payment_transactions_no_delete
 create trigger trg_payment_transaction_events_immutable
   before update or delete on public.payment_transaction_events
   for each row execute function public.reject_payment_ledger_delete();
+create trigger trg_payment_transactions_no_truncate
+  before truncate on public.payment_transactions
+  for each statement execute function public.reject_payment_ledger_delete();
+create trigger trg_payment_transaction_events_no_truncate
+  before truncate on public.payment_transaction_events
+  for each statement execute function public.reject_payment_ledger_delete();
 create trigger trg_payment_transactions_created_event
   after insert on public.payment_transactions
   for each row execute function public.record_payment_transaction_event();
@@ -334,20 +355,26 @@ create policy "payment transaction events: staff read"
   on public.payment_transaction_events for select to authenticated
   using ((select public.is_admin_or_ops()) or (select public.is_cashier()));
 
-revoke all on public.payment_transactions from anon;
-revoke all on public.payment_transaction_events from anon;
-revoke insert, update, delete on public.payment_transactions from authenticated;
-revoke insert, update, delete on public.payment_transaction_events from authenticated;
+revoke all on public.payment_transactions from public, anon, authenticated, service_role;
+revoke all on public.payment_transaction_events from public, anon, authenticated, service_role;
+revoke insert, update, delete on public.payment_transactions from anon, authenticated;
+revoke insert, update, delete on public.payment_transaction_events from anon, authenticated;
 grant select on public.payment_transactions to authenticated;
 grant select on public.payment_transaction_events to authenticated;
-grant all on public.payment_transactions to service_role;
-grant all on public.payment_transaction_events to service_role;
+grant select, insert, update on public.payment_transactions to service_role;
+grant select, insert on public.payment_transaction_events to service_role;
 ```
+
+The final migration must also use strict allowlisted JSON shapes (never an open-ended
+provider payload), length-bound and trim all unique provider identifiers, and validate
+with a trigger that refund/void parents are succeeded original `payment` rows. Revoke
+validator-function execution from `PUBLIC`, `anon`, and `authenticated` so the helpers
+are not browser-callable RPCs.
 
 - [ ] **Step 2: Run the contract test and verify GREEN**
 
 Run: `npm test -- --run src/payments/paymentMigration.contract.test.js --maxWorkers=1` from `app/`  
-Expected: 6 tests PASS.
+Expected: 10 tests PASS.
 
 - [ ] **Step 3: Verify migration hygiene**
 
@@ -356,6 +383,12 @@ Expected in this workstation: command reports that the local database is unavail
 
 Run: `git diff --check`  
 Expected: exit 0.
+
+When a disposable local Supabase database is available, apply migrations locally and
+run `supabase/tests/pelecard_payment_ledger.sql` with `ON_ERROR_STOP=1`. It verifies
+real uniqueness, sensitive-shape rejection, parent integrity, event creation,
+update/delete/TRUNCATE rejection, and role privileges, then rolls back every mutation.
+Never run this behavior script against Production.
 
 - [ ] **Step 4: Commit Phase 2**
 
@@ -384,7 +417,7 @@ Define a complete Pelecard fixture containing documented fields, including card-
   statusCode: "000",
   amountMinor: 10000,
   currencyCode: "ILS",
-  terminalNumber: "0882577012",
+  terminalNumber: "sandbox-terminal-fixture",
   merchantKey: "payment-uuid"
 }
 ```

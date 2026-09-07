@@ -19,11 +19,11 @@ Active phase: **Post-MVP — Phase F: Backlog batch (sites + cash register + adm
 - Added additive migration `supabase/migrations/021_pelecard_payment_ledger.sql`.
 - Added `payment_transactions` with immutable business identity, unique `(provider, idempotency_key)`, partial unique provider transaction ID, and one-to-one sale linkage.
 - Added append-only `payment_transaction_events`; database triggers record creation and status transitions and reject updates/deletes.
-- Added safe JSON checks that reject card/security-field keys recursively. The schema contains no PAN, CVV, expiry, card-token, or raw-provider-response columns.
+- Added strict allowlisted JSON shapes for the business checkout snapshot and sanitized event metadata; unknown/provider/card fields are rejected. The schema contains no PAN, CVV, expiry, card-token, or raw-provider-response columns.
 - Added read-only staff RLS and removed direct authenticated/anonymous ledger writes. Service-role-only triggers reserve `פלאקארד` for verified server-side payments while preserving `אשראי` for the existing manual/external flow.
 - Added nullable `sales.payment_transaction_id` and expanded the existing order payment-status check additively.
-- Test-first proof: the contract failed before the migration existed, then passed 6/6 after implementation.
-- Local Supabase database lint could not run because no local Postgres instance was listening on `127.0.0.1:54322`; the CLI explicitly requested Docker/`supabase start`. No remote database was linked or contacted as a fallback.
+- Test-first proof: the initial contract failed before the migration existed, then passed after implementation. Review-driven regression contracts also cover TRUNCATE denial, least-privilege grants, normalized unique identifiers, original-payment refund parents, strict JSON allowlists, and the disposable database test script.
+- Added `supabase/tests/pelecard_payment_ledger.sql` for disposable-database behavior checks. It is not executed on this workstation because no local Postgres instance is listening on `127.0.0.1:54322`; the CLI explicitly requested Docker/`supabase start`. No remote database was linked or contacted as a fallback.
 - Phase 3 Edge Functions, provider calls, callbacks, refunds, and UI wiring are not implemented yet and remain behind the next approval gate.
 
 ---
