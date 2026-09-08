@@ -53,7 +53,10 @@ export function calculateCheckoutTotals(items, discount) {
 
   let discountMinor = 0;
   if (discount !== null && discount !== undefined) {
-    const valueMinor = toMinor(discount.value);
+    const discountValue = typeof discount.value === "string"
+      ? Number(discount.value)
+      : discount.value;
+    const valueMinor = toMinor(discountValue);
     if (valueMinor === null) {
       return { valid: false, subtotal: 0, discountAmount: 0, total: 0 };
     }

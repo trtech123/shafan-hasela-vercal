@@ -14,6 +14,24 @@ describe("cash-register agorot arithmetic", () => {
   });
 
   test.each([
+    [{ mode: "percentage", value: "10" }, 10.5, 94.5],
+    [{ mode: "fixed", value: "10.50" }, 10.5, 94.5],
+  ])("normalizes Cart's string-valued discount input", (
+    discount,
+    discountAmount,
+    total,
+  ) => {
+    expect(calculateCheckoutTotals([
+      { qty: 1, customPrice: 105 },
+    ], discount)).toEqual({
+      valid: true,
+      subtotal: 105,
+      discountAmount,
+      total,
+    });
+  });
+
+  test.each([
     [{ qty: 1, customPrice: 10.001 }, null],
     [{ qty: 1, customPrice: 10 }, { mode: "percentage", value: 10.001 }],
     [{ qty: 1, customPrice: 10 }, { mode: "fixed", value: 1.001 }],
