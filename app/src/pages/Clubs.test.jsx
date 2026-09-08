@@ -76,6 +76,14 @@ function query(data) {
   return builder;
 }
 
+function failedQuery(message = "relation does not exist") {
+  const builder = {
+    select: vi.fn(() => builder),
+    order: vi.fn(async () => ({ data: null, error: { message } })),
+  };
+  return builder;
+}
+
 beforeEach(() => {
   toastError.mockReset();
   toastSuccess.mockReset();
@@ -98,6 +106,15 @@ afterEach(() => {
 });
 
 describe("Clubs admin workspace", () => {
+  test("shows an in-page Hebrew error when Clubs data cannot load", async () => {
+    fromMock.mockImplementation(() => failedQuery());
+
+    render(<Clubs />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("לא ניתן לטעון את נתוני החוגים");
+    expect(screen.getByRole("button", { name: "נסה שוב" })).toBeInTheDocument();
+  });
+
   test("shows club schedule, participants, membership, payment, and debt state", async () => {
     render(<Clubs />);
 

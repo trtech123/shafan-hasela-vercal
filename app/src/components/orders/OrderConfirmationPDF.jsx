@@ -41,6 +41,7 @@ const LOGO_SRC = "/shafan-logo.jpg";
 // per-machine variance (high-DPI/zoom can blow a scale:2 canvas past memory
 // limits, yielding a blank/oversized capture). 1.5 keeps text crisp.
 const CAPTURE_SCALE = 1.5;
+const WHATSAPP_STEP_TIMEOUT_MS = 30_000;
 
 const ORDER_CONFIRMATION_TEMPLATE = Object.freeze({
   name: "order_confirmation_pdf",
@@ -65,7 +66,21 @@ const WHATSAPP_ERROR_MESSAGES = {
   authorization_failed: "לא ניתן לאמת כרגע את הרשאת השליחה",
   forbidden: "אין לך הרשאה לשלוח הודעות WhatsApp",
   server_not_configured: "שירות WhatsApp עדיין אינו מוגדר",
+  pdf_timeout: "יצירת ה-PDF ארכה זמן רב מדי. אפשר לנסות שוב",
 };
+
+const withTimeout = (operation, code, onTimeout = () => {}) =>
+  new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      onTimeout();
+      reject(Object.assign(new Error(code), { code }));
+    }, WHATSAPP_STEP_TIMEOUT_MS);
+
+    Promise.resolve()
+      .then(operation)
+      .then(resolve, reject)
+      .finally(() => window.clearTimeout(timeoutId));
+  });
 
 const readFunctionFailure = async (data, error) => {
   if (data?.code) return data;
@@ -108,7 +123,7 @@ const ensureImageReady = (src) =>
 
 // Shared section chrome — header band (logo right, title left) matching the
 // quote-PDF look, used by both sections so they read as one document.
-function SectionHeader({ title, subtitle }) {
+function SectionHeader({ title, subtitle = null }) {
   return (
     <div className="px-6 py-4 border-b border-blue-100" style={{ background: "rgba(59, 130, 246, 0.12)" }}>
       <div className="flex items-center justify-between gap-4">
@@ -130,6 +145,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   const [emailSent, setEmailSent] = useState(false);
   const [waSending, setWaSending] = useState(false);
   const [waSendStep, setWaSendStep] = useState(null); // null | "מייצר PDF..." | "שולח..."
+  const [waResult, setWaResult] = useState(null); // null | { type: "success" | "error", message: string }
   const [recipientEmail, setRecipientEmail] = useState(order?.client_email || "");
   const [emailError, setEmailError] = useState(() => getEmailError(order?.client_email || ""));
   const [isEditingEmail, setIsEditingEmail] = useState(() =>
@@ -143,6 +159,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     setEmailError(nextEmailError);
     setIsEditingEmail(Boolean(nextEmailError));
     setEmailSent(false);
+    setWaResult(null);
   }, [order?.id, order?.client_email]);
 
   if (!order) return null;
@@ -302,30 +319,6 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     }
   };
 
-  // WhatsApp share — Israeli phone normalization (05X… → 972…).
-  // waMessage = raw text used by both wa.me link and Meta Cloud API send.
-  const waMessage = [
-    `שלום ${order.client_name || ""},`,
-    "",
-    `מצורף אישור ההזמנה שלך לפעילות *${activityName}* בתאריך *${dateFormatted}*.`,
-    "",
-    "פרטי ההזמנה:",
-    `• מספר הזמנה: ${orderNumber}`,
-    participants ? `• מספר משתתפים: ${participants}` : "",
-    `• סה״כ לתשלום: ₪${total.toLocaleString()}`,
-    "",
-    "נא להחזיר את הטופס מלא וחתום.",
-    "",
-    "תודה! 🏔️ צוות שפן הסלע",
-  ]
-    .filter(Boolean)
-    .join("\n");
-  const waText = encodeURIComponent(waMessage);
-  const waPhone = (order.client_phone || "").replace(/\D/g, "").replace(/^0/, "972");
-  const waLink = waPhone
-    ? `https://wa.me/${waPhone}?text=${waText}`
-    : `https://wa.me/?text=${waText}`;
-
   // Send PDF via Meta WhatsApp Cloud API using the approved Utility template.
   //   1. Build the same 2-page PDF used by download + email.
   //   2. Ask send-whatsapp to validate Meta's template approval status.
@@ -337,38 +330,51 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
       return;
     }
     setWaSending(true);
+    setWaResult(null);
     setWaSendStep("מייצר PDF...");
     try {
-      const pdf = await buildPdf();
+      const pdf = await withTimeout(() => buildPdf(), "pdf_timeout");
       const pdfBase64 = pdf.output("datauristring").split(",")[1];
       const kb = Math.round((pdfBase64.length * 3) / 4 / 1024);
-      console.info(`[WA PDF] PDF built — ~${kb} KB`);
+      console.info(`OrderConfirmationPDF: WhatsApp PDF built — ~${kb} KB`);
 
       setWaSendStep("שולח...");
-      const { data, error } = await supabase.functions.invoke("send-whatsapp", {
-        body: {
-          mode: "template",
-          phone: order.client_phone,
-          pdfBase64,
-          fileName,
-          template: {
-            ...ORDER_CONFIRMATION_TEMPLATE,
-            bodyParameters: [
-              String(order.client_name ?? "").trim(),
-              String(order.order_number ?? "").trim(),
-              dateFormatted,
-            ],
+      const abortController = new AbortController();
+      const { data, error } = await withTimeout(
+        () => supabase.functions.invoke("send-whatsapp", {
+          body: {
+            mode: "template",
+            phone: order.client_phone,
+            pdfBase64,
+            fileName,
+            template: {
+              ...ORDER_CONFIRMATION_TEMPLATE,
+              bodyParameters: [
+                String(order.client_name ?? "").trim(),
+                String(order.order_number ?? "").trim(),
+                dateFormatted,
+              ],
+            },
           },
-        },
-      });
+          signal: abortController.signal,
+        }),
+        "network_timeout",
+        () => abortController.abort()
+      );
       if (error || !data?.ok) {
         const failure = await readFunctionFailure(data, error);
-        toast.error(WHATSAPP_ERROR_MESSAGES[failure.code] ?? "שליחת WhatsApp PDF נכשלה");
+        const message = WHATSAPP_ERROR_MESSAGES[failure.code] ?? "שליחת אישור ההזמנה ב-WhatsApp נכשלה. אפשר לנסות שוב";
+        setWaResult({ type: "error", message });
+        toast.error(message);
       } else {
-        toast.success("WhatsApp PDF נשלח ✓");
+        const message = "אישור ההזמנה נשלח בוואטסאפ";
+        setWaResult({ type: "success", message });
+        toast.success(`${message} ✓`);
       }
-    } catch {
-      toast.error("שליחת WhatsApp PDF נכשלה");
+    } catch (error) {
+      const message = WHATSAPP_ERROR_MESSAGES[error?.code] ?? "שליחת אישור ההזמנה ב-WhatsApp נכשלה. אפשר לנסות שוב";
+      setWaResult({ type: "error", message });
+      toast.error(message);
     } finally {
       setWaSending(false);
       setWaSendStep(null);
@@ -397,11 +403,6 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
               {emailBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
               {emailBusy ? "שולח..." : emailSent ? "נשלח ✓" : "שלח במייל"}
             </Button>
-            <a href={waLink} target="_blank" rel="noreferrer">
-              <Button variant="outline" className="gap-2 border-green-500 text-green-700 hover:bg-green-50">
-                <MessageCircle className="w-4 h-4" /> שלח וואטסאפ
-              </Button>
-            </a>
             <Button
               variant="outline"
               className="gap-2 border-green-700 text-green-800 hover:bg-green-50"
@@ -410,13 +411,30 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
               title={!order.client_phone ? "אין מספר טלפון ללקוח" : "שלח PDF דרך Meta WhatsApp Cloud API"}
             >
               {waSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
-              {waSendStep ?? "WA PDF"}
+              {waSendStep ?? (waResult?.type === "success"
+                ? "נשלח בוואטסאפ ✓"
+                : waResult?.type === "error"
+                  ? "נסה לשלוח שוב בוואטסאפ"
+                  : "שלח אישור בוואטסאפ")}
             </Button>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
           </Button>
         </div>
+
+        {waResult && (
+          <p
+            role={waResult.type === "error" ? "alert" : "status"}
+            className={`mb-3 rounded-lg px-3 py-2 text-sm font-medium ${
+              waResult.type === "error"
+                ? "border border-red-200 bg-red-50 text-red-700"
+                : "border border-green-200 bg-green-50 text-green-700"
+            }`}
+          >
+            {waResult.message}
+          </p>
+        )}
 
         <div className="mb-3 rounded-xl bg-white px-3 py-3 shadow-sm">
           {isEditingEmail ? (

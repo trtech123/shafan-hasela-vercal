@@ -63,6 +63,7 @@ export default function Clubs() {
   const [memberships, setMemberships] = useState([]);
   const [selectedClubId, setSelectedClubId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [clubDialog, setClubDialog] = useState({ open: false, club: null });
   const [registrationOpen, setRegistrationOpen] = useState(false);
@@ -71,6 +72,7 @@ export default function Clubs() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     const [clubsResult, instructorsResult, rulesResult, membershipsResult] = await Promise.all([
       supabase.from("clubs").select("*, instructor:instructors(id, full_name)").order("created_at", { ascending: false }),
       supabase.from("instructors").select("id, full_name, status").order("full_name"),
@@ -81,6 +83,7 @@ export default function Clubs() {
     const failure = [clubsResult, instructorsResult, rulesResult, membershipsResult].find((result) => result.error);
     if (failure) {
       toast.error("שגיאה בטעינת החוגים");
+      setLoadError("לא ניתן לטעון את נתוני החוגים. ייתכן שמסד הנתונים טרם עודכן.");
       setLoading(false);
       return;
     }
@@ -161,6 +164,21 @@ export default function Clubs() {
 
   if (loading) {
     return <div className="flex h-64 items-center justify-center"><div className="h-9 w-9 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-700" /></div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-[18rem] items-center justify-center" dir="rtl">
+        <div role="alert" className="max-w-lg rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-red-800 shadow-sm">
+          <CircleAlert className="mx-auto h-8 w-8" />
+          <h1 className="mt-3 text-lg font-bold">לא ניתן לטעון את נתוני החוגים</h1>
+          <p className="mt-2 text-sm">ייתכן שמסד הנתונים טרם עודכן. המסך זמין, אך הנתונים אינם נגישים כרגע.</p>
+          <Button type="button" variant="outline" className="mt-4 border-red-300 bg-white" onClick={loadData}>
+            נסה שוב
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

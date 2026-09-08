@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import OrderConfirmationPDF from "./OrderConfirmationPDF";
@@ -85,6 +85,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -186,13 +187,21 @@ describe("OrderConfirmationPDF recipient email", () => {
 });
 
 describe("OrderConfirmationPDF WhatsApp Utility template", () => {
-  test("WA PDF sends the approved template contract with the order PDF", async () => {
+  test("exposes one clearly named WhatsApp order action", () => {
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "WA PDF" }));
+    expect(screen.getAllByRole("button", { name: /וואטסאפ|WA PDF/i })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /וואטסאפ/i })).not.toBeInTheDocument();
+  });
+
+  test("the single WhatsApp action sends the approved template contract with the order PDF", async () => {
+    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" }));
 
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith("send-whatsapp", {
+      expect(invokeMock).toHaveBeenCalledWith("send-whatsapp", expect.objectContaining({
         body: {
           mode: "template",
           phone: order.client_phone,
@@ -204,8 +213,12 @@ describe("OrderConfirmationPDF WhatsApp Utility template", () => {
             bodyParameters: [order.client_name, order.order_number, "01/08/2026"],
           },
         },
-      });
+        signal: expect.any(AbortSignal),
+      }));
     });
+
+    expect(await screen.findByRole("status")).toHaveTextContent("אישור ההזמנה נשלח בוואטסאפ");
+    expect(screen.getByRole("button", { name: "נשלח בוואטסאפ ✓" })).toBeInTheDocument();
   });
 
   test("shows a clear Hebrew status when Meta approval is pending", async () => {
@@ -221,10 +234,27 @@ describe("OrderConfirmationPDF WhatsApp Utility template", () => {
     });
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "WA PDF" }));
+    fireEvent.click(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" }));
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith("תבנית WhatsApp עדיין ממתינה לאישור Meta");
     });
+    expect(screen.getByRole("alert")).toHaveTextContent("תבנית WhatsApp עדיין ממתינה לאישור Meta");
+  });
+
+  test("leaves the sending state with a Hebrew error when the provider invocation times out", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    invokeMock.mockImplementationOnce(() => new Promise(() => {}));
+    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" }));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("WhatsApp לא הגיב בזמן");
+    expect(screen.getByRole("button", { name: "נסה לשלוח שוב בוואטסאפ" })).toBeEnabled();
   });
 });
