@@ -1,5 +1,11 @@
 -- Prevent the existing self-update profile policy from being used for role
 -- escalation. This is additive: ordinary self-profile updates remain allowed.
+-- Migration 022 installs an equivalent early guard so accounting access is
+-- protected before this migration runs. Replace it here with the canonical
+-- guard, leaving exactly one role-protection trigger after migration 024.
+
+DROP TRIGGER IF EXISTS protect_profile_role_updates ON public.profiles;
+DROP FUNCTION IF EXISTS public.protect_profile_role_updates();
 
 CREATE OR REPLACE FUNCTION public.protect_profile_role_change()
 RETURNS TRIGGER

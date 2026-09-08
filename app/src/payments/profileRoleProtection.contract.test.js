@@ -44,6 +44,19 @@ describe("profile role protection migration", () => {
     );
   });
 
+  test("replaces the earlier Rivhit role guard with the canonical guard", () => {
+    const sql = normalize(readFileSync(migrationPath, "utf8"));
+
+    expect(sql).toContain(
+      "drop trigger if exists protect_profile_role_updates on public.profiles",
+    );
+    expect(sql).toContain(
+      "drop function if exists public.protect_profile_role_updates()",
+    );
+    expect(sql.indexOf("drop trigger if exists protect_profile_role_updates"))
+      .toBeLessThan(sql.indexOf("create or replace trigger trg_profiles_protect_role"));
+  });
+
   test("ships disposable pgTAP coverage for caller role behavior", () => {
     expect(existsSync(behaviorTestPath)).toBe(true);
     const sql = normalize(readFileSync(behaviorTestPath, "utf8"));
