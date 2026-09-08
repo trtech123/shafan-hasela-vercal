@@ -40,6 +40,7 @@ CREATE TABLE public.bot_conversations (
 CREATE TABLE public.bot_messages (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   conversation_id       UUID NOT NULL REFERENCES public.bot_conversations(id) ON DELETE CASCADE,
+  trigger_event_id      UUID,
   channel               TEXT NOT NULL CHECK (channel IN ('whatsapp', 'facebook_messenger', 'instagram_dm', 'email')),
   provider_message_id   TEXT,
   direction             TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
@@ -71,6 +72,10 @@ CREATE TABLE public.bot_channel_events (
   UNIQUE (channel, provider_event_id)
 );
 
+ALTER TABLE public.bot_messages
+  ADD CONSTRAINT bot_messages_trigger_event_fk
+  FOREIGN KEY (trigger_event_id) REFERENCES public.bot_channel_events(id) ON DELETE RESTRICT;
+
 CREATE TABLE public.bot_handoffs (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   conversation_id       UUID NOT NULL REFERENCES public.bot_conversations(id) ON DELETE RESTRICT,
@@ -94,6 +99,18 @@ CREATE TABLE public.bot_handoffs (
   closed_at             TIMESTAMPTZ,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE public.bot_action_events (
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  conversation_id       UUID NOT NULL REFERENCES public.bot_conversations(id) ON DELETE RESTRICT,
+  trigger_event_id      UUID NOT NULL REFERENCES public.bot_channel_events(id) ON DELETE RESTRICT,
+  action_id             TEXT NOT NULL CHECK (action_id IN ('resend_order_confirmation')),
+  idempotency_key       TEXT NOT NULL UNIQUE,
+  availability          TEXT NOT NULL CHECK (availability IN ('handoff_only')),
+  outcome               TEXT NOT NULL CHECK (outcome IN ('handoff_required')),
+  failure_code          TEXT NOT NULL CHECK (failure_code IN ('artifact_persistence_unavailable')),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE UNIQUE INDEX bot_conversations_one_active
@@ -120,6 +137,9 @@ CREATE UNIQUE INDEX bot_handoffs_one_open_per_conversation
   ON public.bot_handoffs(conversation_id)
   WHERE status IN ('waiting', 'active');
 
+CREATE INDEX bot_action_events_conversation_idx
+  ON public.bot_action_events(conversation_id, created_at DESC);
+
 CREATE TRIGGER trg_bot_contacts_updated_at
   BEFORE UPDATE ON public.bot_contacts
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
@@ -141,6 +161,7 @@ ALTER TABLE public.bot_conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bot_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bot_channel_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bot_handoffs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bot_action_events ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "bot contacts: admin/ops read"
   ON public.bot_contacts FOR SELECT USING (public.is_admin_or_ops());
@@ -152,10 +173,12 @@ CREATE POLICY "bot events: admin/ops read"
   ON public.bot_channel_events FOR SELECT USING (public.is_admin_or_ops());
 CREATE POLICY "bot handoffs: admin/ops read"
   ON public.bot_handoffs FOR SELECT USING (public.is_admin_or_ops());
+CREATE POLICY "bot action events: admin/ops read"
+  ON public.bot_action_events FOR SELECT USING (public.is_admin_or_ops());
 
-REVOKE ALL ON public.bot_contacts, public.bot_conversations, public.bot_messages, public.bot_channel_events, public.bot_handoffs FROM PUBLIC, anon, authenticated;
-GRANT SELECT ON public.bot_contacts, public.bot_conversations, public.bot_messages, public.bot_channel_events, public.bot_handoffs TO authenticated;
-GRANT ALL ON public.bot_contacts, public.bot_conversations, public.bot_messages, public.bot_channel_events, public.bot_handoffs TO service_role;
+REVOKE ALL ON public.bot_contacts, public.bot_conversations, public.bot_messages, public.bot_channel_events, public.bot_handoffs, public.bot_action_events FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.bot_contacts, public.bot_conversations, public.bot_messages, public.bot_channel_events, public.bot_handoffs, public.bot_action_events TO authenticated;
+GRANT ALL ON public.bot_contacts, public.bot_conversations, public.bot_messages, public.bot_channel_events, public.bot_handoffs, public.bot_action_events TO service_role;
 
 CREATE OR REPLACE FUNCTION public.claim_bot_channel_event(
   p_channel TEXT,
@@ -166,7 +189,7 @@ CREATE OR REPLACE FUNCTION public.claim_bot_channel_event(
   p_occurred_at TIMESTAMPTZ,
   p_sanitized_metadata JSONB DEFAULT '{}'::JSONB
 )
-RETURNS TABLE(event_id UUID, claimed BOOLEAN)
+RETURNS TABLE(event_id UUID, claimed BOOLEAN, resumed BOOLEAN)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
@@ -184,13 +207,30 @@ BEGIN
   ON CONFLICT (channel, provider_event_id) DO NOTHING
   RETURNING id INTO event_id;
 
-  IF event_id IS NULL THEN
+  IF event_id IS NOT NULL THEN
+    claimed := TRUE;
+    resumed := FALSE;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+
+  UPDATE public.bot_channel_events
+  SET processing_status = 'claimed', retry_count = retry_count + 1,
+      error_code = NULL, retry_after = NULL
+  WHERE channel = p_channel AND provider_event_id = p_provider_event_id
+    AND processing_status = 'failed'
+    AND (retry_after IS NULL OR retry_after <= NOW())
+  RETURNING id INTO event_id;
+
+  IF event_id IS NOT NULL THEN
+    claimed := TRUE;
+    resumed := TRUE;
+  ELSE
     SELECT e.id INTO event_id
     FROM public.bot_channel_events e
     WHERE e.channel = p_channel AND e.provider_event_id = p_provider_event_id;
     claimed := FALSE;
-  ELSE
-    claimed := TRUE;
+    resumed := FALSE;
   END IF;
   RETURN NEXT;
 END;
