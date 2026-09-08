@@ -4,7 +4,7 @@
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT extensions.plan(13);
+SELECT extensions.plan(15);
 
 INSERT INTO auth.users (id, email) VALUES
   ('40000000-0000-4000-8000-000000000001', 'payment-workflow@example.test');
@@ -208,6 +208,25 @@ SELECT extensions.throws_ok(
   '23505', NULL, 'provider transaction cannot be assigned twice'
 );
 
+SELECT public.record_pelecard_verification_rejection(
+  '40000000-0000-4000-8000-000000000020',
+  'amount_mismatch',
+  'callback'
+);
+
+SELECT extensions.ok(
+  (SELECT count(*) = 1 FROM public.payment_transaction_events
+   WHERE payment_transaction_id = '40000000-0000-4000-8000-000000000020'
+     AND event_type = 'verification_rejected'
+     AND status = 'initiated'
+     AND metadata = jsonb_build_object(
+       'failure_code', 'amount_mismatch', 'source', 'callback'
+     ))
+  AND (SELECT status = 'initiated' FROM public.payment_transactions
+       WHERE id = '40000000-0000-4000-8000-000000000020'),
+  'rejected verification is audited without changing payment status'
+);
+
 SELECT extensions.is(
   (SELECT count(*)::INTEGER FROM public.payment_transaction_events
    WHERE payment_transaction_id = '40000000-0000-4000-8000-000000000010'
@@ -229,6 +248,14 @@ SELECT extensions.throws_ok(
     '40000000-0000-4000-8000-000000000010', 'provider-workflow-1',
     'approval-workflow-1', '000', 120.00, 'ILS')$$,
   '42501', NULL, 'authenticated cannot execute finalization'
+);
+
+SELECT extensions.throws_ok(
+  $$SELECT public.record_pelecard_verification_rejection(
+    '40000000-0000-4000-8000-000000000020',
+    'amount_mismatch',
+    'callback')$$,
+  '42501', NULL, 'authenticated cannot append verification audit events'
 );
 
 RESET ROLE;

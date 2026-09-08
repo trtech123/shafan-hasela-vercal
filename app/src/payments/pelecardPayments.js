@@ -21,6 +21,61 @@ const POLLING_TERMINAL_STATUSES = new Set([
   "refunded",
   "voided",
 ]);
+const MAX_LEDGER_AMOUNT_MINOR = 9_999_999_999;
+
+function toMinor(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  const scaled = value * 100;
+  const rounded = Math.round(scaled);
+  return Math.abs(scaled - rounded) <= 1e-7 && Number.isSafeInteger(rounded)
+    ? rounded
+    : null;
+}
+
+export function calculateCheckoutTotals(items, discount) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { valid: false, subtotal: 0, discountAmount: 0, total: 0 };
+  }
+  let subtotalMinor = 0;
+  for (const item of items) {
+    const priceMinor = toMinor(item?.customPrice);
+    if (priceMinor === null || !Number.isSafeInteger(item?.qty) || item.qty <= 0) {
+      return { valid: false, subtotal: 0, discountAmount: 0, total: 0 };
+    }
+    subtotalMinor += priceMinor * item.qty;
+    if (!Number.isSafeInteger(subtotalMinor) ||
+      subtotalMinor > MAX_LEDGER_AMOUNT_MINOR) {
+      return { valid: false, subtotal: 0, discountAmount: 0, total: 0 };
+    }
+  }
+
+  let discountMinor = 0;
+  if (discount !== null && discount !== undefined) {
+    const valueMinor = toMinor(discount.value);
+    if (valueMinor === null) {
+      return { valid: false, subtotal: 0, discountAmount: 0, total: 0 };
+    }
+    if (discount.mode === "percentage") {
+      if (valueMinor > 10_000) {
+        return { valid: false, subtotal: 0, discountAmount: 0, total: 0 };
+      }
+      discountMinor = Math.round((subtotalMinor * valueMinor) / 10_000);
+    } else if (discount.mode === "fixed" && valueMinor <= subtotalMinor) {
+      discountMinor = valueMinor;
+    } else {
+      return { valid: false, subtotal: 0, discountAmount: 0, total: 0 };
+    }
+  }
+
+  return {
+    valid: true,
+    subtotal: subtotalMinor / 100,
+    discountAmount: discountMinor / 100,
+    total: (subtotalMinor - discountMinor) / 100,
+  };
+}
 
 export class PelecardFrontendError extends Error {
   constructor(code) {

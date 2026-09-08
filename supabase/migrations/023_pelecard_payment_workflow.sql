@@ -376,6 +376,56 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.record_pelecard_verification_rejection(
+  p_payment_id UUID,
+  p_failure_code TEXT,
+  p_source TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  payment_status TEXT;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'service role required' USING ERRCODE = '42501';
+  END IF;
+  IF p_failure_code NOT IN (
+       'forged_callback',
+       'provider_mismatch',
+       'amount_mismatch',
+       'currency_mismatch'
+     )
+     OR p_source NOT IN ('callback', 'verify') THEN
+    RAISE EXCEPTION 'invalid rejection audit metadata' USING ERRCODE = '23514';
+  END IF;
+
+  SELECT status INTO STRICT payment_status
+  FROM public.payment_transactions
+  WHERE id = p_payment_id AND provider = 'pelecard' AND operation = 'payment'
+  FOR SHARE;
+
+  INSERT INTO public.payment_transaction_events (
+    payment_transaction_id,
+    event_type,
+    status,
+    metadata,
+    actor_id
+  ) VALUES (
+    p_payment_id,
+    'verification_rejected',
+    payment_status,
+    jsonb_build_object(
+      'failure_code', p_failure_code,
+      'source', p_source
+    ),
+    NULL
+  );
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.reserve_pelecard_payment(UUID, UUID, UUID, TEXT, NUMERIC, TEXT, JSONB)
   FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.complete_pelecard_initiation(UUID, TEXT, TEXT)
@@ -387,6 +437,8 @@ REVOKE ALL ON FUNCTION public.get_pelecard_payment(UUID)
 REVOKE ALL ON FUNCTION public.fail_pelecard_payment(UUID, TEXT, TEXT)
   FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.finalize_pelecard_payment(UUID, TEXT, TEXT, TEXT, NUMERIC, TEXT)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.record_pelecard_verification_rejection(UUID, TEXT, TEXT)
   FROM PUBLIC, anon, authenticated, service_role;
 
 GRANT EXECUTE ON FUNCTION public.reserve_pelecard_payment(UUID, UUID, UUID, TEXT, NUMERIC, TEXT, JSONB)
@@ -400,6 +452,8 @@ GRANT EXECUTE ON FUNCTION public.get_pelecard_payment(UUID)
 GRANT EXECUTE ON FUNCTION public.fail_pelecard_payment(UUID, TEXT, TEXT)
   TO service_role;
 GRANT EXECUTE ON FUNCTION public.finalize_pelecard_payment(UUID, TEXT, TEXT, TEXT, NUMERIC, TEXT)
+  TO service_role;
+GRANT EXECUTE ON FUNCTION public.record_pelecard_verification_rejection(UUID, TEXT, TEXT)
   TO service_role;
 
 COMMENT ON COLUMN public.payment_transactions.provider_redirect_url IS

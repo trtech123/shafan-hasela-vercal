@@ -37,6 +37,7 @@ describe("Pelecard atomic workflow migration", () => {
     "mark_pelecard_initiation_uncertain",
     "get_pelecard_payment",
     "fail_pelecard_payment",
+    "record_pelecard_verification_rejection",
     "finalize_pelecard_payment",
   ])("creates service-only RPC %s", (name) => {
     const sql = normalize(read(migrationPath));
@@ -91,6 +92,7 @@ describe("Pelecard atomic workflow migration", () => {
       "currency mismatch cannot finalize",
       "authenticated cannot execute finalization",
       "manual credit sale remains unchanged",
+      "rejected verification is audited without changing payment status",
     ]) {
       expect(sql).toContain(phrase);
     }

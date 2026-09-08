@@ -6,7 +6,10 @@ import ActivityGrid from "@/components/cashregister/ActivityGrid";
 import Cart from "@/components/cashregister/Cart";
 import PaymentScreen from "@/components/cashregister/PaymentScreen";
 import ReceiptScreen from "@/components/cashregister/ReceiptScreen";
-import { beginHostedPelecardPayment } from "@/payments/pelecardPayments";
+import {
+  beginHostedPelecardPayment,
+  calculateCheckoutTotals,
+} from "@/payments/pelecardPayments";
 
 const frontendEnv = /** @type {ImportMeta & { env: Record<string, string | undefined> }} */ (import.meta);
 
@@ -71,22 +74,11 @@ export default function CashRegister() {
 
   const removeItem = (id) => setCartItems(prev => prev.filter(i => i.id !== id));
 
-  const subtotal = cartItems.reduce((s, i) => s + i.customPrice * i.qty, 0);
-
-  // Discount math + validation. discountValid gates checkout.
+  // Use the same integer-agorot arithmetic as server-side initiation.
+  const checkoutTotals = calculateCheckoutTotals(cartItems, discount);
+  const { subtotal, discountAmount, total } = checkoutTotals;
   const discountValue = Number(discount?.value) || 0;
-  const rawDiscountAmount = !discount
-    ? 0
-    : discount.mode === "percentage"
-      ? Math.round(subtotal * (discountValue / 100))
-      : discountValue;
-  const discountValid =
-    !discount ||
-    (discount.mode === "percentage"
-      ? discountValue >= 0 && discountValue <= 100
-      : discountValue >= 0 && discountValue <= subtotal);
-  const discountAmount = discountValid ? rawDiscountAmount : 0;
-  const total = Math.max(0, subtotal - discountAmount); // final, post-discount
+  const discountValid = checkoutTotals.valid;
 
   const handlePaymentConfirm = async (method, paymentDetails = null) => {
     setPaymentMethod(method);

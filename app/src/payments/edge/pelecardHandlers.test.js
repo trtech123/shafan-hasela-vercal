@@ -75,6 +75,7 @@ function createMemoryStore(initial = pendingPayment) {
       };
       return { ...payment };
     }),
+    recordRejected: vi.fn(async () => {}),
   };
 }
 
@@ -149,7 +150,7 @@ function notification(overrides = {}) {
   return {
     localPayment: PAYMENT_ID,
     confirmationProof: "confirmation-key",
-    antiForgeryReference: "unique-key",
+    antiForgeryReference: PAYMENT_ID,
     transactionNotice: PROVIDER_TRANSACTION_ID,
     callbackReference: "callback-1",
     ...overrides,
@@ -204,7 +205,7 @@ describe("Pelecard callback and verification", () => {
       });
       expect(context.provider.validateConfirmation).toHaveBeenCalledWith({
         confirmationKey: "confirmation-key",
-        uniqueKey: "unique-key",
+        uniqueKey: PAYMENT_ID,
         amountMinor: 12_000,
       });
       expect(context.store.finalize).toHaveBeenCalledOnce();
@@ -241,6 +242,25 @@ describe("Pelecard callback and verification", () => {
     expect(await response.json()).toEqual({ error: { code: "forged_callback" } });
     expect(provider.lookup).not.toHaveBeenCalled();
     expect(context.store.writes).toBe(0);
+    expect(context.store.recordRejected).toHaveBeenCalledWith(
+      PAYMENT_ID,
+      "forged_callback",
+      "callback",
+    );
+  });
+
+  test("rejects a callback unique key that differs from the local payment", async () => {
+    const context = callbackContext();
+    const response = await context.handler(request(notification({
+      antiForgeryReference: "attacker-controlled-key",
+    })));
+    expect(response.status).toBe(400);
+    expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
+    expect(context.store.recordRejected).toHaveBeenCalledWith(
+      PAYMENT_ID,
+      "forged_callback",
+      "callback",
+    );
   });
 
   test.each([
@@ -265,6 +285,11 @@ describe("Pelecard callback and verification", () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: { code } });
     expect(context.store.writes).toBe(0);
+    expect(context.store.recordRejected).toHaveBeenCalledWith(
+      PAYMENT_ID,
+      code,
+      "callback",
+    );
   });
 
   test.each(["provider_timeout", "provider_unavailable"])(
@@ -305,6 +330,30 @@ describe("Pelecard callback and verification", () => {
     });
     expect(context.store.markFailed).toHaveBeenCalledOnce();
     expect(context.store.finalize).not.toHaveBeenCalled();
+  });
+
+  test("does not mark a decline when its amount or currency belongs to another payment", async () => {
+    const context = callbackContext({
+      provider: createProvider({
+        lookup: vi.fn().mockResolvedValue({
+          transaction: {
+            ...verifiedTransaction,
+            statusCode: "006",
+            amountMinor: 11_999,
+          },
+          correlationEvidence: { kind: "merchant_correlation", value: PAYMENT_ID },
+        }),
+      }),
+    });
+    const response = await context.handler(request(notification()));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: { code: "amount_mismatch" } });
+    expect(context.store.markFailed).not.toHaveBeenCalled();
+    expect(context.store.recordRejected).toHaveBeenCalledWith(
+      PAYMENT_ID,
+      "amount_mismatch",
+      "callback",
+    );
   });
 
   test("makes a duplicate callback exactly-once and returns the existing sale", async () => {
@@ -371,6 +420,23 @@ describe("Pelecard callback and verification", () => {
       error: { code: "missing_authorization" },
     });
     expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
+  });
+
+  test("audits a forged authenticated browser return as verify input", async () => {
+    const context = verifyContext();
+    const response = await context.handler(request(notification({
+      antiForgeryReference: "attacker-controlled-key",
+    }), {
+      authorization: "Bearer valid-jwt",
+      origin: "https://app.example.test",
+    }));
+
+    expect(response.status).toBe(400);
+    expect(context.store.recordRejected).toHaveBeenCalledWith(
+      PAYMENT_ID,
+      "forged_callback",
+      "verify",
+    );
   });
 });
 
@@ -495,6 +561,7 @@ describe("Supabase verification store", () => {
       rawProviderPayload: { mustNotPersist: true },
     });
     await store.markFailed(PAYMENT_ID, "006");
+    await store.recordRejected(PAYMENT_ID, "amount_mismatch", "callback");
 
     expect(client.rpc).toHaveBeenNthCalledWith(1, "finalize_pelecard_payment", {
       p_payment_id: PAYMENT_ID,
@@ -509,6 +576,15 @@ describe("Supabase verification store", () => {
       p_provider_status_code: "006",
       p_failure_code: "provider_declined",
     });
+    expect(client.rpc).toHaveBeenNthCalledWith(
+      3,
+      "record_pelecard_verification_rejection",
+      {
+        p_payment_id: PAYMENT_ID,
+        p_failure_code: "amount_mismatch",
+        p_source: "callback",
+      },
+    );
   });
 });
 

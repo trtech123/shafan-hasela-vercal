@@ -148,16 +148,16 @@ export function reconcilePayment(
     return { kind: "reject", code: "provider_mismatch" };
   }
 
-  if (!localPayment.successfulProviderStatusCodes.includes(transaction.statusCode)) {
-    return { kind: "mark_failed", code: "provider_declined" };
-  }
-
   if (transaction.amountMinor !== localPayment.amountMinor) {
     return { kind: "reject", code: "amount_mismatch" };
   }
 
   if (transaction.currencyCode !== localPayment.currencyCode) {
     return { kind: "reject", code: "currency_mismatch" };
+  }
+
+  if (!localPayment.successfulProviderStatusCodes.includes(transaction.statusCode)) {
+    return { kind: "mark_failed", code: "provider_declined" };
   }
 
   return { kind: "finalize", transaction: safeTransaction(transaction) };

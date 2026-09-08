@@ -91,8 +91,8 @@ describe("Pelecard refund/void capability gate", () => {
     expect(deps.provider.adjust).not.toHaveBeenCalled();
   });
 
-  test("allows only admin and operations roles when enabled", async () => {
-    for (const role of ["cashier", "instructor"]) {
+  test("allows only the admin role when enabled", async () => {
+    for (const role of ["operations", "cashier", "instructor"]) {
       const deps = dependencies({
         auth: { authenticate: vi.fn().mockResolvedValue({ id: USER_ID, role }) },
         config: { ...dependencies().config, enabled: true },

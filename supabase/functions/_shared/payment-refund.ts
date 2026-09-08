@@ -153,7 +153,7 @@ export function createPelecardRefundHandler(
           cors,
         );
       }
-      if (authorization.identity.role === "cashier") {
+      if (authorization.identity.role !== "admin") {
         return paymentJson({ error: { code: "forbidden" } }, 403, cors);
       }
 

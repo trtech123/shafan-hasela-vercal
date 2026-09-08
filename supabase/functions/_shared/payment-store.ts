@@ -292,6 +292,14 @@ export function createSupabasePaymentVerificationStore(
         },
       ));
     },
+
+    async recordRejected(paymentId, failureCode, source) {
+      await nullableRpc(client, "record_pelecard_verification_rejection", {
+        p_payment_id: paymentId,
+        p_failure_code: failureCode,
+        p_source: source,
+      });
+    },
   };
 }
 import type {

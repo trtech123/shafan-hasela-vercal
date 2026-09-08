@@ -13,6 +13,7 @@ import {
   reconcilePayment,
   type PaymentLifecycleStatus,
   type ProviderCorrelationEvidence,
+  type RejectionCode,
 } from "./payment-reconciliation.ts";
 import {
   type ConfirmationValidation,
@@ -57,6 +58,11 @@ export interface PaymentVerificationStore {
     paymentId: string,
     providerStatusCode: string,
   ): Promise<PaymentRecord>;
+  recordRejected(
+    paymentId: string,
+    failureCode: RejectionCode,
+    source: "callback" | "verify",
+  ): Promise<void>;
 }
 
 export interface PaymentVerificationProvider {
@@ -84,6 +90,7 @@ interface VerificationDependencies {
   provider: PaymentVerificationProvider;
   decodeNotification: PaymentNotificationDecoder;
   config: PaymentHandlerConfig;
+  rejectionSource?: "callback" | "verify";
 }
 
 interface AuthenticatedVerificationDependencies extends VerificationDependencies {
@@ -181,9 +188,12 @@ async function verifyPayment(
   }
 
   try {
+    if (notice.uniqueKey !== payment.id) {
+      throw new PaymentError("forged_callback");
+    }
     const confirmationValid = await dependencies.provider.validateConfirmation({
       confirmationKey: notice.confirmationKey,
-      uniqueKey: notice.uniqueKey,
+      uniqueKey: payment.id,
       amountMinor: payment.amountMinor,
     });
     if (confirmationValid !== true) {
@@ -239,8 +249,21 @@ async function verifyPayment(
       return paymentJson(pendingResult(payment), 202, cors);
     }
     const status = decision.code === "forged_callback" ? 400 : 409;
+    await dependencies.store.recordRejected(
+      payment.id,
+      decision.code,
+      dependencies.rejectionSource ?? "callback",
+    );
     return paymentJson({ error: { code: decision.code } }, status, cors);
   } catch (error) {
+    if (error instanceof PaymentError &&
+      (error.code === "forged_callback" || error.code === "provider_mismatch")) {
+      await dependencies.store.recordRejected(
+        payment.id,
+        error.code,
+        dependencies.rejectionSource ?? "callback",
+      );
+    }
     const response = paymentErrorResponse(error, payment, cors);
     if (response) return response;
     return paymentJson({ error: { code: "internal_error" } }, 500, cors);
@@ -291,7 +314,10 @@ export function createPelecardCallbackHandler(
 export function createPelecardVerifyHandler(
   dependencies: AuthenticatedVerificationDependencies,
 ): (request: Request) => Promise<Response> {
-  const callback = createPelecardCallbackHandler(dependencies);
+  const callback = createPelecardCallbackHandler({
+    ...dependencies,
+    rejectionSource: "verify",
+  });
   return async (request) => {
     let cors: HeadersInit = {};
     try {

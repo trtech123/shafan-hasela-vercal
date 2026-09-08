@@ -175,9 +175,9 @@ describe("payment reconciliation", () => {
       expected: { kind: "reject", code: "provider_mismatch" },
     },
     {
-      name: "provider status before amount",
+      name: "amount before provider status",
       providerResult: verifiedResult({ statusCode: "006", amountMinor: 9_999 }),
-      expected: { kind: "mark_failed", code: "provider_declined" },
+      expected: { kind: "reject", code: "amount_mismatch" },
     },
     {
       name: "amount before currency",
