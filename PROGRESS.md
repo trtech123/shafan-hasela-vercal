@@ -1428,3 +1428,20 @@ Radix UI `Select` reserves the empty-string `value` to represent the unselected 
 - No migrations were applied, and nothing was pushed or deployed. Supabase CLI, Deno, and Docker are unavailable locally, so migration execution and Edge Function `deno check` remain staging gates.
 - Meta setup still required: webhook callback registration/subscription, verify token, App Secret, WhatsApp token/phone-number ID, production phone/WABA linkage, and test-recipient acceptance.
 - Messenger, Instagram DM, and inbound email remain intentionally deferred until WhatsApp staging acceptance.
+
+---
+
+## Staging release-candidate integration
+
+**Date:** 2026-09-08
+**Branch:** `integration/staging-release-candidate`
+**Frozen base:** `489b8c7fb101794bc2af33a3df2bea44a242d43a`
+
+- Integrated accepted QA commit `1fb2d7c0b5b72826655b9b9ad892368795a77876` and accepted chatbot commit `6b242727dde7500d3e928e6135ba8daf5d2ed3b5` with explicit merge commits. Both merges were textually clean; the shared `App.jsx`/`Layout.jsx` result was audited semantically to retain `/clubs`, admin-only Clubs navigation, `/chatbot-handoffs`, and the admin/operations handoff navigation entry.
+- Preserved one ordered migration chain through `021_pelecard_payment_ledger.sql`, `022_rivhit_accounting.sql`, `023_clubs_and_recurring_billing.sql`, `024_protect_profile_role.sql`, `025_pelecard_payment_workflow.sql`, and `026_chatbot_runtime.sql`. No duplicate migration number and no migration 027 exists.
+- Verified quotations 7/7, outbound WhatsApp 52/52, chatbot/inbound 118/118, Pelecard 192/192, Clubs+iCredit 37/37, application migration contracts 37/37, explicit Rivhit root suite 64/64, and the full application suite 413/413.
+- Production frontend build and focused integrated-file lint pass. Strict standalone TypeScript checking for shared Pelecard modules passes. The inherited project-wide typecheck still exits with 177 diagnostics, but the integrated QA/Clubs/chatbot UI files contribute zero diagnostics.
+- Browser verification against the built application with intercepted local test data passes: admin sees and opens Clubs; non-admin is redirected from `/clubs` and does not see its navigation entry; Orders exposes exactly one canonical WhatsApp PDF action and no legacy action; quotations, products, and the chatbot handoff queue load. No send/provider action was invoked.
+- Remote Supabase staging validation is blocked by infrastructure only: the CLI has no authorized session or staging link/config, and local Docker, Deno, psql, and pg_isready are unavailable. The documented Production Supabase project was not used as a substitute. Migrations were not applied and Edge Functions were not deployed.
+- Production, provider endpoints, real messages, transactions, recurring charges, refunds, and Rivhit documents were untouched. Payment-to-accounting migration 027 remains design-only and unimplemented.
+- Vercel Preview deployment metadata is kept in the release handoff so the deployed SHA remains identical to the final source commit.
