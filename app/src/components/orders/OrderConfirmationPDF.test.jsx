@@ -6,12 +6,21 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import OrderConfirmationPDF from "./OrderConfirmationPDF";
 
 const invokeMock = vi.fn();
+const toastErrorMock = vi.fn();
+const toastSuccessMock = vi.fn();
 
 vi.mock("@/api/supabaseClient", () => ({
   supabase: {
     functions: {
       invoke: (...args) => invokeMock(...args),
     },
+  },
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: (...args) => toastErrorMock(...args),
+    success: (...args) => toastSuccessMock(...args),
   },
 }));
 
@@ -44,6 +53,7 @@ const order = {
   id: "order-1",
   order_number: "ORD-1",
   client_name: "לקוח בדיקה",
+  client_phone: "0501234567",
   client_email: "original@example.com",
   activity_date: "2026-08-01",
   num_participants: 4,
@@ -57,6 +67,8 @@ const activity = {
 beforeEach(() => {
   invokeMock.mockReset();
   invokeMock.mockResolvedValue({ data: { ok: true }, error: null });
+  toastErrorMock.mockReset();
+  toastSuccessMock.mockReset();
 
   class ReadyImage {
     decode() {
@@ -169,6 +181,50 @@ describe("OrderConfirmationPDF recipient email", () => {
           body: expect.objectContaining({ to: "new@example.com" }),
         })
       );
+    });
+  });
+});
+
+describe("OrderConfirmationPDF WhatsApp Utility template", () => {
+  test("WA PDF sends the approved template contract with the order PDF", async () => {
+    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "WA PDF" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("send-whatsapp", {
+        body: {
+          mode: "template",
+          phone: order.client_phone,
+          pdfBase64: "cGRm",
+          fileName: "אישור_הזמנה_ORD-1.pdf",
+          template: {
+            name: "order_confirmation_pdf",
+            language: "he",
+            bodyParameters: [order.client_name, order.order_number, "01/08/2026"],
+          },
+        },
+      });
+    });
+  });
+
+  test("shows a clear Hebrew status when Meta approval is pending", async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        context: new Response(JSON.stringify({
+          ok: false,
+          code: "template_pending",
+          error: "WhatsApp template is pending approval",
+        }), { status: 409, headers: { "Content-Type": "application/json" } }),
+      },
+    });
+    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "WA PDF" }));
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith("תבנית WhatsApp עדיין ממתינה לאישור Meta");
     });
   });
 });

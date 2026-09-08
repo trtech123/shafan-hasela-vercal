@@ -42,6 +42,45 @@ const LOGO_SRC = "/shafan-logo.jpg";
 // limits, yielding a blank/oversized capture). 1.5 keeps text crisp.
 const CAPTURE_SCALE = 1.5;
 
+const ORDER_CONFIRMATION_TEMPLATE = Object.freeze({
+  name: "order_confirmation_pdf",
+  language: "he",
+});
+
+const WHATSAPP_ERROR_MESSAGES = {
+  template_pending: "תבנית WhatsApp עדיין ממתינה לאישור Meta",
+  template_rejected: "תבנית WhatsApp נדחתה ב-Meta",
+  template_missing: "תבנית WhatsApp המאושרת לא נמצאה",
+  template_unavailable: "תבנית WhatsApp אינה זמינה לשליחה",
+  template_lookup_failed: "לא ניתן לבדוק כרגע את סטטוס תבנית WhatsApp",
+  template_parameter_mismatch: "חסרים פרטי הזמנה הנדרשים לשליחה",
+  invalid_template: "הגדרת תבנית WhatsApp אינה תקינה",
+  invalid_pdf: "קובץ ה-PDF שנוצר אינו תקין",
+  invalid_pdf_content: "הקובץ שנוצר אינו PDF תקין",
+  pdf_too_large: "קובץ ה-PDF גדול מדי לשליחה",
+  media_upload_failed: "העלאת ה-PDF ל-WhatsApp נכשלה",
+  meta_send_failed: "WhatsApp דחה את שליחת ההודעה",
+  network_timeout: "WhatsApp לא הגיב בזמן. אפשר לנסות שוב",
+  unauthorized: "ההתחברות פגה. יש להתחבר מחדש",
+  authorization_failed: "לא ניתן לאמת כרגע את הרשאת השליחה",
+  forbidden: "אין לך הרשאה לשלוח הודעות WhatsApp",
+  server_not_configured: "שירות WhatsApp עדיין אינו מוגדר",
+};
+
+const readFunctionFailure = async (data, error) => {
+  if (data?.code) return data;
+  const response = error?.context;
+  if (response && typeof response.clone === "function") {
+    try {
+      const payload = await response.clone().json();
+      if (payload?.code) return payload;
+    } catch {
+      // Supabase can return a non-JSON gateway error. Use the safe fallback below.
+    }
+  }
+  return { code: null };
+};
+
 const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((e || "").trim());
 
 const getEmailError = (value) => {
@@ -287,10 +326,10 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     ? `https://wa.me/${waPhone}?text=${waText}`
     : `https://wa.me/?text=${waText}`;
 
-  // Send PDF via Meta WhatsApp Cloud API (Phase 2 — document mode).
+  // Send PDF via Meta WhatsApp Cloud API using the approved Utility template.
   //   1. Build the same 2-page PDF used by download + email.
-  //   2. Send base64 to send-whatsapp Edge Function.
-  //   3. Edge Function uploads to Meta Media API → gets media_id → sends document msg.
+  //   2. Ask send-whatsapp to validate Meta's template approval status.
+  //   3. The Edge Function uploads only after approval, then sends the template.
   // Token never reaches client — all secrets in Supabase Edge Function env.
   const handleWhatsAppAPI = async () => {
     if (!order.client_phone) {
@@ -308,20 +347,28 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
       setWaSendStep("שולח...");
       const { data, error } = await supabase.functions.invoke("send-whatsapp", {
         body: {
+          mode: "template",
           phone: order.client_phone,
-          message: waMessage,
           pdfBase64,
           fileName,
+          template: {
+            ...ORDER_CONFIRMATION_TEMPLATE,
+            bodyParameters: [
+              String(order.client_name ?? "").trim(),
+              String(order.order_number ?? "").trim(),
+              dateFormatted,
+            ],
+          },
         },
       });
       if (error || !data?.ok) {
-        const errText = data?.error ?? error?.message ?? "שגיאה לא ידועה";
-        toast.error(`WhatsApp PDF נכשל: ${errText}`);
+        const failure = await readFunctionFailure(data, error);
+        toast.error(WHATSAPP_ERROR_MESSAGES[failure.code] ?? "שליחת WhatsApp PDF נכשלה");
       } else {
-        toast.success(`WhatsApp PDF נשלח ✓ (id: ${data.messageId ?? "—"})`);
+        toast.success("WhatsApp PDF נשלח ✓");
       }
-    } catch (e) {
-      toast.error(`שגיאה: ${e?.message ?? String(e)}`);
+    } catch {
+      toast.error("שליחת WhatsApp PDF נכשלה");
     } finally {
       setWaSending(false);
       setWaSendStep(null);
