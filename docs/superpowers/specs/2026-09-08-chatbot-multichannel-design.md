@@ -8,7 +8,7 @@
 
 Build “שפן”, a deterministic Hebrew customer-service bot for WhatsApp, Facebook Messenger, Instagram DM, and email. The bot answers only from the client-approved content version, collects lead details, and transfers every pricing request, complaint, complex/custom event, unsupported question, or unknown question to a human.
 
-V1 will not generate factual answers with an LLM. It will not read operational pricing, orders, clubs, payments, accounting, or billing data. Once a handoff begins, automatic responses stop until staff explicitly resume or close the conversation.
+V1 will not generate factual answers with an LLM. The generic conversation engine will not read operational pricing, orders, clubs, payments, accounting, or billing data. A future order-confirmation resend may cross into Orders only through the narrow deterministic action boundary defined below; it never makes order data available to the engine. Once a handoff begins, automatic responses stop until staff explicitly resume or close the conversation.
 
 ## Source authority
 
@@ -30,7 +30,33 @@ The repository’s WhatsApp capability is an authenticated staff-initiated outbo
 
 Inbound channel endpoints are separate public surfaces. They authenticate providers with channel-specific verification and signatures rather than staff JWTs. They may share pure validation patterns, but they must not call or weaken the authenticated outbound endpoint.
 
-The existing `leads` table is the CRM destination for qualified or handed-off conversations. It is not conversation, message, webhook-event, or session storage. The Clubs/iCredit, Pelecard, Rivhit, order, quote, and pricing domains remain inaccessible to the chatbot.
+The existing `leads` table is the CRM destination for qualified or handed-off conversations. It is not conversation, message, webhook-event, or session storage. The Clubs/iCredit, Pelecard, Rivhit, quote, and pricing domains remain inaccessible to the chatbot. Orders remain inaccessible to the generic engine; only a separately authorized order-confirmation action may read the minimum fields required for association and delivery.
+
+## Order confirmation boundary
+
+There is one canonical order-confirmation document and one existing transactional delivery path:
+
+```text
+staff → Orders screen → existing order → existing Order Confirmation PDF
+      → order_confirmation_pdf Utility template → customer
+```
+
+The existing `OrderConfirmationPDF` component builds the official two-page PDF from the selected order and activity. Its “WA PDF” action sends that generated PDF through the authenticated `send-whatsapp` Edge Function using template name `order_confirmation_pdf`, language `he`, and the existing three server-validated body parameters. This remains the canonical staff-initiated flow.
+
+The chatbot must not create another PDF renderer, reproduce the document markup, reconstruct an order inside bot content, or build template parameters from conversation text. A future inbound request such as `שלחו לי את אישור ההזמנה` or `אני רוצה את אישור ההזמנה שלי` is a request for a privileged action, not a factual bot answer.
+
+The current PDF generator is browser/DOM-based and its output is not persisted or available to a server-side chatbot action. Therefore the safe initial behavior for this intent is `handoff_only`. Automated resend remains disabled until the existing staff flow can persist the exact PDF it generated as a private, immutable order-confirmation artifact. This extends the canonical flow without creating a second document implementation:
+
+```text
+Orders screen → existing generator → exact PDF bytes ─┬─> staff download/email/WhatsApp
+                                                       └─> private canonical artifact
+
+verified inbound request → deterministic intent → secure action registry
+                         → exact order/contact match → same stored artifact
+                         → same order_confirmation_pdf Utility delivery core
+```
+
+The existing private `documents` bucket can hold the artifact under an order-scoped path. A dedicated Orders-owned `order_confirmation_artifacts` record stores `order_id`, object path, SHA-256 digest, byte count, generator/content version, source `orders.updated_at`, creator, and creation time. An Orders-owned `order_confirmation_delivery_attempts` record audits staff and chatbot deliveries without storing PDF bytes or financial fields. The artifact is current only when its recorded source timestamp/version still matches the order; a missing, corrupt, or stale artifact always hands off so staff can regenerate it through the existing Orders UI.
 
 ## Architecture
 
@@ -89,11 +115,16 @@ type EngineResult = {
     | { type: "send"; responseId: string; menuId?: string }
     | { type: "capture"; field: string; value: string }
     | { type: "handoff"; reason: string; priority: "normal" | "high" }
+    | {
+        type: "request_secure_action";
+        actionId: "resend_order_confirmation";
+        customerOrderReference: string;
+      }
   >;
 };
 ```
 
-The engine accepts exact option IDs, menu numbers, and a small reviewed alias list. It performs no open-ended semantic inference. An input that cannot be resolved to one approved transition returns `handoff.unknown`.
+The engine accepts exact option IDs, menu numbers, and a small reviewed alias list. It performs no open-ended semantic inference. The two approved order-confirmation request examples may route to `request_secure_action`, but the engine neither resolves nor reads an order. An input that cannot be resolved to one approved transition returns `handoff.unknown`.
 
 Global commands in every automated state are `תפריט`, `חזרה`, and `נציג`. `תפריט` returns to the main menu, `חזרה` returns to the stored parent state, and `נציג` starts handoff.
 
@@ -122,7 +153,7 @@ Runtime copies will live under `supabase/functions/_shared/chatbot/content/v1/he
 
 ### `bot_contacts`
 
-Stores one normalized customer identity per channel: channel, external contact ID, display name, phone/email when supplied, opt-out status, blocked status, and timestamps. A channel identity is unique; cross-channel merging is not automatic.
+Stores one normalized customer identity per channel: channel, external contact ID, display name, phone/email when supplied, provider verification source/time, opt-out status, blocked status, and timestamps. A channel identity is unique; cross-channel merging is not automatic. For WhatsApp, only the sender number from a successfully verified Meta webhook is marked as a verified phone; user-entered text never updates that attestation.
 
 ### `bot_conversations`
 
@@ -219,6 +250,62 @@ The FAQ answers are parking, rain, clothing, accompanying parent, cancellation, 
 
 The bot sends the approved transfer response from `handoff.json`, stores the customer’s original text as the summary, and immediately hands off. It does not attempt a generative answer, invent a separate fallback message, or perform a web search.
 
+### Existing order-confirmation request
+
+Until the secure action prerequisites in this design are implemented and enabled, every order-confirmation request hands off. Once enabled, automatic resend is limited to a WhatsApp conversation whose sender identity was verified by a valid Meta-signed webhook and whose customer-supplied order number exactly identifies an eligible order with the same normalized phone number. A phone number merely typed into a conversation is not a verified contact. Messenger, Instagram, and email requests hand off unless a separately approved verified cross-channel identity mechanism is introduced.
+
+The bot never selects “the latest” order, guesses among several orders, discloses candidate orders, or reports totals, payment state, quotation data, or order details. A missing order number, no exact match, phone mismatch, multiple matches, ineligible order, stale/missing artifact, rate limit, or delivery uncertainty all produce a human handoff without revealing which check failed to the customer.
+
+## Secure resend action contract
+
+The safest contract uses opaque server-owned identifiers rather than accepting a caller-supplied `verified_contact` object:
+
+```ts
+type ResendOrderConfirmationCommand = {
+  action: "resend_order_confirmation";
+  orderId: string;           // internal UUID resolved server-side from the exact order number
+  verifiedContactId: string; // bot_contacts row attested by the signed WhatsApp webhook
+  conversationId: string;
+  triggerEventId: string;
+  idempotencyKey: string;
+};
+
+type ResendOrderConfirmationResult =
+  | {
+      status: "sent";
+      deliveryAttemptId: string;
+      providerMessageId: string;
+    }
+  | {
+      status: "handoff_required";
+      reason:
+        | "contact_not_verified"
+        | "order_reference_missing"
+        | "order_not_uniquely_resolved"
+        | "contact_order_mismatch"
+        | "order_not_eligible"
+        | "artifact_unavailable"
+        | "artifact_stale"
+        | "rate_limited"
+        | "delivery_failed";
+    };
+```
+
+`orderId` and `verifiedContactId` are never trusted from a public request. The verified webhook processor records the contact and event, the deterministic resolver converts an exact customer-supplied order number into an internal candidate, and the private action registry constructs the command. The action executor is not directly callable by an anonymous client.
+
+Before any send, the executor atomically verifies all of the following:
+
+1. The triggering event belongs to the conversation and has not already executed this action.
+2. The contact is a non-opted-out WhatsApp contact whose number came from a valid Meta-signed inbound event.
+3. The order number resolved exactly and the normalized `orders.client_phone` equals that verified WhatsApp sender number.
+4. The order status is in the explicitly approved resend-eligible set.
+5. The private artifact belongs to that order, passes its stored SHA-256/PDF validation, and was generated from the current order version.
+6. The order/contact/action rate limit permits another delivery.
+
+The destination is derived from the matched order/contact pair, never from request input. Template parameters are derived inside the Orders-owned action from the matched order. The executor sends the existing artifact through the same internal `order_confirmation_pdf` Utility delivery implementation used by the authenticated staff endpoint. The public inbound webhook does not invoke or weaken `send-whatsapp`; both endpoints may reuse a private delivery module after their distinct authorization checks.
+
+The action result exposes only delivery or handoff status. It never returns order rows, totals, payment fields, quotation IDs, PDF bytes, signed storage URLs, or candidate-match details to the engine. An action audit record stores the conversation, trigger event, opaque contact/order/artifact IDs, artifact digest, idempotency key, outcome, provider message ID, actor, and timestamps. It must not store the PDF body, totals, payment data, access tokens, or signatures.
+
 ## Staff handoff queue
 
 V1 adds an authenticated staff page with filters for waiting, active, resolved, channel, reason, age, and assignee. Each row exposes the collected fields and transcript. Staff actions are claim, send reply, resume bot, resolve, and close.
@@ -237,6 +324,8 @@ Claim changes `awaiting_human` to `human_active`. Resume is explicit and returns
 - Opted-out or blocked contacts receive no automated marketing or re-engagement messages.
 - Customer-service-window/template rules belong to channel adapters, not the engine.
 - The bot service role can access only bot tables and the minimum lead-write operation. It has no club, payment, accounting, order, quote, or pricing read permissions.
+- The generic engine and channel adapters cannot query Orders. The separately deployed resend executor receives only the narrow Orders capability described above and cannot query quotations, payments, accounting, or clubs.
+- A public inbound request can never supply a trusted `orderId`, destination phone, PDF, template name, or template parameters.
 
 ## Error handling
 
@@ -255,6 +344,9 @@ Testing is contract-first and transcript-driven:
 - RLS/authorization contract tests proving bot isolation from operational domains.
 - Channel-normalization fixtures for WhatsApp, Messenger, Instagram, and email.
 - End-to-end sandbox transcripts for all approved flows.
+- Contract tests proving the Orders UI and secure resend use the same artifact bytes and `order_confirmation_pdf` delivery module.
+- Association tests for missing/wrong order number, phone mismatch, multiple matches, stale artifact, replay, rate limiting, and cross-channel denial.
+- Audit/redaction tests proving no order details, totals, payment data, PDF bytes, or signed URLs enter bot messages or logs.
 
 ## Delivery sequence
 
@@ -263,6 +355,8 @@ Testing is contract-first and transcript-driven:
 3. Messenger and Instagram adapters.
 4. Inbound email adapter and threading.
 5. Security, replay, opt-out, retention, and all-channel staging acceptance.
+
+The optional automated order-confirmation resend is a gated extension after the WhatsApp inbound flow. It does not change the five-phase sequence: until its artifact, eligibility, identity, authorization, and audit gates pass, the intent remains `handoff_only`.
 
 No implementation, push, or deployment begins until the owner supplies the frozen integration commit.
 
@@ -280,4 +374,6 @@ No implementation, push, or deployment begins until the owner supplies the froze
 - Transcript/message/event retention periods and deletion authority.
 - Opt-out keywords and whether opt-out is channel-specific or cross-channel.
 - Sandbox identities and production rollout recipients.
+- Resend-eligible order statuses and resend rate limit.
+- Retention period and invalidation/deletion policy for persisted order-confirmation artifacts and action audit records.
 - Authorization to align or retire the stale legacy `OrderDocumentDialog` copy.
