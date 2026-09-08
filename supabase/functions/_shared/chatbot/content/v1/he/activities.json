@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "content_version": "client-doc-1.0-2026-07-he",
+  "activities": [
+    {
+      "id": "acre_climbing",
+      "site_id": "acre_extreme_park",
+      "name": "מתקני גובה וטיפוס",
+      "response": "יש לנו את קירות הטיפוס הגבוהים בישראל! 🇮🇱 מתחם חיצוני: 1,500 מ\"ר | גובה 30 מ׳ | עשרות מסלולים בכל הרמות מתחם פנימי מקורה: 500 מ\"ר | גובה 30 מ׳ | פעיל גם בחורף בולדר פנימי: קיר 4 מ׳ ללא אבטחה ✅ ציוד בטיחות כלול | ✅ מדריכים מוסמכים באתר ⚠️ מגבלת משקל: עד 110 ק\"ג",
+      "handoff_only": false
+    },
+    {
+      "id": "acre_sky_trek",
+      "site_id": "acre_extreme_park",
+      "name": "גשרים תלויים (Sky Trek)",
+      "response": "🟡 Sky Trek — 6 גשרים בגובה 7 מ׳ | מתחילים ומשפחות 🔴 Extreme Sky Trek — 6 גשרים בגובה 15 מ׳ | רמה גבוהה ✅ רתמות בטיחות מסופקות | ✅ מדריך מלווה",
+      "handoff_only": false
+    },
+    {
+      "id": "acre_bungee_drop",
+      "site_id": "acre_extreme_park",
+      "name": "באנג׳י דרופ",
+      "response": "הבאנג׳י דרופ שלנו — ייחודי בישראל! 🇮🇱 גובה: 30 מטרים של צניחה חופשית 💥 ⚠️ מגבלת משקל: עד 110 ק\"ג ⚠️ לא מתאים לנשים בהריון או לבעלי בעיות גב/צוואר",
+      "handoff_only": false
+    },
+    {
+      "id": "acre_zipline",
+      "site_id": "acre_extreme_park",
+      "name": "אומגה",
+      "response": "גלישה מ-18 מ׳ גובה לאורך 90 מ׳ — ניתן גם בזוגות",
+      "handoff_only": false
+    },
+    {
+      "id": "acre_kids",
+      "site_id": "acre_extreme_park",
+      "name": "אקסטרים קידס",
+      "response": "🧒 אקסטרים קידס — מגרש שעשועים מעוצב לקטנטנים כל המתקנים מחולקים לרמות קושי — יש מסלול לכל ילד ⚠️ ילדים מתחת לגיל 3 חייבים השגחת מבוגר צמודה",
+      "handoff_only": false
+    }
+  ]
+}

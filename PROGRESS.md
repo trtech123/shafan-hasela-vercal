@@ -1409,3 +1409,22 @@ Radix UI `Select` reserves the empty-string `value` to represent the unselected 
 - Final live sandbox proof created customer `534205242` and TEST document `6660` (`d6d939e5-c264-4fec-b319-b1672192ab9b`). A fresh second run used the persisted document and made no second `Document.New` request.
 - No Production migration, configuration, deployment, credentials, or Rivhit document was used.
 - Docker is unavailable, so the migration and Edge Function were not executed against a local Supabase stack.
+
+---
+
+## Deterministic chatbot workstream — Phase 1 + WhatsApp inbound
+
+**Date:** 2026-09-08
+**Branch:** `workstream/chatbot`
+**Frozen base:** `489b8c7fb101794bc2af33a3df2bea44a242d43a`
+
+- Added the exact approved Hebrew content version `client-doc-1.0-2026-07-he`, a fail-closed content validator, and a pure deterministic state machine covering every approved menu, activity, safety, FAQ, pricing, corporate, Clubs, unknown, and human-handoff route.
+- Added migration `026_chatbot_runtime.sql` for verified contacts, conversations, messages, provider-event replay protection, handoffs, CRM Lead linkage, and disabled secure-action audit records. RLS exposes read-only queue data only to admin/operations; writes and state changes stay behind service/staff functions.
+- Added a public `whatsapp-webhook` Edge Function secured by Meta GET verification and raw-body `X-Hub-Signature-256` validation. The existing authenticated `send-whatsapp` function and Orders/PDF implementation were not modified.
+- Added an authenticated `chatbot-handoff-admin` Edge Function plus `/chatbot-handoffs` staff UI for claim, reply, explicit bot resume, resolve, and close. Replies derive the recipient from the assigned active handoff server-side.
+- Added the `resend_order_confirmation(...)` security boundary and exact customer intent. It remains `handoff_only`; no Orders lookup, PDF generation, or delivery is attempted until the canonical artifact-persistence capability exists.
+- Verification: 125/125 chatbot-specific tests pass; the full suite passes 408/408 with neutral Supabase test variables; production build passes; touched chatbot files add zero lint errors and zero TypeScript diagnostics.
+- Baseline remains unchanged: seven unrelated lint errors; typecheck has unrelated pre-existing diagnostics; the two previously timed-out tests pass individually; the Quote PDF product suite requires Supabase environment variables and passes when supplied.
+- No migrations were applied, and nothing was pushed or deployed. Supabase CLI, Deno, and Docker are unavailable locally, so migration execution and Edge Function `deno check` remain staging gates.
+- Meta setup still required: webhook callback registration/subscription, verify token, App Secret, WhatsApp token/phone-number ID, production phone/WABA linkage, and test-recipient acceptance.
+- Messenger, Instagram DM, and inbound email remain intentionally deferred until WhatsApp staging acceptance.
