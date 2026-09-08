@@ -14,6 +14,7 @@ const allNavItems = [
 { path: "/clubs", label: "חוגים ומנויים", icon: Trophy, roles: ["admin"] },
 { path: "/quotes", label: "הצעות מחיר", icon: FileText, roles: ["admin"] },
 { path: "/leads", label: "לידים", icon: UserSearch, roles: ["admin"] },
+{ path: "/chatbot-handoffs", label: "תור שפן", icon: MessageSquareText, roles: ["admin", "אחמ\"ש"] },
 { path: "/cashregister", label: "קופה", icon: MonitorSmartphone, roles: ["admin", "אחמ\"ש", "קופאי"] },
 { path: "/sales-report", label: "דוח קופה", icon: BarChart2, roles: ["admin"] },
 { path: "/pricing", label: "תמחור", icon: Calculator, roles: ["admin"] },

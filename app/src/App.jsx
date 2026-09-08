@@ -24,6 +24,7 @@ import Products from './pages/Products';
 import Templates from './pages/Templates';
 import Login from './pages/Login';
 import PaymentReturn from './pages/PaymentReturn';
+import ChatbotHandoffs from './pages/ChatbotHandoffs';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, authError } = useAuth();
@@ -64,6 +65,7 @@ const AuthenticatedApp = () => {
         <Route path="/users" element={<Users />} />
         <Route path="/products" element={<Products />} />
         <Route path="/templates" element={<Templates />} />
+        <Route path="/chatbot-handoffs" element={<ChatbotHandoffs />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>
