@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 const migrationPath = fileURLToPath(new URL(
-  "../../../supabase/migrations/022_protect_profile_role.sql",
+  "../../../supabase/migrations/024_protect_profile_role.sql",
   import.meta.url,
 ));
 const behaviorTestPath = fileURLToPath(new URL(

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 const migrationPath = fileURLToPath(new URL(
-  "../../../supabase/migrations/023_pelecard_payment_workflow.sql",
+  "../../../supabase/migrations/025_pelecard_payment_workflow.sql",
   import.meta.url,
 ));
 const pgTapPath = fileURLToPath(new URL(

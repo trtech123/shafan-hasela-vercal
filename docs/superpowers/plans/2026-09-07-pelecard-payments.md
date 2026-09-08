@@ -28,8 +28,9 @@
 - `app/src/payments/edge/pelecardClient.test.js` — provider adapter fixtures and no-sensitive-data assertions.
 - `app/src/payments/edge/paymentReconciliation.test.js` — success, failure, forgery, mismatch, timeout, and duplicate cases.
 - `app/src/payments/edge/pelecardHandlers.test.js` — handler auth/idempotency/capability contracts.
-- `supabase/migrations/022_pelecard_atomic_finalization.sql` — service-role-only atomic finalizer and verified-state guards.
-- `supabase/tests/pelecard_atomic_finalization.sql` — database integration proof for repeated finalization.
+- `supabase/migrations/024_protect_profile_role.sql` — additive database guard against self-service role escalation.
+- `supabase/migrations/025_pelecard_payment_workflow.sql` — service-role-only atomic workflow and verified-state guards.
+- `supabase/tests/pelecard_payment_workflow.sql` — database integration proof for repeated finalization.
 - `app/src/payments/pelecardPayments.js` — frontend calls for initiate/status/verify.
 - `app/src/pages/PaymentReturn.jsx` — safe return/polling screen.
 - `app/src/components/cashregister/PaymentScreen.jsx` — separate external-credit and Pelecard choices.
@@ -619,8 +620,8 @@ git commit -m "feat: reconcile and gate Pelecard operations"
 ### Task 7: Implement atomic database finalization
 
 **Files:**
-- Create: `supabase/migrations/022_pelecard_atomic_finalization.sql`
-- Create: `supabase/tests/pelecard_atomic_finalization.sql`
+- Create: `supabase/migrations/025_pelecard_payment_workflow.sql`
+- Create: `supabase/tests/pelecard_payment_workflow.sql`
 - Modify: `supabase/functions/_shared/payment-store.ts`
 
 - [ ] **Step 1: Write the failing SQL integration test**
@@ -629,7 +630,7 @@ Within one rolled-back transaction, create an order and pending payment, call `f
 
 - [ ] **Step 2: Verify RED against a disposable Supabase database**
 
-Run: `psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/pelecard_atomic_finalization.sql`  
+Run: `psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/pelecard_payment_workflow.sql`
 Expected: FAIL because the finalizer does not exist. Never point `TEST_DATABASE_URL` at production.
 
 - [ ] **Step 3: Implement the service-role-only finalizer**
@@ -639,8 +640,8 @@ Use `security definer set search_path = ''`, revoke execution from public/anon/a
 - [ ] **Step 4: Verify GREEN and commit**
 
 ```powershell
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/pelecard_atomic_finalization.sql
-git add supabase/migrations/022_pelecard_atomic_finalization.sql supabase/tests/pelecard_atomic_finalization.sql supabase/functions/_shared/payment-store.ts
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/pelecard_payment_workflow.sql
+git add supabase/migrations/025_pelecard_payment_workflow.sql supabase/tests/pelecard_payment_workflow.sql supabase/functions/_shared/payment-store.ts
 git commit -m "feat: finalize Pelecard payments atomically"
 ```
 
@@ -687,7 +688,7 @@ git commit -m "feat: add hosted Pelecard checkout UI"
 
 ```powershell
 npm test --prefix app -- --run src/payments/edge --maxWorkers=1
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/pelecard_atomic_finalization.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/pelecard_payment_workflow.sql
 ```
 
 Expected: all tests pass against mocked provider responses and a disposable database.
