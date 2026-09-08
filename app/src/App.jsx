@@ -22,6 +22,7 @@ import Users from './pages/Users';
 import Products from './pages/Products';
 import Templates from './pages/Templates';
 import Login from './pages/Login';
+import PaymentReturn from './pages/PaymentReturn';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, authError } = useAuth();
@@ -55,6 +56,7 @@ const AuthenticatedApp = () => {
         <Route path="/quotes" element={<Quotes />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/cashregister" element={<CashRegister />} />
+        <Route path="/payment/return" element={<PaymentReturn />} />
         <Route path="/sales-report" element={<DailySalesReport />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/users" element={<Users />} />

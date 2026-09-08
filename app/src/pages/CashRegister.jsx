@@ -6,6 +6,7 @@ import ActivityGrid from "@/components/cashregister/ActivityGrid";
 import Cart from "@/components/cashregister/Cart";
 import PaymentScreen from "@/components/cashregister/PaymentScreen";
 import ReceiptScreen from "@/components/cashregister/ReceiptScreen";
+import { beginHostedPelecardPayment } from "@/payments/pelecardPayments";
 
 // SCREENS: menu | payment | receipt
 export default function CashRegister() {
@@ -20,6 +21,7 @@ export default function CashRegister() {
   const [discount, setDiscount] = useState(null);
   // null = standalone sale; else { id, order_number, client_name, client_phone, organization }
   const [linkedOrder, setLinkedOrder] = useState(null);
+  const [pelecardBusy, setPelecardBusy] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -133,6 +135,55 @@ export default function CashRegister() {
     setScreen("receipt");
   };
 
+  const handlePelecardStart = async () => {
+    if (pelecardBusy) return;
+    setPelecardBusy(true);
+    const saleItems = cartItems.map((item) => ({
+      id: item.id,
+      name: item.name,
+      qty: item.qty,
+      customPrice: item.customPrice,
+    }));
+    try {
+      await beginHostedPelecardPayment({
+        orderId: linkedOrder?.id || null,
+        checkout: {
+          schema_version: 1,
+          items: saleItems,
+          discount: discount
+            ? {
+                type: discount.type,
+                mode: discount.mode,
+                value: discountValue,
+                original_total: subtotal,
+                final_total: total,
+              }
+            : null,
+          linked_order_info: linkedOrder
+            ? {
+                order_number: linkedOrder.order_number,
+                client_name: linkedOrder.client_name,
+                client_phone: linkedOrder.client_phone,
+                organization: linkedOrder.organization || "",
+              }
+            : null,
+          sale_date: new Date().toISOString().slice(0, 10),
+        },
+      }, {
+        client: supabase,
+        storage: window.sessionStorage,
+        location: window.location,
+        createIdempotencyKey: () => crypto.randomUUID(),
+        allowedRedirectOrigins:
+          (import.meta.env.VITE_PELECARD_REDIRECT_ORIGINS || "")
+            .split(",").map((origin) => origin.trim()).filter(Boolean),
+      });
+    } catch {
+      toast.error("לא ניתן להתחיל תשלום מאומת בפלאקארד כרגע");
+      setPelecardBusy(false);
+    }
+  };
+
   const handleNewSale = () => {
     setCartItems([]);
     setScreen("menu");
@@ -155,7 +206,16 @@ export default function CashRegister() {
   }
 
   if (screen === "payment") {
-    return <PaymentScreen total={total} cartItems={cartItems} onConfirm={handlePaymentConfirm} onBack={() => setScreen("menu")} />;
+    return (
+      <PaymentScreen
+        total={total}
+        cartItems={cartItems}
+        onConfirm={handlePaymentConfirm}
+        onPelecard={handlePelecardStart}
+        pelecardBusy={pelecardBusy}
+        onBack={() => setScreen("menu")}
+      />
+    );
   }
 
   return (
