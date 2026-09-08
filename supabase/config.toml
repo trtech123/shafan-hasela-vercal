@@ -1,0 +1,10 @@
+project_id = "shafan-hasela"
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.send-whatsapp]
+verify_jwt = true
+
+[functions.chatbot-handoff-admin]
+verify_jwt = true
