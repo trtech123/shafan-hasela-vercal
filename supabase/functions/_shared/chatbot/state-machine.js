@@ -18,6 +18,7 @@ const orderConfirmationPatterns = [
   "שלחו לי את אישור ההזמנה",
   "אני רוצה את אישור ההזמנה שלי",
 ];
+const greetings = new Set(["", "שלום", "היי", "אהלן", "בוקר טוב", "ערב טוב"]);
 
 function normalize(value) {
   return String(value ?? "")
@@ -174,9 +175,17 @@ export function advance({ content, session, input }) {
   if (LOCKED_STATUSES.has(session.status)) return { session, actions: [] };
 
   if (session.currentState === "start") {
+    const mainSession = enterMenu(session, "main", null);
+    if (!input.optionId && greetings.has(normalize(input.text))) {
+      return {
+        session: mainSession,
+        actions: [send("policy.welcome"), send("menu.main")],
+      };
+    }
+    const firstResult = advance({ content, session: mainSession, input });
     return {
-      session: enterMenu(session, "main", null),
-      actions: [send("policy.welcome"), send("menu.main")],
+      session: firstResult.session,
+      actions: [send("policy.welcome"), ...firstResult.actions],
     };
   }
 
@@ -189,6 +198,10 @@ export function advance({ content, session, input }) {
     return renderMenu(content, session, target.slice(5), null);
   }
   if (commands.human.includes(text)) return beginHandoff(session, input, "explicit_human_request");
+
+  const menu = menuFor(content, session.currentState);
+  const option = menu ? resolveMenuOption(menu, input) : null;
+  if (option) return followTransition(content, session, input, option);
 
   if (orderConfirmationPatterns.includes(text)) {
     return beginHandoff(session, input, "order_confirmation_unavailable", "normal", "handoff.transfer", [{
@@ -207,10 +220,6 @@ export function advance({ content, session, input }) {
   for (const safety of safetyPatterns) {
     if (safety.pattern.test(text)) return { session, actions: [send(safety.responseId)] };
   }
-
-  const menu = menuFor(content, session.currentState);
-  const option = menu ? resolveMenuOption(menu, input) : null;
-  if (option) return followTransition(content, session, input, option);
 
   return beginHandoff(session, input, "unknown_question");
 }

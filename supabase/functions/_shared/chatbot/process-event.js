@@ -17,7 +17,7 @@ async function deliverMessages({ event, eventId, messages, repository, sender })
       });
     } catch (error) {
       await repository.updateOutboundDelivery(message.id, { status: "failed" });
-      await repository.failEvent(eventId, "send_failed");
+      error.chatbotFailureCode = "send_failed";
       throw error;
     }
   }
@@ -49,9 +49,10 @@ export async function processVerifiedEvent({
 }) {
   const claim = await repository.claimEvent(event);
   if (!claim.claimed) return { status: "duplicate", eventId: claim.eventId };
-  if (claim.resumed) return retryDelivery({ event, eventId: claim.eventId, repository, sender });
+  try {
+    if (claim.resumed) return retryDelivery({ event, eventId: claim.eventId, repository, sender });
 
-  if (event.eventKind === "status") {
+    if (event.eventKind === "status") {
     await repository.updateDeliveryStatus(
       event.channel,
       event.providerMessageId,
@@ -62,7 +63,7 @@ export async function processVerifiedEvent({
     return { status: "status_updated", eventId: claim.eventId };
   }
 
-  const contact = await repository.upsertVerifiedContact({
+    const contact = await repository.upsertVerifiedContact({
     channel: event.channel,
     externalContactId: event.externalContactId,
     displayName: event.profileName ?? null,
@@ -147,10 +148,14 @@ export async function processVerifiedEvent({
   });
   await repository.completeEvent(claim.eventId);
 
-  return {
-    status: "processed",
-    eventId: claim.eventId,
-    replies: outboundMessages.length,
-    handedOff: Boolean(handoff),
-  };
+    return {
+      status: "processed",
+      eventId: claim.eventId,
+      replies: outboundMessages.length,
+      handedOff: Boolean(handoff),
+    };
+  } catch (error) {
+    await repository.failEvent(claim.eventId, error?.chatbotFailureCode ?? "processing_failed");
+    throw error;
+  }
 }

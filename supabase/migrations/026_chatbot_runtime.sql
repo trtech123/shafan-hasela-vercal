@@ -219,6 +219,7 @@ BEGIN
       error_code = NULL, retry_after = NULL
   WHERE channel = p_channel AND provider_event_id = p_provider_event_id
     AND processing_status = 'failed'
+    AND error_code = 'send_failed'
     AND (retry_after IS NULL OR retry_after <= NOW())
   RETURNING id INTO event_id;
 

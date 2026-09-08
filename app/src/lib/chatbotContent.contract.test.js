@@ -69,4 +69,10 @@ describe("approved chatbot content contract", () => {
     expect(content.policies.pricing_and_booking.specific_price_behavior).toBe("handoff_only");
     expect(serialized).not.toMatch(/₪|ש"ח|\d[\d.,]*\s*שקל(?:ים)?/u);
   });
+
+  test("fails closed when a transition references unregistered content", () => {
+    const invalid = structuredClone(loadBundle(runtimeRoot));
+    invalid.menus.menus[0].options[0].next_state = "answer.activity.not_approved";
+    expect(() => validateContentBundle(invalid)).toThrow("unknown target answer.activity.not_approved");
+  });
 });

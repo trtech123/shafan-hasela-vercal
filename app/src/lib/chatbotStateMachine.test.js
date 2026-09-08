@@ -171,6 +171,12 @@ describe("deterministic chatbot state machine", () => {
     },
   );
 
+  test("does not discard a guarded intent in the first customer message", () => {
+    const result = advance({ content, session: createSession(), input: { text: "כמה עולה לקבוצה?" } });
+    expect(responseIds(result)).toEqual(["policy.welcome", "handoff.transfer"]);
+    expect(result.actions).toContainEqual(expect.objectContaining({ type: "handoff", reason: "specific_price" }));
+  });
+
   test("supports global menu, back, and exact interactive option identifiers", () => {
     const menu = advance({ content, session: automated("menu.safety", "menu.main"), input: { text: "תפריט" } });
     expect(menu.session.currentState).toBe("menu.main");
@@ -182,6 +188,9 @@ describe("deterministic chatbot state machine", () => {
 
     const interactive = advance({ content, session: automated(), input: { optionId: "activities" } });
     expect(interactive.session.currentState).toBe("menu.activities_sites");
+
+    const pricing = advance({ content, session: automated(), input: { optionId: "pricing", text: "מחירים והזמנה" } });
+    expect(responseIds(pricing)).toEqual(["policy.pricing", "handoff.transfer"]);
   });
 
   test.each(["awaiting_human", "human_active"])("suppresses automation while %s", (status) => {

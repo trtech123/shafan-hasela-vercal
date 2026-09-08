@@ -192,4 +192,15 @@ describe("verified chatbot event processor", () => {
       failureCode: "artifact_persistence_unavailable",
     });
   });
+
+  test("marks a claimed event retryable when persistence fails before any reply", async () => {
+    const repository = makeRepo({
+      insertInboundMessage: vi.fn().mockRejectedValue(new Error("database unavailable")),
+    });
+    const sender = { sendText: vi.fn() };
+
+    await expect(processVerifiedEvent({ event: baseEvent, repository, sender })).rejects.toThrow("database unavailable");
+    expect(repository.failEvent).toHaveBeenCalledWith("event-1", "processing_failed");
+    expect(sender.sendText).not.toHaveBeenCalled();
+  });
 });

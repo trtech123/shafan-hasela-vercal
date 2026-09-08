@@ -39,6 +39,7 @@ describe("chatbot runtime migration contract", () => {
     expect(source).toMatch(/ON CONFLICT \(channel, provider_event_id\) DO NOTHING/i);
     expect(source).toMatch(/RETURNS TABLE\(event_id UUID, claimed BOOLEAN, resumed BOOLEAN\)/i);
     expect(source).toMatch(/processing_status = 'failed'/i);
+    expect(source).toMatch(/AND error_code = 'send_failed'/i);
     expect(source).toMatch(/retry_count = retry_count \+ 1/i);
     expect(source).toMatch(/CREATE OR REPLACE FUNCTION public\.create_bot_handoff/i);
     expect(source).toMatch(/CREATE OR REPLACE FUNCTION public\.claim_bot_handoff/i);

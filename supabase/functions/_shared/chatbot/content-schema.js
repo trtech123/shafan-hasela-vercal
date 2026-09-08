@@ -9,8 +9,6 @@ const REQUIRED_SECTIONS = [
   "handoff",
 ];
 
-const TERMINAL_PREFIXES = ["answer.", "capture.", "flow.", "handoff."];
-
 function assert(condition, message) {
   if (!condition) throw new Error(`Invalid chatbot content: ${message}`);
 }
@@ -44,12 +42,27 @@ export function validateContentBundle(bundle) {
     }
   }
 
+  const registeredTargets = new Set([
+    "flow.corporate",
+    "flow.pricing",
+    "flow.clubs_handoff",
+    "capture.corporate_lead",
+    "handoff.missing_content",
+    "answer.site.berko_overview",
+    "answer.site.field_overview",
+    "answer.site.acre_directions",
+    "answer.site.berko_directions",
+    ...bundle.activities.activities.map((activity) => `answer.activity.${activity.id}`),
+    ...bundle.safety.answers.map((answer) => `answer.safety.${answer.id}`),
+    ...bundle.faq.entries.map((entry) => `answer.faq.${entry.id}`),
+  ]);
+
   for (const menu of bundle.menus.menus) {
     for (const option of menu.options) {
       if (option.next_state.startsWith("menu.")) {
         assert(menuIds.has(option.next_state.slice(5)), `unknown target ${option.next_state}`);
       } else {
-        assert(TERMINAL_PREFIXES.some((prefix) => option.next_state.startsWith(prefix)), `unsupported target ${option.next_state}`);
+        assert(registeredTargets.has(option.next_state), `unknown target ${option.next_state}`);
       }
     }
   }

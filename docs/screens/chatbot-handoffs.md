@@ -1,6 +1,6 @@
 # Chatbot Handoff Queue Screen Action Map
 
-**Route:** `/chatbot-handoffs`  
+**Route:** `/chatbot-handoffs`
 **Access:** admin and operations only
 
 ## Visible actions

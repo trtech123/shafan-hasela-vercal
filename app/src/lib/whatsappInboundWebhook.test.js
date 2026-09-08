@@ -191,4 +191,14 @@ describe("Meta WhatsApp event normalization", () => {
     });
     expect(event).not.toHaveProperty("input");
   });
+
+  test("ignores unrecognized provider statuses instead of violating storage constraints", async () => {
+    const payload = payloadWithMessage();
+    const value = payload.entry[0].changes[0].value;
+    delete value.messages;
+    value.statuses = [{ id: "wamid.out.1", status: "mystery", timestamp: "1788872460" }];
+
+    await expect(normalizeWhatsAppWebhook(payload, { rawBody: JSON.stringify(payload) }))
+      .resolves.toEqual([]);
+  });
 });

@@ -203,7 +203,7 @@ export function createChatbotRepository(supabase) {
     },
 
     async failEvent(eventId, errorCode) {
-      const retryAfter = new Date(Date.now() + 30_000).toISOString();
+      const retryAfter = new Date().toISOString();
       ensure(await supabase
         .from("bot_channel_events")
         .update({ processing_status: "failed", error_code: errorCode, retry_after: retryAfter })

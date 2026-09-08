@@ -2,6 +2,8 @@ function bytesToHex(bytes) {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+const DELIVERY_STATUSES = new Set(["sent", "delivered", "read", "failed"]);
+
 async function sha256(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return bytesToHex(new Uint8Array(digest));
@@ -90,7 +92,9 @@ export async function normalizeWhatsAppWebhook(payload, { rawBody, receivedAt = 
         if (message?.id && message?.from) events.push(normalizeMessage({ message, value, digest, receivedAt }));
       }
       for (const status of value.statuses ?? []) {
-        if (status?.id && status?.status) events.push(normalizeStatus({ status, value, digest, receivedAt }));
+        if (status?.id && DELIVERY_STATUSES.has(status.status)) {
+          events.push(normalizeStatus({ status, value, digest, receivedAt }));
+        }
       }
     }
   }
