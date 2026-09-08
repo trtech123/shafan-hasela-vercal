@@ -4,7 +4,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, Bot, CheckCircle2, Clock3, Loader2, MessageCircle, RefreshCw, Send, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -148,13 +147,13 @@ export default function ChatbotHandoffs() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Card className="shadow-sm"><CardContent className="p-4 flex items-center justify-between"><span className="text-sm text-muted-foreground">ממתינות</span><strong className="text-2xl text-amber-700">{counts.waiting}</strong></CardContent></Card>
-        <Card className="shadow-sm"><CardContent className="p-4 flex items-center justify-between"><span className="text-sm text-muted-foreground">בטיפול</span><strong className="text-2xl text-blue-700">{counts.active}</strong></CardContent></Card>
-        <Card className="shadow-sm"><CardContent className="p-4 flex items-center justify-between"><span className="text-sm text-muted-foreground">דחופות</span><strong className="text-2xl text-rose-700">{counts.high}</strong></CardContent></Card>
+        <div className="rounded-xl border bg-card shadow-sm p-4 flex items-center justify-between"><span className="text-sm text-muted-foreground">ממתינות</span><strong className="text-2xl text-amber-700">{counts.waiting}</strong></div>
+        <div className="rounded-xl border bg-card shadow-sm p-4 flex items-center justify-between"><span className="text-sm text-muted-foreground">בטיפול</span><strong className="text-2xl text-blue-700">{counts.active}</strong></div>
+        <div className="rounded-xl border bg-card shadow-sm p-4 flex items-center justify-between"><span className="text-sm text-muted-foreground">דחופות</span><strong className="text-2xl text-rose-700">{counts.high}</strong></div>
       </div>
 
-      <Card className="shadow-sm">
-        <CardContent className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="rounded-xl border bg-card shadow-sm">
+        <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
           <select aria-label="סינון לפי סטטוס" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-10 rounded-lg border bg-background px-3 text-sm">
             <option value="all">כל הסטטוסים</option>
             {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -168,12 +167,12 @@ export default function ChatbotHandoffs() {
           <select aria-label="סינון לפי שיוך" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} className="h-10 rounded-lg border bg-background px-3 text-sm">
             <option value="all">כל השיוכים</option><option value="mine">שלי</option><option value="unassigned">ללא שיוך</option>
           </select>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.6fr)] gap-4 items-start">
-        <Card className="shadow-sm overflow-hidden">
-          <CardHeader className="pb-3 border-b"><CardTitle className="text-base">פניות ({filtered.length})</CardTitle></CardHeader>
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="p-6 pb-3 border-b"><h2 className="font-semibold text-base">פניות ({filtered.length})</h2></div>
           <div className="max-h-[680px] overflow-y-auto divide-y">
             {loading && <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />טוען פניות…</div>}
             {!loading && filtered.length === 0 && <div className="p-8 text-center text-muted-foreground">אין פניות התואמות לסינון</div>}
@@ -197,14 +196,14 @@ export default function ChatbotHandoffs() {
               </button>
             ))}
           </div>
-        </Card>
+        </div>
 
-        <Card className="shadow-sm min-h-[540px]">
-          {!selected ? <CardContent className="p-12 text-center text-muted-foreground">בחרו פנייה להצגת הפרטים</CardContent> : (
+        <div className="rounded-xl border bg-card shadow-sm min-h-[540px]">
+          {!selected ? <div className="p-12 text-center text-muted-foreground">בחרו פנייה להצגת הפרטים</div> : (
             <>
-              <CardHeader className="border-b pb-4">
+              <div className="p-6 border-b pb-4">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div><CardTitle>{contactName(selected)}</CardTitle><p className="text-sm text-muted-foreground mt-1">{selected.callback_phone || selected.callback_email || "אין פרטי חזרה נוספים"}</p></div>
+                  <div><h2 className="font-semibold leading-none tracking-tight">{contactName(selected)}</h2><p className="text-sm text-muted-foreground mt-1">{selected.callback_phone || selected.callback_email || "אין פרטי חזרה נוספים"}</p></div>
                   <Badge variant="outline" className={STATUS_STYLES[selected.status]}>{STATUS_LABELS[selected.status]}</Badge>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-3 text-xs">
@@ -213,8 +212,8 @@ export default function ChatbotHandoffs() {
                   <div><span className="text-muted-foreground">גודל קבוצה</span><p className="font-medium mt-1">{selected.group_size || "—"}</p></div>
                   <div><span className="text-muted-foreground">CRM</span><p className="font-medium mt-1">{selected.lead_id ? `ליד ${selected.lead_id}` : "—"}</p></div>
                 </div>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4">
+              </div>
+              <div className="p-4 space-y-4">
                 <div className="rounded-xl bg-muted/40 border p-3"><p className="text-xs font-semibold text-muted-foreground mb-1">סיכום ההעברה</p><p className="text-sm">{selected.summary}</p></div>
                 <div className="space-y-2 min-h-40 max-h-72 overflow-y-auto p-1">
                   {messagesLoading && <Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" />}
@@ -242,10 +241,10 @@ export default function ChatbotHandoffs() {
                     </div>
                   </div>
                 )}
-              </CardContent>
+              </div>
             </>
           )}
-        </Card>
+        </div>
       </div>
     </div>
   );
