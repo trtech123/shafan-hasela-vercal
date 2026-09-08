@@ -38,8 +38,7 @@ ${order?.notes ? `הערות: ${order.notes}` : ""}
     `בהצלחה!`,
   ].filter(Boolean).join("\n");
 
-  // Israeli phone normalization: 05X-XXXXXXX → 9725XXXXXXXX.
-  // Matches OrderDocumentDialog convention; wa.me requires digits only.
+  // Normalize an Israeli local mobile number for wa.me, which accepts digits only.
   const phoneDigits = (instructor.phone || "").replace(/\D/g, "");
   const waPhone = phoneDigits.startsWith("0") ? `972${phoneDigits.slice(1)}` : phoneDigits;
   const waLink = waPhone

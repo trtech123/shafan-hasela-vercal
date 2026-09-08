@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Search, Pencil, Trash2, Mail, FileText, CheckCircle2, Link2, Lock, CalendarClock } from "lucide-react";
 import InstructorEmailDialog from "../components/orders/InstructorEmailDialog";
 import InstructorDailyDialog from "../components/orders/InstructorDailyDialog";
-import OrderDocumentDialog from "../components/orders/OrderDocumentDialog";
 import OrderConfirmationPDF from "../components/orders/OrderConfirmationPDF";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
 import PaymentBadge from "../components/orders/PaymentBadge";
@@ -41,7 +40,6 @@ export default function Orders() {
   const [deleteId, setDeleteId] = useState(null);
   const [emailOrder, setEmailOrder] = useState(null);
   const [dailyOrder, setDailyOrder] = useState(null); // triggers the daily-summary dialog
-  const [docOrder, setDocOrder] = useState(null); // legacy text doc — kept as fallback
   const [pdfOrder, setPdfOrder] = useState(null); // combined order-confirmation PDF
   // Order being prepared for "lock this slot" — null when no confirm dialog open.
   const [lockingOrder, setLockingOrder] = useState(null);
@@ -465,14 +463,6 @@ export default function Orders() {
           onClose={() => setPdfOrder(null)}
         />
       )}
-
-      {/* Legacy plain-text customer doc — kept as fallback until the PDF is verified; no UI trigger now. */}
-      <OrderDocumentDialog
-        open={!!docOrder}
-        onClose={() => setDocOrder(null)}
-        order={docOrder}
-        activity={activities.find(a => a.id === docOrder?.activity_id)}
-      />
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent dir="rtl">
