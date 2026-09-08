@@ -57,9 +57,10 @@ export default function PaymentReturn() {
         return;
       }
 
-      const notification = Object.fromEntries(
-        new URLSearchParams(location.search).entries(),
-      );
+      const notification = {};
+      new URLSearchParams(location.search).forEach((value, key) => {
+        notification[key] = value;
+      });
       if (Object.keys(notification).length > 0) {
         try {
           await verifyPelecardReturn(attempt.paymentId, notification, {
