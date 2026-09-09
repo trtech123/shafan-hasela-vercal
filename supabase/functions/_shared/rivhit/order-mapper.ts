@@ -21,7 +21,7 @@ function positiveNumber(value: unknown): number | null {
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 
-function stableStringify(value: unknown): string {
+export function stableStringify(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map(stableStringify).join(",")}]`;
   }
@@ -35,7 +35,7 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-async function sha256Hex(value: string): Promise<string> {
+export async function sha256Hex(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -50,6 +50,52 @@ function identityInput(order: OrderSource, accountingEmail: string): string {
   return `order:${order.id}`;
 }
 
+export interface OrderAccountingCustomerIdentity {
+  customerName: string;
+  accountingEmail: string;
+  identityKey: string;
+  externalCustomerReference: string;
+  customerRequestReference: string;
+  customer: MappedAccountingSource["customer"];
+}
+
+export async function mapOrderAccountingCustomerIdentity(
+  order: OrderSource,
+  fallbackName: string | null = "Shafan customer",
+): Promise<OrderAccountingCustomerIdentity> {
+  const sourceName = order.billing_institution_name
+    || order.organization
+    || order.client_name;
+  if (!sourceName?.trim() && fallbackName === null) {
+    throw new Error("Order has no accounting customer name");
+  }
+  const customerName = truncate(sourceName || fallbackName || "", 30);
+  const accountingEmail = normalizeEmail(
+    order.billing_accounting_email || order.client_email,
+  );
+  const identityKey = await sha256Hex(identityInput(order, accountingEmail));
+  const externalCustomerReference = `sh${identityKey.slice(0, 18)}`;
+  const customerRequestReference = `shafan:rivhit:customer:${externalCustomerReference}`;
+  const email = accountingEmail || undefined;
+  const phone = truncate(String(order.client_phone || ""), 15) || undefined;
+  const customer = {
+    last_name: customerName,
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
+    acc_ref: externalCustomerReference,
+    request_reference: customerRequestReference,
+  };
+
+  return {
+    customerName,
+    accountingEmail,
+    identityKey,
+    externalCustomerReference,
+    customerRequestReference,
+    customer,
+  };
+}
+
 export async function mapOrderToAccountingSource(
   order: OrderSource,
   activityName: string | null,
@@ -60,16 +106,14 @@ export async function mapOrderToAccountingSource(
   if (!accountNamespace.trim()) {
     throw new Error("RIVHIT_ACCOUNT_NAMESPACE is not configured");
   }
-  const customerName = truncate(
-    order.billing_institution_name || order.organization || order.client_name || "Shafan customer",
-    30,
-  );
-  const accountingEmail = normalizeEmail(
-    order.billing_accounting_email || order.client_email,
-  );
-  const identityKey = await sha256Hex(identityInput(order, accountingEmail));
-  const externalCustomerReference = `sh${identityKey.slice(0, 18)}`;
-  const customerRequestReference = `shafan:rivhit:customer:${externalCustomerReference}`;
+  const {
+    customerName,
+    accountingEmail,
+    identityKey,
+    externalCustomerReference,
+    customerRequestReference,
+    customer,
+  } = await mapOrderAccountingCustomerIdentity(order);
   const documentRequestReference =
     `shafan:rivhit:order:${order.id}:${documentTypeKey}`;
 
@@ -88,15 +132,6 @@ export async function mapOrderToAccountingSource(
     30,
   );
   const email = accountingEmail || undefined;
-  const phone = truncate(String(order.client_phone || ""), 15) || undefined;
-
-  const customer = {
-    last_name: customerName,
-    ...(email ? { email } : {}),
-    ...(phone ? { phone } : {}),
-    acc_ref: externalCustomerReference,
-    request_reference: customerRequestReference,
-  };
   const document = {
     document_type: mapping.document_type,
     last_name: customerName,
