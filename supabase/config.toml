@@ -1,5 +1,14 @@
 project_id = "shafan-hasela"
 
+[functions.pelecard-callback]
+verify_jwt = false
+
+[functions.pelecard-verify]
+verify_jwt = true
+
+[functions.payment-accounting-worker]
+verify_jwt = true
+
 [functions.whatsapp-webhook]
 verify_jwt = false
 

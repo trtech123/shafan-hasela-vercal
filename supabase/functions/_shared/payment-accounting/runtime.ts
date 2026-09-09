@@ -47,6 +47,37 @@ interface AccountingConfiguration {
   client?: RivhitAccountingClient;
 }
 
+type EdgeWaitUntil = (promise: Promise<unknown>) => void;
+
+function edgeWaitUntil(): EdgeWaitUntil | null {
+  const edgeRuntime = (globalThis as typeof globalThis & {
+    EdgeRuntime?: { waitUntil?: EdgeWaitUntil };
+  }).EdgeRuntime;
+  return typeof edgeRuntime?.waitUntil === "function"
+    ? edgeRuntime.waitUntil.bind(edgeRuntime)
+    : null;
+}
+
+export function schedulePaymentAccountingWake(
+  wake: (paymentId: string) => void | Promise<void>,
+  paymentId: string,
+  waitUntil: EdgeWaitUntil | null = edgeWaitUntil(),
+): void {
+  let pending: Promise<void>;
+  try {
+    pending = Promise.resolve(wake(paymentId)).catch(() => undefined);
+  } catch {
+    return;
+  }
+  if (waitUntil) {
+    try {
+      waitUntil(pending);
+    } catch {
+      // The rejection is already handled; the durable outbox remains retryable.
+    }
+  }
+}
+
 function trimmed(value: string | undefined): string {
   return value?.trim() ?? "";
 }

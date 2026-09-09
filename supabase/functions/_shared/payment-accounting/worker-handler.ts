@@ -75,6 +75,13 @@ export function createPaymentAccountingWorkerHandler(
       }
       const input = workerInput(await parsePaymentJson(request, dependencies.maxBodyBytes));
       const result = await dependencies.processEvent(input.eventId, input.forceRetry);
+      if (result.status === null) {
+        return paymentJson(
+          { ok: false, error: { code: "not_found" } },
+          404,
+          cors,
+        );
+      }
       return paymentJson({ ok: true, ...result }, responseStatus(result), cors);
     } catch (error) {
       if (error instanceof PaymentHttpError) {

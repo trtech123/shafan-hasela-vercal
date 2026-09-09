@@ -11,16 +11,23 @@ function auth(role: string | null) {
   };
 }
 
-function request(body: unknown, token = "valid-token") {
+function request(
+  body: unknown,
+  token = "valid-token",
+  overrides: { method?: string; origin?: string; contentType?: string } = {},
+) {
   const headers = new Headers({
-    "Content-Type": "application/json",
-    Origin: "https://app.example.test",
+    "Content-Type": overrides.contentType ?? "application/json",
+    Origin: overrides.origin ?? "https://app.example.test",
   });
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const method = overrides.method ?? "POST";
   return new Request("https://edge.example.test/payment-accounting-worker", {
-    method: "POST",
+    method,
     headers,
-    body: JSON.stringify(body),
+    ...(method === "GET" || method === "HEAD" || method === "OPTIONS"
+      ? {}
+      : { body: JSON.stringify(body) }),
   });
 }
 
@@ -116,5 +123,87 @@ describe("payment accounting worker handler", () => {
       retryAfter: "2026-09-09T10:10:00.000Z",
     });
     expect(body).not.toHaveProperty("error");
+  });
+
+  test.each([
+    ["succeeded", 200],
+    ["retryable_error", 202],
+    ["configuration_required", 202],
+    ["permanent_error", 409],
+    ["reconciliation_required", 409],
+  ])("returns a sanitized response for %s", async (status, expectedStatus) => {
+    const processEvent = vi.fn().mockResolvedValue({
+      eventId,
+      status,
+      claimed: true,
+      duplicate: false,
+      retryAfter: null,
+    });
+    const response = await handler("admin", processEvent).handle(request({ eventId }));
+
+    expect(response.status).toBe(expectedStatus);
+    expect(await response.json()).toEqual({
+      ok: true,
+      eventId,
+      status,
+      claimed: true,
+      duplicate: false,
+      retryAfter: null,
+    });
+  });
+
+  test("returns an explicit not-found error when no durable event exists", async () => {
+    const processEvent = vi.fn().mockResolvedValue({
+      eventId,
+      status: null,
+      claimed: false,
+      duplicate: true,
+      retryAfter: null,
+    });
+    const response = await handler("admin", processEvent).handle(request({ eventId }));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: { code: "not_found" },
+    });
+  });
+
+  test("handles OPTIONS without authentication and rejects other methods", async () => {
+    const context = handler("admin");
+    const optionsResponse = await context.handle(request({}, "", { method: "OPTIONS" }));
+    const getResponse = await context.handle(request({}, "valid-token", { method: "GET" }));
+
+    expect(optionsResponse.status).toBe(204);
+    expect(optionsResponse.headers.get("Access-Control-Allow-Origin"))
+      .toBe("https://app.example.test");
+    expect(getResponse.status).toBe(405);
+    expect(context.processEvent).not.toHaveBeenCalled();
+  });
+
+  test("rejects a disallowed browser origin", async () => {
+    const context = handler("admin");
+    const response = await context.handle(request(
+      { eventId },
+      "valid-token",
+      { origin: "https://attacker.example" },
+    ));
+    expect(response.status).toBe(403);
+    expect(context.processEvent).not.toHaveBeenCalled();
+  });
+
+  test("rejects unsupported media and oversized bodies", async () => {
+    const context = handler("admin");
+    const mediaResponse = await context.handle(request(
+      { eventId },
+      "valid-token",
+      { contentType: "text/plain" },
+    ));
+    const largeBody = { eventId, padding: "x".repeat(4096) };
+    const sizeResponse = await context.handle(request(largeBody));
+
+    expect(mediaResponse.status).toBe(415);
+    expect(sizeResponse.status).toBe(413);
+    expect(context.processEvent).not.toHaveBeenCalled();
   });
 });

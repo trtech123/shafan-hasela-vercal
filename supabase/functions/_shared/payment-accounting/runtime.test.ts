@@ -1,5 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
-import { createPaymentAccountingRuntime } from "./runtime.ts";
+import {
+  createPaymentAccountingRuntime,
+  schedulePaymentAccountingWake,
+} from "./runtime.ts";
 
 const eventId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const paymentId = "22222222-2222-4222-8222-222222222222";
@@ -68,6 +71,29 @@ const validEnv = {
 };
 
 describe("payment accounting runtime", () => {
+  test("schedules the durable wake in EdgeRuntime without awaiting it", async () => {
+    let finish!: () => void;
+    const wake = vi.fn(() => new Promise<void>((resolve) => {
+      finish = resolve;
+    }));
+    const waitUntil = vi.fn();
+
+    expect(schedulePaymentAccountingWake(wake, paymentId, waitUntil)).toBeUndefined();
+    expect(wake).toHaveBeenCalledWith(paymentId);
+    expect(waitUntil).toHaveBeenCalledOnce();
+
+    finish();
+    await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
+  });
+
+  test("swallows scheduled wake rejection when EdgeRuntime is unavailable", async () => {
+    const wake = vi.fn().mockRejectedValue(new Error("database unavailable"));
+
+    expect(schedulePaymentAccountingWake(wake, paymentId, null)).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(wake).toHaveBeenCalledWith(paymentId);
+  });
+
   test.each([
     ["missing_rivhit_api_token", { ...validEnv, RIVHIT_API_TOKEN: undefined }],
     ["invalid_accounting_mode", { ...validEnv, RIVHIT_ACCOUNTING_MODE: "test" }],

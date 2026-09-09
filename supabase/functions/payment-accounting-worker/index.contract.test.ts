@@ -10,6 +10,10 @@ const verifySource = readFileSync(
   new URL("../pelecard-verify/index.ts", import.meta.url),
   "utf8",
 );
+const configSource = readFileSync(
+  new URL("../../config.toml", import.meta.url),
+  "utf8",
+);
 
 describe("payment accounting worker Edge contracts", () => {
   test("composes protected handler from server accounting runtime", () => {
@@ -21,7 +25,16 @@ describe("payment accounting worker Edge contracts", () => {
   test("wires the UUID-only payment success hook into callback and verify", () => {
     for (const entrypoint of [callbackSource, verifySource]) {
       expect(entrypoint).toContain("onPaymentSucceeded");
-      expect(entrypoint).toContain("runtime.accounting.wakePaymentAccounting");
+      expect(entrypoint).toContain("schedulePaymentAccountingWake");
     }
+  });
+
+  test("exposes only the provider callback without disabling JWT on staff endpoints", () => {
+    expect(configSource).toMatch(
+      /\[functions\.pelecard-callback\]\s*verify_jwt\s*=\s*false/,
+    );
+    expect(configSource).not.toMatch(
+      /\[functions\.(?:pelecard-verify|payment-accounting-worker)\]\s*verify_jwt\s*=\s*false/,
+    );
   });
 });

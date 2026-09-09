@@ -91,7 +91,7 @@ interface VerificationDependencies {
   decodeNotification: PaymentNotificationDecoder;
   config: PaymentHandlerConfig;
   rejectionSource?: "callback" | "verify";
-  onPaymentSucceeded?: (paymentId: string) => Promise<void>;
+  onPaymentSucceeded?: (paymentId: string) => void | Promise<void>;
 }
 
 interface AuthenticatedVerificationDependencies extends VerificationDependencies {
