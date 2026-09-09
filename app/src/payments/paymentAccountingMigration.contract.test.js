@@ -99,6 +99,7 @@ describe("payment accounting orchestration migration", () => {
     expect(sql).toContain("left join public.payment_transactions");
     expect(sql).toContain("left join lateral");
     expect(sql).toContain("public.accounting_documents");
+    expect(sql).toContain("when ae.status = 'configuration_required' then true");
     expect(sql).toContain("grant select on public.payment_accounting_operations to authenticated");
     expect(sql).not.toMatch(/grant\s+(insert|update|delete|all)[^;]+authenticated/);
   });
@@ -132,6 +133,8 @@ describe("payment accounting orchestration migration", () => {
       "stale attempt cannot complete newer work",
       "wrong lease token cannot fail work",
       "event failure does not reverse payment success",
+      "configuration-required event is reported retryable",
+      "configuration-required event requires an explicit force retry",
     ]) {
       expect(sql).toContain(phrase);
     }

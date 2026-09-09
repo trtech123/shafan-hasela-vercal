@@ -4,7 +4,7 @@
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT extensions.plan(13);
+SELECT extensions.plan(15);
 
 INSERT INTO auth.users (id, email) VALUES
   ('70000000-0000-4000-8000-000000000001', 'accounting-ops@example.test');
@@ -209,11 +209,11 @@ SELECT extensions.ok(
     (SELECT id FROM second_claim),
     (SELECT attempt_count FROM second_claim),
     (SELECT lease_token FROM second_claim),
-    'permanent_error',
+    'configuration_required',
     NOW() + INTERVAL '1 hour',
     jsonb_build_object('message', 'sanitized provider failure', 'errorCode', 'E_TEST')
   ),
-  'current fenced attempt can record a terminal failure'
+  'current fenced attempt can record a configuration failure'
 );
 
 SELECT extensions.ok(
@@ -221,7 +221,7 @@ SELECT extensions.ok(
    FROM public.payment_transactions
    WHERE id = '70000000-0000-4000-8000-000000000010')
   AND
-  (SELECT status = 'permanent_error' AND next_attempt_at IS NULL
+  (SELECT status = 'configuration_required' AND next_attempt_at IS NULL
    FROM public.accounting_events
    WHERE id = (SELECT id FROM second_claim)),
   'event failure does not reverse payment success'
@@ -239,10 +239,40 @@ SELECT extensions.ok(
   (SELECT count(*) = 1
    FROM public.payment_accounting_operations
    WHERE payment_transaction_id = '70000000-0000-4000-8000-000000000010'
-     AND accounting_status = 'permanent_error'
+     AND accounting_status = 'configuration_required'
      AND NOT reconciliation_required
-     AND NOT retry_allowed),
-  'operations can read payment and accounting status without mutation access'
+     AND retry_allowed),
+  'configuration-required event is reported retryable'
+);
+
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT set_config(
+  'request.jwt.claims',
+  '{"role":"service_role","sub":"70000000-0000-4000-8000-000000000001"}',
+  true
+);
+
+SELECT extensions.ok(
+  NOT (SELECT claimed
+       FROM public.claim_accounting_event(
+         (SELECT id FROM second_claim),
+         'configuration-worker',
+         300,
+         FALSE
+       )),
+  'configuration-required event requires an explicit force retry'
+);
+
+SELECT extensions.ok(
+  (SELECT claimed
+   FROM public.claim_accounting_event(
+     (SELECT id FROM second_claim),
+     'configuration-worker',
+     300,
+     TRUE
+   )),
+  'configuration-required event can be force retried after configuration'
 );
 
 RESET ROLE;

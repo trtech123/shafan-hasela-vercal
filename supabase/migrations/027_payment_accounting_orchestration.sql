@@ -374,6 +374,7 @@ SELECT
   CASE
     WHEN ae.status = 'pending' THEN TRUE
     WHEN ae.status = 'retryable_error' AND ae.next_attempt_at <= NOW() THEN TRUE
+    WHEN ae.status = 'configuration_required' THEN TRUE
     WHEN ae.status = 'processing' AND ae.lease_expires_at <= NOW() THEN TRUE
     ELSE FALSE
   END AS retry_allowed,
