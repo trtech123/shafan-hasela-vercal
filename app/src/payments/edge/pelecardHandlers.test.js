@@ -380,8 +380,31 @@ describe("Pelecard callback and verification", () => {
     });
     expect(context.store.writes).toBe(1);
     expect(context.store.finalize).toHaveBeenCalledOnce();
-    expect(onPaymentSucceeded).toHaveBeenCalledTimes(2);
-    expect(onPaymentSucceeded.mock.calls).toEqual([[PAYMENT_ID], [PAYMENT_ID]]);
+    expect(onPaymentSucceeded).toHaveBeenCalledOnce();
+    expect(onPaymentSucceeded.mock.calls).toEqual([[PAYMENT_ID]]);
+  });
+
+  test("does not wake accounting from a forged notification targeting stored success", async () => {
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const store = createMemoryStore({
+      ...pendingPayment,
+      saleId: SALE_ID,
+      status: "succeeded",
+      providerTransactionId: PROVIDER_TRANSACTION_ID,
+      receiptNumber: "RCP-1001",
+      verifiedAt: "2026-09-08T08:01:00.000Z",
+    });
+    const context = callbackContext({ store, onPaymentSucceeded });
+
+    const response = await context.handler(request(notification({
+      antiForgeryReference: "attacker-controlled-key",
+      confirmationProof: "attacker-controlled-proof",
+    })));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "succeeded" });
+    expect(onPaymentSucceeded).not.toHaveBeenCalled();
+    expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
   });
 
   test("keeps durable payment success when the accounting wake-up rejects", async () => {
@@ -490,10 +513,8 @@ describe("Pelecard callback and verification", () => {
     expect(firstReturn.status).toBe(200);
     expect(secondReturn.status).toBe(200);
     expect(store.writes).toBe(1);
-    expect(onPaymentSucceeded).toHaveBeenCalledTimes(3);
-    expect(onPaymentSucceeded.mock.calls).toEqual([
-      [PAYMENT_ID], [PAYMENT_ID], [PAYMENT_ID],
-    ]);
+    expect(onPaymentSucceeded).toHaveBeenCalledOnce();
+    expect(onPaymentSucceeded.mock.calls).toEqual([[PAYMENT_ID]]);
   });
 
   test("supports browser return before callback without double finalization", async () => {

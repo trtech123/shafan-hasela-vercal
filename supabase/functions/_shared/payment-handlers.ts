@@ -206,7 +206,6 @@ async function verifyPayment(
     return paymentJson({ error: { code: "not_found" } }, 404, cors);
   }
   if (FINAL_STATUSES.has(payment.status)) {
-    await wakePaymentAccounting(payment, dependencies.onPaymentSucceeded);
     return paymentJson(safePaymentResult(payment), 200, cors);
   }
 
