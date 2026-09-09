@@ -92,7 +92,7 @@ function retryAt(
   const outerRetryTime = now.getTime() + delaySeconds * 1000;
   const innerRetryTime = innerRetryAfter ? Date.parse(innerRetryAfter) : Number.NaN;
   const selectedRetryTime = Number.isFinite(innerRetryTime) && innerRetryTime > now.getTime()
-    ? Math.max(outerRetryTime, innerRetryTime)
+    ? innerRetryTime
     : outerRetryTime;
   return new Date(selectedRetryTime).toISOString();
 }

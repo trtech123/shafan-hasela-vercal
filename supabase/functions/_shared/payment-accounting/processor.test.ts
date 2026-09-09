@@ -537,6 +537,26 @@ describe("payment accounting event processor", () => {
       .toBe("2026-09-09T10:10:00.000Z");
   });
 
+  test("uses an authoritative future inner retry even before a high-attempt outer backoff", async () => {
+    const repository = new RecordingEventRepository();
+    repository.claims = [eventClaim({ attemptCount: 99 })];
+    const rivhitRepository = new RecordingRivhitRepository();
+    rivhitRepository.documentClaim = {
+      ...rivhitRepository.documentClaim,
+      status: "retryable_error",
+      claimed: false,
+      retryAfter: "2026-09-09T10:10:00.000Z",
+    };
+
+    const result = await processPaymentAccountingEvent(
+      options(repository, rivhitRepository),
+    );
+
+    expect(result.retryAfter).toBe("2026-09-09T10:10:00.000Z");
+    expect(repository.failures[0].failure.nextAttemptAt)
+      .toBe("2026-09-09T10:10:00.000Z");
+  });
+
   test.each([
     "not-a-date",
     "2026-09-09T09:59:00.000Z",
