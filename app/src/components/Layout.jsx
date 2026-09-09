@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
-import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText, Trophy } from "lucide-react";
+import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText, Trophy, Landmark } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -15,6 +15,7 @@ const allNavItems = [
 { path: "/quotes", label: "הצעות מחיר", icon: FileText, roles: ["admin"] },
 { path: "/leads", label: "לידים", icon: UserSearch, roles: ["admin"] },
 { path: "/chatbot-handoffs", label: "תור שפן", icon: MessageSquareText, roles: ["admin", "אחמ\"ש"] },
+{ path: "/accounting-operations", label: "בקרת הנה״ח", icon: Landmark, roles: ["admin", "אחמ\"ש"] },
 { path: "/cashregister", label: "קופה", icon: MonitorSmartphone, roles: ["admin", "אחמ\"ש", "קופאי"] },
 { path: "/sales-report", label: "דוח קופה", icon: BarChart2, roles: ["admin"] },
 { path: "/pricing", label: "תמחור", icon: Calculator, roles: ["admin"] },

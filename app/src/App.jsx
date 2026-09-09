@@ -25,6 +25,7 @@ import Templates from './pages/Templates';
 import Login from './pages/Login';
 import PaymentReturn from './pages/PaymentReturn';
 import ChatbotHandoffs from './pages/ChatbotHandoffs';
+import AccountingOperations from './pages/AccountingOperations';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, authError } = useAuth();
@@ -66,6 +67,7 @@ const AuthenticatedApp = () => {
         <Route path="/products" element={<Products />} />
         <Route path="/templates" element={<Templates />} />
         <Route path="/chatbot-handoffs" element={<ChatbotHandoffs />} />
+        <Route path="/accounting-operations" element={<AccountingOperations />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>
