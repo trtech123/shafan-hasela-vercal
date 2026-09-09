@@ -1,6 +1,6 @@
 # Rivhit accounting function
 
-This server-side function creates standalone Rivhit accounting state for an existing Shafan order. It is not invoked by Pelecard or iCredit and has no frontend trigger in this phase.
+The standalone function creates Rivhit accounting state for an existing Shafan order. The separate `payment-accounting-worker` processes durable accounting events created only after a locally verified Pelecard payment succeeds. iCredit recurring charges remain excluded to avoid duplicate documents.
 
 ## Server secrets
 
@@ -25,6 +25,24 @@ Example shape only (the numeric document type and behavior are not a Production 
 }
 ```
 
+Pelecard activation additionally requires a reviewed `payment_success` mapping whose `currency_code` exactly matches the durable payment currency:
+
+```json
+{
+  "payment_success": {
+    "document_type": 0,
+    "sort_code": 0,
+    "currency_id": 0,
+    "currency_code": "ILS",
+    "price_include_vat": true,
+    "send_mail": false,
+    "digital_signature": false
+  }
+}
+```
+
+The zeros are placeholders only. Do not activate this mapping until the accountant/client supplies and approves the numeric Rivhit values.
+
 The function accepts an authenticated `admin` or `operations` request:
 
 ```json
@@ -35,4 +53,15 @@ The function accepts an authenticated `admin` or `operations` request:
 }
 ```
 
-Do not deploy the function, apply migration `022_rivhit_accounting.sql`, or configure Production secrets without explicit approval and the accountant decisions listed in the design specification.
+The protected payment worker also accepts only `admin` or `operations`, with an exact request body:
+
+```json
+{
+  "eventId": "<accounting event UUID>",
+  "forceRetry": false
+}
+```
+
+`forceRetry` does not override source, payment, document type, or backend retry policy. Missing/invalid Rivhit configuration finalizes the claimed event as `configuration_required` without calling Rivhit. Payment and sale success remain unchanged when accounting fails.
+
+Do not activate the Production `payment_success` mapping or create a real accounting document until the accountant/client has approved the exact document type and related numeric values.

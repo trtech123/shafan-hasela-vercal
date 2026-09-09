@@ -14,5 +14,6 @@ servePaymentHandler(() => {
     provider: unconfiguredVerificationProvider,
     decodeNotification: unconfiguredNotificationDecoder,
     config: runtime.config,
+    onPaymentSucceeded: runtime.accounting.wakePaymentAccounting,
   });
 });

@@ -310,6 +310,25 @@ describe("payment accounting event processor", () => {
     );
   });
 
+  test("claims and records runtime preflight failure without a Rivhit client", async () => {
+    const repository = new RecordingEventRepository();
+    const rivhitRepository = new RecordingRivhitRepository();
+    const input = options(repository, rivhitRepository);
+
+    const result = await processPaymentAccountingEvent({
+      ...input,
+      configurationIssue: "missing_rivhit_api_token",
+      rivhitClient: undefined,
+    });
+
+    expect(result.status).toBe("configuration_required");
+    expect(repository.failures[0].failure).toMatchObject({
+      status: "configuration_required",
+      error: { code: "missing_rivhit_api_token" },
+    });
+    expect(rivhitRepository.customerClaims).toBe(0);
+  });
+
   test.each([
     ["missing mapping", {}, "official-sandbox"],
     ["missing currency", { payment_success: { ...paymentSuccessMapping, currency_code: undefined } }, "official-sandbox"],

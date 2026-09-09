@@ -33,9 +33,10 @@ export interface ProcessPaymentAccountingEventOptions {
   forceRetry?: boolean;
   repository: PaymentAccountingEventRepository;
   rivhitRepository: AccountingRepository;
-  rivhitClient: RivhitAccountingClient;
+  rivhitClient?: RivhitAccountingClient;
   documentMappings: Record<string, DocumentMapping>;
   accountNamespace: string;
+  configurationIssue?: string;
   now?: () => Date;
 }
 
@@ -51,9 +52,9 @@ export interface PaymentAccountingEventResult {
 }
 
 class ProcessorConfigurationError extends Error {
-  readonly code: "missing_document_mapping" | "missing_account_namespace";
+  readonly code: string;
 
-  constructor(code: ProcessorConfigurationError["code"]) {
+  constructor(code: string) {
     super(code);
     this.name = "ProcessorConfigurationError";
     this.code = code;
@@ -235,6 +236,9 @@ export async function processPaymentAccountingEvent(
   let workflowResult: WorkflowResult;
   try {
     const sourceId = validateClaimedSource(claim);
+    if (options.configurationIssue) {
+      throw new ProcessorConfigurationError(options.configurationIssue);
+    }
     if (!options.accountNamespace.trim()) {
       throw new ProcessorConfigurationError("missing_account_namespace");
     }
@@ -250,6 +254,9 @@ export async function processPaymentAccountingEvent(
       mapping,
       options.accountNamespace,
     );
+    if (!options.rivhitClient) {
+      throw new ProcessorConfigurationError("missing_rivhit_api_token");
+    }
     workflowResult = await runRivhitAccounting({
       source,
       repository: options.rivhitRepository,
