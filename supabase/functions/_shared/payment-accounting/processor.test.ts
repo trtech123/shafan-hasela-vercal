@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { RivhitError } from "../rivhit/client.ts";
+import { AccountingRepositoryIdempotencyError } from "../rivhit/supabase-repository.ts";
 import type {
   AccountingRepository,
   ClaimDocumentInput,
@@ -408,6 +409,25 @@ describe("payment accounting event processor", () => {
     expect(rivhitRepository.customerClaims).toBe(0);
   });
 
+  test("marks a Rivhit ledger idempotency mismatch for reconciliation", async () => {
+    const repository = new RecordingEventRepository();
+    const rivhitRepository = new RecordingRivhitRepository();
+    rivhitRepository.claimDocument = async () => {
+      throw new AccountingRepositoryIdempotencyError("document");
+    };
+
+    const result = await processPaymentAccountingEvent(
+      options(repository, rivhitRepository),
+    );
+
+    expect(result.status).toBe("reconciliation_required");
+    expect(repository.failures[0].failure).toMatchObject({
+      status: "reconciliation_required",
+      nextAttemptAt: null,
+      error: { code: "rivhit_document_idempotency_mismatch" },
+    });
+  });
+
   test("treats inner processing state as retryable with bounded backoff", async () => {
     const repository = new RecordingEventRepository();
     repository.claims = [eventClaim({ attemptCount: 99 })];
@@ -474,6 +494,69 @@ describe("payment accounting event processor", () => {
     expect(result.status).toBe("permanent_error");
     expect(repository.loadCalls).toEqual([]);
     expect(rivhitRepository.customerClaims).toBe(0);
+  });
+
+  test("rejects a claim for another event without touching either event or Rivhit", async () => {
+    const repository = new RecordingEventRepository();
+    repository.claims = [eventClaim({
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    })];
+    const rivhitRepository = new RecordingRivhitRepository();
+
+    await expect(processPaymentAccountingEvent(
+      options(repository, rivhitRepository),
+    )).rejects.toMatchObject({
+      name: "PaymentAccountingRepositoryError",
+      code: "malformed_response",
+    });
+    expect(repository.loadCalls).toEqual([]);
+    expect(repository.completions).toEqual([]);
+    expect(repository.failures).toEqual([]);
+    expect(rivhitRepository.customerClaims).toBe(0);
+  });
+
+  test("preserves a later valid inner-ledger retry timestamp", async () => {
+    const repository = new RecordingEventRepository();
+    const rivhitRepository = new RecordingRivhitRepository();
+    rivhitRepository.documentClaim = {
+      ...rivhitRepository.documentClaim,
+      status: "retryable_error",
+      claimed: false,
+      retryAfter: "2026-09-09T10:10:00.000Z",
+    };
+
+    const result = await processPaymentAccountingEvent(
+      options(repository, rivhitRepository),
+    );
+
+    expect(result).toMatchObject({
+      status: "retryable_error",
+      retryAfter: "2026-09-09T10:10:00.000Z",
+    });
+    expect(repository.failures[0].failure.nextAttemptAt)
+      .toBe("2026-09-09T10:10:00.000Z");
+  });
+
+  test.each([
+    "not-a-date",
+    "2026-09-09T09:59:00.000Z",
+  ])("falls back to bounded outer backoff for invalid inner retry %s", async (retryAfter) => {
+    const repository = new RecordingEventRepository();
+    const rivhitRepository = new RecordingRivhitRepository();
+    rivhitRepository.documentClaim = {
+      ...rivhitRepository.documentClaim,
+      status: "retryable_error",
+      claimed: false,
+      retryAfter,
+    };
+
+    const result = await processPaymentAccountingEvent(
+      options(repository, rivhitRepository),
+    );
+
+    expect(result.retryAfter).toBe("2026-09-09T10:01:00.000Z");
+    expect(repository.failures[0].failure.nextAttemptAt)
+      .toBe("2026-09-09T10:01:00.000Z");
   });
 
   test("does not overwrite a newer event attempt when completion loses its fence", async () => {

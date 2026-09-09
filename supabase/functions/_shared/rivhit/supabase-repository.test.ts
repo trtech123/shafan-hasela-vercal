@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { SupabaseAccountingRepository } from "./supabase-repository.ts";
+import {
+  AccountingRepositoryIdempotencyError,
+  SupabaseAccountingRepository,
+} from "./supabase-repository.ts";
 import type { PersistedFailure } from "./workflow.ts";
 
 class RecordingSupabase {
@@ -195,5 +198,40 @@ describe("SupabaseAccountingRepository", () => {
 
     await expect(repository.succeedCustomer("customer-row", 1, "1234"))
       .rejects.toThrow("stale accounting finalization");
+  });
+
+  test.each([
+    ["customer", "accounting customer idempotency mismatch"],
+    ["document", "database rejected: accounting document idempotency mismatch"],
+  ] as const)("types a known %s idempotency mismatch for reconciliation", async (
+    kind,
+    message,
+  ) => {
+    const client = new RecordingSupabase();
+    client.rpc = async () => ({ data: null, error: { message } });
+    const repository = new SupabaseAccountingRepository(client);
+    const operation = kind === "customer"
+      ? repository.claimCustomer({
+        provider: "rivhit",
+        accountNamespace: "sandbox-account",
+        identityKey: "identity",
+        externalReference: "reference",
+      })
+      : repository.claimDocument({
+        provider: "rivhit",
+        accountNamespace: "sandbox-account",
+        accountingCustomerId: "customer-row",
+        sourceType: "payment_transaction",
+        sourceId: "payment-row",
+        documentTypeKey: "payment_success",
+        externalDocumentType: 1,
+        requestReference: "request-reference",
+        payloadHash: "payload-hash",
+      });
+
+    await expect(operation).rejects.toMatchObject({
+      name: "AccountingRepositoryIdempotencyError",
+      kind,
+    } satisfies Partial<AccountingRepositoryIdempotencyError>);
   });
 });

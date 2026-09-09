@@ -1,5 +1,6 @@
 import { RivhitError } from "../rivhit/client.ts";
 import { getDocumentMapping } from "../rivhit/config.ts";
+import { AccountingRepositoryIdempotencyError } from "../rivhit/supabase-repository.ts";
 import type { DocumentMapping } from "../rivhit/types.ts";
 import {
   runRivhitAccounting,
@@ -81,10 +82,19 @@ function eventFence(claim: AccountingEventClaim): AccountingEventFence {
   };
 }
 
-function retryAt(attemptCount: number, now: Date): string {
+function retryAt(
+  attemptCount: number,
+  now: Date,
+  innerRetryAfter?: string | null,
+): string {
   const exponent = Math.min(6, Math.max(0, attemptCount - 1));
   const delaySeconds = Math.min(3600, 60 * (2 ** exponent));
-  return new Date(now.getTime() + delaySeconds * 1000).toISOString();
+  const outerRetryTime = now.getTime() + delaySeconds * 1000;
+  const innerRetryTime = innerRetryAfter ? Date.parse(innerRetryAfter) : Number.NaN;
+  const selectedRetryTime = Number.isFinite(innerRetryTime) && innerRetryTime > now.getTime()
+    ? Math.max(outerRetryTime, innerRetryTime)
+    : outerRetryTime;
+  return new Date(selectedRetryTime).toISOString();
 }
 
 function controlledError(
@@ -136,6 +146,9 @@ function classifiedFailure(
   } else if (error instanceof InvalidAccountingEventSourceError) {
     status = "permanent_error";
     code = error.code;
+  } else if (error instanceof AccountingRepositoryIdempotencyError) {
+    status = "reconciliation_required";
+    code = `rivhit_${error.kind}_idempotency_mismatch`;
   } else if (error instanceof RivhitError) {
     rivhitError = error;
     status = error.reconciliationRequired
@@ -175,7 +188,7 @@ function workflowFailure(
   return {
     status,
     nextAttemptAt: status === "retryable_error"
-      ? retryAt(attemptCount, now)
+      ? retryAt(attemptCount, now, result.retryAfter)
       : null,
     error: controlledError(status, `rivhit_workflow_${result.status}`),
   };
@@ -210,6 +223,12 @@ export async function processPaymentAccountingEvent(
       duplicate: true,
       retryAfter: claim.nextAttemptAt,
     };
+  }
+  if (claim.id !== options.eventId) {
+    throw new PaymentAccountingRepositoryError(
+      "malformed_response",
+      "claim_accounting_event",
+    );
   }
 
   const fence = eventFence(claim);
