@@ -32,3 +32,46 @@ export interface MappedPaymentAccountingSource extends MappedAccountingSource {
   paymentAmountMinor: number;
   currencyCode: string;
 }
+
+export type AccountingEventStatus =
+  | "pending"
+  | "processing"
+  | "succeeded"
+  | "retryable_error"
+  | "permanent_error"
+  | "reconciliation_required"
+  | "configuration_required";
+
+export interface AccountingEventClaim {
+  id: string;
+  sourceType: string | null;
+  sourceId: string | null;
+  purpose: string | null;
+  accountingProvider: string | null;
+  status: AccountingEventStatus | null;
+  claimed: boolean;
+  attemptCount: number | null;
+  leaseToken: string | null;
+  leaseExpiresAt: string | null;
+  lastAttemptAt: string | null;
+  nextAttemptAt: string | null;
+  lastError: Record<string, unknown> | null;
+}
+
+export interface AccountingEventFence {
+  id: string;
+  attemptCount: number;
+  leaseToken: string;
+}
+
+export type AccountingEventFailureStatus =
+  | "retryable_error"
+  | "permanent_error"
+  | "reconciliation_required"
+  | "configuration_required";
+
+export interface AccountingEventFailure {
+  status: AccountingEventFailureStatus;
+  nextAttemptAt: string | null;
+  error: Record<string, string | number | boolean | null>;
+}
