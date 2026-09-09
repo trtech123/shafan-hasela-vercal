@@ -15,7 +15,7 @@ export interface VerifiedPelecardPaymentSource {
   provider: "pelecard";
   operation: "payment";
   status: "succeeded";
-  orderId: string;
+  orderId: string | null;
   saleId: string;
   providerTransactionId: string;
   amountMinor: number;

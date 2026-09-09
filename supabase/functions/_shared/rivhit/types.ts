@@ -10,6 +10,7 @@ export interface DocumentMapping {
   document_type: number;
   sort_code: number;
   currency_id: number;
+  currency_code?: string;
   price_include_vat: boolean;
   send_mail: boolean;
   digital_signature: boolean;

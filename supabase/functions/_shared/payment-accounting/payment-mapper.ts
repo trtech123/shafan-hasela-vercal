@@ -1,5 +1,6 @@
 import {
   mapOrderAccountingCustomerIdentity,
+  MissingOrderAccountingCustomerIdentityError,
   sha256Hex,
   stableStringify,
 } from "../rivhit/order-mapper.ts";
@@ -17,6 +18,16 @@ export class PaymentAccountingReconciliationError extends Error {
   constructor(code: PaymentAccountingReconciliationError["code"]) {
     super(code);
     this.name = "PaymentAccountingReconciliationError";
+    this.code = code;
+  }
+}
+
+export class PaymentAccountingConfigurationError extends Error {
+  readonly code: "missing_currency_code" | "currency_mismatch";
+
+  constructor(code: PaymentAccountingConfigurationError["code"]) {
+    super(code);
+    this.name = "PaymentAccountingConfigurationError";
     this.code = code;
   }
 }
@@ -45,6 +56,12 @@ export async function mapVerifiedPaymentToAccountingSource(
   if (!Number.isSafeInteger(source.amountMinor) || source.amountMinor <= 0) {
     throw new Error("Payment has no positive accounting amount");
   }
+  if (!mapping.currency_code) {
+    throw new PaymentAccountingConfigurationError("missing_currency_code");
+  }
+  if (mapping.currency_code !== source.currencyCode) {
+    throw new PaymentAccountingConfigurationError("currency_mismatch");
+  }
   if (!source.order || source.order.id !== source.orderId) {
     throw new PaymentAccountingReconciliationError("missing_order");
   }
@@ -52,8 +69,11 @@ export async function mapVerifiedPaymentToAccountingSource(
   let customerIdentity;
   try {
     customerIdentity = await mapOrderAccountingCustomerIdentity(source.order, null);
-  } catch {
-    throw new PaymentAccountingReconciliationError("missing_billing_identity");
+  } catch (error) {
+    if (error instanceof MissingOrderAccountingCustomerIdentityError) {
+      throw new PaymentAccountingReconciliationError("missing_billing_identity");
+    }
+    throw error;
   }
 
   const orderNumber = truncate(source.order.order_number || source.orderId, 15);

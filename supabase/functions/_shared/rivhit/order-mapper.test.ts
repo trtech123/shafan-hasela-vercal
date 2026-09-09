@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { mapOrderToAccountingSource } from "./order-mapper.ts";
+import {
+  mapOrderAccountingCustomerIdentity,
+  mapOrderToAccountingSource,
+  MissingOrderAccountingCustomerIdentityError,
+} from "./order-mapper.ts";
 import type { DocumentMapping, OrderSource } from "./types.ts";
 
 const mapping: DocumentMapping = {
@@ -112,5 +116,25 @@ describe("order to Rivhit mapping", () => {
         accountNamespace,
       ),
     ).rejects.toThrow("Order has no positive accounting amount");
+  });
+
+  test("exposes a typed missing customer identity error without changing legacy fallback", async () => {
+    const emptyIdentityOrder = {
+      ...order,
+      client_name: "",
+      organization: null,
+      billing_institution_name: null,
+    };
+
+    await expect(
+      mapOrderAccountingCustomerIdentity(emptyIdentityOrder, null),
+    ).rejects.toBeInstanceOf(MissingOrderAccountingCustomerIdentityError);
+    await expect(mapOrderToAccountingSource(
+      emptyIdentityOrder,
+      null,
+      "sandbox_test",
+      { ...mapping, document_type: 2 },
+      accountNamespace,
+    )).resolves.toMatchObject({ customer: { last_name: "Shafan customer" } });
   });
 });

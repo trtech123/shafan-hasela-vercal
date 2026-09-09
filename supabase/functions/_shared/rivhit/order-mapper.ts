@@ -59,6 +59,13 @@ export interface OrderAccountingCustomerIdentity {
   customer: MappedAccountingSource["customer"];
 }
 
+export class MissingOrderAccountingCustomerIdentityError extends Error {
+  constructor() {
+    super("Order has no accounting customer name");
+    this.name = "MissingOrderAccountingCustomerIdentityError";
+  }
+}
+
 export async function mapOrderAccountingCustomerIdentity(
   order: OrderSource,
   fallbackName: string | null = "Shafan customer",
@@ -67,7 +74,7 @@ export async function mapOrderAccountingCustomerIdentity(
     || order.organization
     || order.client_name;
   if (!sourceName?.trim() && fallbackName === null) {
-    throw new Error("Order has no accounting customer name");
+    throw new MissingOrderAccountingCustomerIdentityError();
   }
   const customerName = truncate(sourceName || fallbackName || "", 30);
   const accountingEmail = normalizeEmail(

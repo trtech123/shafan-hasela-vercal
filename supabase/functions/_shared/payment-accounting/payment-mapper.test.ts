@@ -1,10 +1,12 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { mapOrderToAccountingSource } from "../rivhit/order-mapper.ts";
 import type { DocumentMapping } from "../rivhit/types.ts";
 import {
   mapVerifiedPaymentToAccountingSource,
+  PaymentAccountingConfigurationError,
   PaymentAccountingReconciliationError,
 } from "./payment-mapper.ts";
+import type { VerifiedPelecardPaymentSource } from "./types.ts";
 
 const paymentId = "22222222-2222-4222-8222-222222222222";
 const orderId = "11111111-1111-4111-8111-111111111111";
@@ -12,6 +14,7 @@ const mapping: DocumentMapping = {
   document_type: 1,
   sort_code: 100,
   currency_id: 1,
+  currency_code: "ILS",
   price_include_vat: true,
   send_mail: false,
   digital_signature: false,
@@ -32,7 +35,9 @@ const order = {
   total_price: 906,
 };
 
-function verifiedSource(overrides: Record<string, unknown> = {}) {
+function verifiedSource(
+  overrides: Partial<VerifiedPelecardPaymentSource> & Record<string, unknown> = {},
+): VerifiedPelecardPaymentSource & Record<string, unknown> {
   return {
     id: paymentId,
     provider: "pelecard" as const,
@@ -159,6 +164,8 @@ describe("verified payment to Rivhit mapping", () => {
           quantity: 2,
           unitPriceMinor: 5000,
           rawProviderField: "do-not-copy-provider-field",
+        } as VerifiedPelecardPaymentSource["checkoutItems"][number] & {
+          rawProviderField: string;
         }],
       }),
       mapping,
@@ -173,7 +180,7 @@ describe("verified payment to Rivhit mapping", () => {
   });
 
   test.each([
-    ["missing_order", null],
+    ["missing_order", null, null],
     [
       "missing_billing_identity",
       {
@@ -182,15 +189,42 @@ describe("verified payment to Rivhit mapping", () => {
         organization: null,
         billing_institution_name: null,
       },
+      orderId,
     ],
-  ])("requires real order billing context: %s", async (code, sourceOrder) => {
+  ] as const)("requires real order billing context: %s", async (code, sourceOrder, sourceOrderId) => {
     await expect(mapVerifiedPaymentToAccountingSource(
-      verifiedSource({ order: sourceOrder }),
+      verifiedSource({ order: sourceOrder, orderId: sourceOrderId }),
       mapping,
       "official-sandbox",
     )).rejects.toMatchObject({
       name: "PaymentAccountingReconciliationError",
       code,
     } satisfies Partial<PaymentAccountingReconciliationError>);
+  });
+
+  test.each([
+    ["missing_currency_code", { ...mapping, currency_code: undefined }],
+    ["currency_mismatch", { ...mapping, currency_code: "USD" }],
+  ] as const)("rejects unusable payment currency configuration: %s", async (code, configuredMapping) => {
+    await expect(mapVerifiedPaymentToAccountingSource(
+      verifiedSource(),
+      configuredMapping,
+      "official-sandbox",
+    )).rejects.toMatchObject({
+      name: "PaymentAccountingConfigurationError",
+      code,
+    } satisfies Partial<PaymentAccountingConfigurationError>);
+  });
+
+  test("does not misclassify crypto/runtime faults as missing customer identity", async () => {
+    const runtimeFault = new Error("crypto unavailable");
+    const digest = vi.spyOn(globalThis.crypto.subtle, "digest")
+      .mockRejectedValueOnce(runtimeFault);
+
+    await expect(mapVerifiedPaymentToAccountingSource(
+      verifiedSource(), mapping, "official-sandbox",
+    )).rejects.toBe(runtimeFault);
+
+    digest.mockRestore();
   });
 });
