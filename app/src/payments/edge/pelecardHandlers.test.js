@@ -407,6 +407,53 @@ describe("Pelecard callback and verification", () => {
     expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
   });
 
+  test("authenticated verification re-kicks correlated stored success once", async () => {
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const store = createMemoryStore({
+      ...pendingPayment,
+      saleId: SALE_ID,
+      status: "succeeded",
+      providerTransactionId: PROVIDER_TRANSACTION_ID,
+      receiptNumber: "RCP-1001",
+      verifiedAt: "2026-09-08T08:01:00.000Z",
+    });
+    const context = verifyContext({ store, onPaymentSucceeded });
+
+    const response = await context.handler(request(notification(), {
+      authorization: "Bearer valid-jwt",
+      origin: "https://app.example.test",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "succeeded" });
+    expect(onPaymentSucceeded.mock.calls).toEqual([[PAYMENT_ID]]);
+    expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
+  });
+
+  test("authenticated verification does not re-kick mismatched stored success", async () => {
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const store = createMemoryStore({
+      ...pendingPayment,
+      saleId: SALE_ID,
+      status: "succeeded",
+      providerTransactionId: PROVIDER_TRANSACTION_ID,
+      receiptNumber: "RCP-1001",
+      verifiedAt: "2026-09-08T08:01:00.000Z",
+    });
+    const context = verifyContext({ store, onPaymentSucceeded });
+
+    const response = await context.handler(request(notification({
+      antiForgeryReference: "attacker-controlled-key",
+    }), {
+      authorization: "Bearer valid-jwt",
+      origin: "https://app.example.test",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(onPaymentSucceeded).not.toHaveBeenCalled();
+    expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
+  });
+
   test("keeps durable payment success when the accounting wake-up rejects", async () => {
     const onPaymentSucceeded = vi.fn().mockRejectedValue(
       new Error("do-not-expose-accounting-detail"),
@@ -513,8 +560,10 @@ describe("Pelecard callback and verification", () => {
     expect(firstReturn.status).toBe(200);
     expect(secondReturn.status).toBe(200);
     expect(store.writes).toBe(1);
-    expect(onPaymentSucceeded).toHaveBeenCalledOnce();
-    expect(onPaymentSucceeded.mock.calls).toEqual([[PAYMENT_ID]]);
+    expect(onPaymentSucceeded).toHaveBeenCalledTimes(3);
+    expect(onPaymentSucceeded.mock.calls).toEqual([
+      [PAYMENT_ID], [PAYMENT_ID], [PAYMENT_ID],
+    ]);
   });
 
   test("supports browser return before callback without double finalization", async () => {
