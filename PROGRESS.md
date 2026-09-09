@@ -1,11 +1,26 @@
 # PROGRESS — Shafan Hasela / Adventure Ops Pro
 
+## Pelecard → Rivhit payment accounting orchestration (local-only; activation blocked externally)
+
+**Date:** 2026-09-09
+**Branch/base:** `workstream/payment-rivhit-clubs` from release candidate `0a36f0a5f6331088570012facd7860a9807a66e8`
+
+- Added additive migration `027_payment_accounting_orchestration.sql`. A database trigger creates one `payment_success` outbox event only when a Pelecard payment durably enters verified `succeeded` state with provider transaction and sale identity. There is no historical backfill and no iCredit/recurring-charge source.
+- Added atomic claim/lease RPCs with `FOR UPDATE SKIP LOCKED`, lease tokens, attempt-count fencing, bounded retry scheduling, sanitized errors, reconciliation/configuration states, admin/operations read-only RLS, and a protected operations view.
+- Added a server-only processor that reloads the verified local payment/order/sale, maps semantic `payment_success`, and calls the existing `runRivhitAccounting()` workflow. Payment, sale, and order success are never mutated when accounting fails.
+- Added an authenticated `payment-accounting-worker` and best-effort post-finalization wake-up. Callback/return bodies can only request verification; they cannot construct an accounting source or document payload. Duplicate callbacks, verification calls, wake-ups, claims, and stale workers are fenced by the outbox and existing Rivhit ledger idempotency.
+- Added `/accounting-operations` (`בקרת הנה״ח`) for admin/operations. It displays payment/order identity, amount, verified time, accounting/document status, document number/link, attempts, error, next retry, and reconciliation state. The browser has no payment-state mutation and sends only the event UUID to the protected worker for backend-approved retry.
+- Verification: Pelecard 199/199; accounting backend and strict Rivhit config 107/107; Rivhit 64/64; Clubs/iCredit exclusion 37/37; migration/finalization contracts 31/31; UI/navigation 14/14; full application 444/444. Production Vite build exited 0. Focused lint has zero errors. Project-wide lint still has the inherited six errors in unrelated Dashboard/Leads/Products/Templates/Users files. Touched backend TypeScript and touched UI diagnostics are zero; the inherited project-wide typecheck still exits non-zero outside this workstream. `git diff --check` passes.
+- SQL behavior tests are authored in `supabase/tests/payment_accounting_orchestration.sql`, but were not executed because Docker, Supabase CLI, psql, and Deno are unavailable locally. No Production database was used as a substitute.
+- Production activation remains blocked by two external inputs only: the written terminal-specific Pelecard Redirect/IFrame 2.0 + ConfirmationKey/ValidateByUniqueKey contract, and the accountant-approved numeric Rivhit `payment_success` mapping. See `docs/pelecard-rivhit-activation.md`.
+- No Production migration, Edge Function, charge, refund/void, Rivhit document, or historical data operation was performed.
+
 > Single source of truth for the Base44 → Supabase MVP recovery.
 > Update at the **end of every phase** before reporting to the user.
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
-Last updated: 2026-09-08
-Latest work: **The two final visual-QA regressions were fixed locally on `workstream/final-qa-fixes`.** Orders now exposes one customer WhatsApp action only: the canonical order-confirmation PDF is sent through the existing `order_confirmation_pdf` Utility-template boundary, with bounded PDF/server steps and persistent Hebrew success/error feedback. Clubs source routing was already present; the QA failure came from an ignored stale `app/dist` bundle built before Clubs was integrated. A fresh build contains `/clubs`, the exact admin nav label `חוגים`, and the Clubs page; non-admin route access still redirects to `/schedule`. Clubs data-loading failures now render visibly with retry instead of resembling a missing route. No push, deployment, migration application, credential use, provider call, chatbot work, or payment-to-accounting work occurred.
+Last updated: 2026-09-09
+Latest work: **Pelecard → Rivhit payment accounting orchestration is code-complete locally on `workstream/payment-rivhit-clubs`.** Migration 027, the protected worker, provider-neutral retry/reconciliation lifecycle, and Hebrew operations UI are implemented and verified. Production activation remains fail-closed pending the terminal-specific Pelecard contract and accountant-approved `payment_success` Rivhit mapping.
 
 ## Final visual QA fixes (local-only; review pending)
 
