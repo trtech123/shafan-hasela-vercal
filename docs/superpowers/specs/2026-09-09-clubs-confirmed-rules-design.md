@@ -11,6 +11,8 @@ Clubs clearly separates payer/parent from participant/child, schedules all new r
 
 Migration `028_clubs_confirmed_business_rules.sql` is expand-only. Existing `primary_contact_*` values remain intact and become the payer/contact fields in the UI. Additive billing identity and recurring-start fields avoid reinterpreting historical data. Existing active provider agreements are not silently rewritten because changing only local day values would diverge from iCredit; all new/pending enrollment paths are forced to day 15, while legacy active deviations remain visible for reconciliation.
 
+iCredit is the authoritative financial source for Clubs. Local recurring agreement and charge rows are only a provider-verified operational mirror/audit trail used for attendance visibility, debt follow-up, and reconciliation. Provider-verified state wins over locally inferred state; unknown or not-yet-verified state is never presented as paid. The application does not create an independent Clubs charge, invoice, receipt, accounting ledger, or Rivhit document.
+
 ## Payer and participant
 
 `club_participants.first_name/last_name/birth_date` continue to describe the participant. Existing `primary_contact_*` columns describe the payer/parent contact and are relabeled accordingly. Add `billing_identity_name` and `billing_identity_number` for invoice identity. New registrations require payer name and phone, but old records may fall back to participant contact so legacy rows remain usable. iCredit enrollment uses payer name/contact, never the child's name as the payer when payer data exists.
@@ -43,4 +45,3 @@ No new freeze endpoint, button, or iCredit call is introduced. The existing lega
 - No iCredit-to-Rivhit accounting document creation.
 - No mutation of active legacy provider schedules without a confirmed provider update contract.
 - No real recurring charge, cancellation, customer notification, or Production migration application during implementation.
-

@@ -21,7 +21,7 @@
 - Search/filter: filter clubs by name, instructor and status.
 - `רישום משתתף`: open participant/membership registration.
 - `התחלת הוראת קבע`: invoke the authenticated enrollment Edge Function and open the returned iCredit TEST hosted URL.
-- `ביטול חברות`: confirm, cancel the iCredit recurring agreement, then cancel local membership only after provider success.
+- `ביטול חברות`: show the deterministic effective period, schedule the request, and finalize local cancellation only after the due provider-first iCredit operation succeeds.
 - Retry enrollment: reuse the stable pending agreement rather than create duplicates.
 
 ## Club form
@@ -84,4 +84,4 @@ No `orders` or one-off recurring session rows are loaded or generated.
 10. A failed charge creates debt; a success for the same charge resolves it; another month's success does not.
 11. Provider cancellation failure leaves local state active; provider success cancels agreement and membership.
 12. Browser code never receives merchant credentials, raw card data or provider/card tokens.
-13. No Rivhit accounting-document endpoint is called.
+13. No Rivhit accounting-document endpoint is called, and local Clubs state is never treated as a second financial system of record.

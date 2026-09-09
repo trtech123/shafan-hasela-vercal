@@ -4,7 +4,7 @@
 
 **Goal:** Implement the confirmed payer, monthly billing, enrollment, cancellation, debt-notification, and participant payment-indicator rules without adding iCredit-to-Rivhit or freeze behavior.
 
-**Architecture:** Pure club-domain date/state helpers define day-15 and cancellation rules. Additive migration 028 preserves legacy rows while enforcing new paths, stores scheduled cancellation/notification work durably, and extends existing verified iCredit reconciliation. Existing Edge Functions remain provider boundaries; the Clubs UI only invokes protected server operations and derives indicators from billing state.
+**Architecture:** iCredit remains the sole financial authority; local agreement/charge rows are only a verified operational mirror and never an independent ledger. Pure club-domain date/state helpers define day-15 and cancellation rules. Additive migration 028 preserves legacy rows while enforcing new paths, stores scheduled cancellation/notification work durably, and extends existing verified iCredit reconciliation. Existing Edge Functions remain provider boundaries; the Clubs UI only invokes protected server operations and derives indicators from verified provider-backed billing state. Unknown state is never shown as paid.
 
 **Tech Stack:** PostgreSQL/Supabase RLS and RPCs, Supabase Edge Functions (Deno TypeScript), React/Vite, Vitest.
 
@@ -71,7 +71,7 @@ Run domain tests; commit as `feat(clubs): define confirmed billing rules`.
 
 - [ ] **Step 1: Write failing migration/reconciliation tests**
 
-Assert additive billing identity/recurring start fields, new/pending day-15 normalization without rewriting active provider agreements, new-write day-15 enforcement, scheduled cancellation jobs with leases/fencing, notification outbox uniqueness on `(recurring_charge_id, purpose)`, admin read/no browser write RLS, one notification created only when final charge state is failed, and no accounting/Rivhit trigger for iCredit.
+Assert additive billing identity/recurring start fields, new/pending day-15 normalization without rewriting active provider agreements, new-write day-15 enforcement, scheduled cancellation jobs with leases/fencing, notification outbox uniqueness on `(recurring_charge_id, purpose)`, admin read/no browser write RLS, one notification created only when final provider-verified charge state is failed, and no accounting/Rivhit trigger or independent financial ledger for iCredit.
 
 - [ ] **Step 2: Prove RED, then implement migration 028**
 
