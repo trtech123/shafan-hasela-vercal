@@ -185,7 +185,8 @@ describe("Accounting operations", () => {
   });
 
   test("renders loading, empty, and load-error states", async () => {
-    let resolveLoad;
+    /** @type {(value: { data: unknown[], error: null }) => void} */
+    let resolveLoad = () => {};
     const pending = new Promise((resolvePromise) => { resolveLoad = resolvePromise; });
     const loadingBuilder = queryResult();
     loadingBuilder.order.mockReturnValue(pending);

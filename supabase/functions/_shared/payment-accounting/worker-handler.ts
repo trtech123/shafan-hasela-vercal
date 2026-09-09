@@ -63,7 +63,7 @@ export function createPaymentAccountingWorkerHandler(
         return paymentJson({ error: { code: "method_not_allowed" } }, 405, cors);
       }
       const authorization = await authorizeStaff(request, dependencies.auth);
-      if (!authorization.ok) {
+      if (authorization.ok === false) {
         return paymentJson(
           { error: { code: authorization.code } },
           authorization.status,

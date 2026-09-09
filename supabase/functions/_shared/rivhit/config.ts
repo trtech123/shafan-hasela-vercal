@@ -31,22 +31,25 @@ function validateMapping(key: string, value: unknown): DocumentMapping {
   if (!isIntegerInRange(mapping.currency_id, 1, 10)) {
     throw new Error(`Invalid Rivhit mapping "${key}": currency_id`);
   }
+  const currencyCode = mapping.currency_code;
+  let normalizedCurrencyCode: string | undefined;
   if (
-    mapping.currency_code !== undefined
+    currencyCode !== undefined
     && (
-      typeof mapping.currency_code !== "string"
-      || !/^[A-Z]{3}$/.test(mapping.currency_code)
+      typeof currencyCode !== "string"
+      || !/^[A-Z]{3}$/.test(currencyCode)
     )
   ) {
     throw new Error(`Invalid Rivhit mapping "${key}": currency_code`);
   }
+  if (typeof currencyCode === "string") normalizedCurrencyCode = currencyCode;
   return {
     document_type: mapping.document_type,
     sort_code: mapping.sort_code,
     currency_id: mapping.currency_id,
-    ...(mapping.currency_code === undefined
+    ...(normalizedCurrencyCode === undefined
       ? {}
-      : { currency_code: mapping.currency_code }),
+      : { currency_code: normalizedCurrencyCode }),
     price_include_vat: requiredBoolean(key, mapping, "price_include_vat"),
     send_mail: requiredBoolean(key, mapping, "send_mail"),
     digital_signature: requiredBoolean(key, mapping, "digital_signature"),

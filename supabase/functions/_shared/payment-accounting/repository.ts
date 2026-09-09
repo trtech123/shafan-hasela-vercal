@@ -287,9 +287,8 @@ function optionalOrderString(row: UnknownRecord, field: string): string | null {
 
 function optionalOrderNumber(row: UnknownRecord, field: string): number | string | null {
   const value = row[field];
-  if (value === null || typeof value === "number" || typeof value === "string") {
-    return value;
-  }
+  if (value === null) return null;
+  if (typeof value === "number" || typeof value === "string") return value;
   return sourceError("malformed_linked_order");
 }
 
