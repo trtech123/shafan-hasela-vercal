@@ -1,5 +1,15 @@
 # Clubs Screen Action Map
 
+## Confirmed business-rule extension (2026-09-09)
+
+- Registration separates `הורה / משלם` contact and billing identity from `משתתף / ילד` details.
+- New recurring agreements use fixed billing day 15 and begin in the month after participation starts; joining-month lessons are paid manually at the cashier and are never prorated automatically.
+- Cancellation confirmation displays the calculated membership end date and effective cancellation month using the day-10 rule.
+- Scheduled cancellations remain financially active until the due worker receives provider confirmation; local success is never asserted before iCredit.
+- Failed recurring charges remain debt, create one durable notification intent, and are visible to staff.
+- Participant management displays a billing-derived green `✓ מוסדר` or red `✕ לא מוסדר` indicator.
+- Freeze remains display-only/pending; no freeze action or provider workflow is added.
+
 **Route:** `/clubs`  
 **Access:** admin only
 
