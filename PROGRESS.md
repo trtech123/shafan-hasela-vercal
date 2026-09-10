@@ -1,5 +1,17 @@
 # PROGRESS — Shafan Hasela / Adventure Ops Pro
 
+## Unified release candidate 2 (Preview-only; rollout authorization pending)
+
+**Date:** 2026-09-10
+**Branch/base:** `integration/release-candidate-2` from approved Production/release base `0a36f0a5f6331088570012facd7860a9807a66e8`
+
+- Integrated the approved Payment → Rivhit workstream (`404838dd75aebc200b712859b02190f1e0d9c3b0`) first and the approved Clubs operational workstream (`03b6ffcb38af36b67634be3a9643a14f0ef422d6`) second, using traceable `--no-ff` merge commits.
+- Preserved the exact migration sequence `021`–`028` with no duplicate numbers. Migration `027` remains Pelecard-only/provider-neutral accounting orchestration; migration `028` keeps verified iCredit state authoritative for Clubs and does not create Clubs accounting documents.
+- Resolved only two documentation conflicts (`PROGRESS.md` and `docs/screens/clubs.md`) by retaining both the Payment → Rivhit exclusion boundary and the full Clubs operational behavior/QA contract. No application-code conflict occurred.
+- Combined verification passed: full application suite 46 files / 460 tests; quotations + outbound WhatsApp 9 files / 76 tests; chatbot 9 files / 100 tests; Pelecard/payment/accounting 15 files / 219 tests; Clubs/iCredit 8 files / 53 tests; explicit Rivhit backend 7 files / 64 tests; explicit payment-accounting backend 6 files / 92 tests; migration contracts 5 files / 32 tests. Production frontend build, focused changed-file lint, touched-file UI TypeScript diagnostics, strict shared payment TypeScript check, and `git diff --check` all pass.
+- The inherited project-wide TypeScript baseline still reports unrelated diagnostics outside the integrated files. SQL behavior tests were not executed against a database because no non-Production Supabase runtime is available locally; Production was not used as a substitute.
+- No Production deployment, migration application, provider call, payment action, accounting-document creation, recurring-agreement cancellation, or customer-message delivery occurred. The release candidate remains frozen in its isolated worktree for Preview QA and explicit rollout authorization.
+
 ## Pelecard → Rivhit payment accounting orchestration (local-only; activation blocked externally)
 
 **Date:** 2026-09-09
@@ -20,7 +32,7 @@
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
 Last updated: 2026-09-10
-Active integration (2026-09-10): `integration/release-candidate-2` combines the approved Pelecard → Rivhit payment-accounting orchestration and Clubs operational rules on approved release base `0a36f0a`. Migration 027 remains provider-neutral and Pelecard-only; migration 028 keeps iCredit authoritative for Clubs. Combined verification and Preview deployment are pending in this integration worktree. No Production migration, deployment, provider, payment, accounting-document, or customer-message action has occurred.
+Active integration (2026-09-10): `integration/release-candidate-2` combines the approved Pelecard → Rivhit payment-accounting orchestration and Clubs operational rules on approved release base `0a36f0a`. Migration 027 remains provider-neutral and Pelecard-only; migration 028 keeps iCredit authoritative for Clubs. Combined verification is complete; Preview deployment is the only remaining release-candidate action. No Production migration, deployment, provider, payment, accounting-document, or customer-message action has occurred.
 Approved Clubs workstream: migration `028_clubs_operational_rules.sql` and Clubs UI/tests implement payer/participant separation, day-15 current-month billing, next-month recurring start, cancellation cutoff, provider-derived attendance payment, and idempotent failed-payment follow-up rules.
 Approved Payment → Rivhit workstream: migration `027_payment_accounting_orchestration.sql`, protected worker, provider-neutral retry/reconciliation lifecycle, and Hebrew `בקרת הנה״ח` operations UI. Production activation remains fail-closed pending the terminal-specific Pelecard contract and accountant-approved `payment_success` Rivhit mapping.
 Latest work: **The two final visual-QA regressions were fixed locally on `workstream/final-qa-fixes`.** Orders now exposes one customer WhatsApp action only: the canonical order-confirmation PDF is sent through the existing `order_confirmation_pdf` Utility-template boundary, with bounded PDF/server steps and persistent Hebrew success/error feedback. Clubs source routing was already present; the QA failure came from an ignored stale `app/dist` bundle built before Clubs was integrated. A fresh build contains `/clubs`, the exact admin nav label `חוגים`, and the Clubs page; non-admin route access still redirects to `/schedule`. Clubs data-loading failures now render visibly with retry instead of resembling a missing route. No push, deployment, migration application, credential use, provider call, chatbot work, or payment-to-accounting work occurred.
