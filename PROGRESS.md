@@ -1,5 +1,16 @@
 # PROGRESS — Shafan Hasela / Adventure Ops Pro
 
+## Production activation audit (safe configuration active; provider inputs still required)
+
+**Date:** 2026-09-10
+
+- Confirmed migrations 021–028, the RC2 frontend, payment Edge Functions, accounting worker, and `/accounting-operations` are deployed. The operations UI is healthy and empty because no verified Pelecard success exists.
+- Configured the deterministic Production return URL, callback URL, application origin, Pelecard redirect origin, and `PELECARD_REFUND_ENABLED=false`. No card charge or Rivhit document was performed.
+- Fixed and deployed the cash-register redirect allowlist so Vite statically injects `VITE_PELECARD_REDIRECT_ORIGINS`; the live bundle now contains `https://gateway20.pelecard.biz` and no longer contains the broken environment alias.
+- Audited project files, local/process environment names, Production secret names, and available provider correspondence. No Pelecard terminal credentials or exact terminal-specific callback/authoritative lookup contract exists there. No Rivhit Production token or accountant-approved `payment_success` document mapping exists there.
+- Verified the public Pelecard sandbox without entering card data: hosted J4 initiation returned an HTTPS payment URL, and `ValidateByUniqueKey` returned success for its matching pre-payment values. This proves that validation is anti-forgery only, not authoritative payment status.
+- Production remains fail-closed until Pelecard supplies the terminal-specific correlation/verification contract and credentials, and the accountant supplies the Rivhit document mapping. A TEST payment is not yet safe through the application.
+
 ## Pelecard → Rivhit payment accounting orchestration (local-only; activation blocked externally)
 
 **Date:** 2026-09-09
@@ -19,8 +30,8 @@
 > Update at the **end of every phase** before reporting to the user.
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
-Last updated: 2026-09-09
-Latest work: **Pelecard → Rivhit payment accounting orchestration is code-complete locally on `workstream/payment-rivhit-clubs`.** Migration 027, the protected worker, provider-neutral retry/reconciliation lifecycle, and Hebrew operations UI are implemented and verified. Production activation remains fail-closed pending the terminal-specific Pelecard contract and accountant-approved `payment_success` Rivhit mapping.
+Last updated: 2026-09-10
+Latest work: **The deployed Pelecard → Rivhit path has been safely activated up to the external provider boundary.** Production return/callback/origin settings are present, the frontend redirect-origin build issue is fixed and deployed, and the official generic Pelecard sandbox contract was verified without entering card data. The adapters remain correctly fail-closed until terminal-specific Pelecard credentials/correlation details and the accountant-approved Rivhit `payment_success` mapping are supplied.
 
 ## Final visual QA fixes (local-only; review pending)
 
