@@ -19,6 +19,8 @@ describe("migration 028 Clubs operational contract", () => {
     expect(sql).toMatch(/club_payment_follow_ups/i);
     expect(sql).toMatch(/UNIQUE\s*\(recurring_charge_id\)/i);
     expect(sql).toMatch(/ON CONFLICT\s*\(recurring_charge_id\)\s*DO NOTHING/i);
+    expect(sql).toMatch(/EXECUTE FUNCTION public\.update_updated_at\(\)/i);
+    expect(sql).not.toMatch(/EXECUTE FUNCTION public\.set_updated_at\(\)/i);
   });
 
   test("keeps attendance payment display derived and not editable", () => {

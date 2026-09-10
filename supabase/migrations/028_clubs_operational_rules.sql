@@ -93,7 +93,7 @@ CREATE POLICY "club payment follow ups: admin read" ON public.club_payment_follo
 CREATE POLICY "club payment follow ups: admin update" ON public.club_payment_follow_ups FOR UPDATE USING (public.is_admin()) WITH CHECK (public.is_admin());
 GRANT SELECT, UPDATE ON public.club_payment_follow_ups TO authenticated;
 CREATE TRIGGER trg_club_payment_follow_ups_updated_at BEFORE UPDATE ON public.club_payment_follow_ups
-FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
 CREATE OR REPLACE FUNCTION public.club_cancellation_effective_on(p_requested_on DATE)
 RETURNS DATE LANGUAGE sql IMMUTABLE STRICT AS $$
