@@ -48,7 +48,7 @@ describe("club domain helpers", () => {
       instructor_id: null,
       capacity: 14,
       monthly_price: 245.5,
-      default_billing_day: 12,
+      default_billing_day: 15,
       currency: "ILS",
     });
     expect(result.rules).toHaveLength(1);
@@ -80,7 +80,9 @@ describe("club domain helpers", () => {
     expect(registration.membership).toMatchObject({
       club_id: "club-1",
       monthly_price: 245,
-      billing_day: 12,
+      billing_day: 15,
+      recurring_starts_on: "2026-11-01",
+      current_month_settlement_status: "manual_required",
       status: "pending_enrollment",
       payment_status: "not_enrolled",
     });
@@ -99,6 +101,6 @@ describe("club domain helpers", () => {
     }, { id: "club-2", monthly_price: 199, default_billing_day: 5 });
 
     expect(registration.membership.monthly_price).toBe(199);
-    expect(registration.membership.billing_day).toBe(5);
+    expect(registration.membership.billing_day).toBe(15);
   });
 });

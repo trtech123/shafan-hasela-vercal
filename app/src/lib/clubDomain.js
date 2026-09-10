@@ -1,5 +1,6 @@
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+export const BILLING_DAY = 15;
 
 function optionalText(value) {
   const text = String(value ?? "").trim();
@@ -57,7 +58,6 @@ export function normalizeClubPayload(form) {
   const name = String(form.name ?? "").trim();
   if (!name) throw new Error("Club name is required");
   const monthlyPrice = numberInRange(form.monthly_price, "monthly price", 0, 999999999.99);
-  const billingDay = numberInRange(form.default_billing_day, "billing day", 1, 28);
   const capacityText = String(form.capacity ?? "").trim();
   const capacity = capacityText
     ? numberInRange(capacityText, "capacity", 1, 100000)
@@ -75,7 +75,7 @@ export function normalizeClubPayload(form) {
       capacity,
       monthly_price: Math.round(monthlyPrice * 100) / 100,
       currency: "ILS",
-      default_billing_day: billingDay,
+      default_billing_day: BILLING_DAY,
       status: form.status,
       notes: optionalText(form.notes),
     },
@@ -94,11 +94,7 @@ export function buildMembershipRegistration(form, club) {
   const priceSource = String(form.monthly_price ?? "").trim()
     ? form.monthly_price
     : club.monthly_price;
-  const billingDaySource = String(form.billing_day ?? "").trim()
-    ? form.billing_day
-    : club.default_billing_day;
   const monthlyPrice = numberInRange(priceSource, "monthly price", 0, 999999999.99);
-  const billingDay = numberInRange(billingDaySource, "billing day", 1, 28);
 
   return {
     participant: {
@@ -111,6 +107,10 @@ export function buildMembershipRegistration(form, club) {
       primary_contact_relationship: optionalText(form.primary_contact_relationship),
       primary_contact_phone: optionalText(form.primary_contact_phone),
       primary_contact_email: optionalText(form.primary_contact_email),
+      payer_name: optionalText(form.payer_name ?? form.primary_contact_name),
+      payer_relationship: optionalText(form.payer_relationship ?? form.primary_contact_relationship),
+      payer_phone: optionalText(form.payer_phone ?? form.primary_contact_phone),
+      payer_email: optionalText(form.payer_email ?? form.primary_contact_email),
       notes: optionalText(form.notes),
     },
     membership: {
@@ -118,11 +118,38 @@ export function buildMembershipRegistration(form, club) {
       starts_on: startsOn,
       monthly_price: Math.round(monthlyPrice * 100) / 100,
       currency: "ILS",
-      billing_day: billingDay,
+      billing_day: BILLING_DAY,
+      recurring_starts_on: recurringStartForJoin(startsOn),
+      current_month_settlement_status: "manual_required",
       status: "pending_enrollment",
       payment_status: "not_enrolled",
       debt_amount: 0,
       notes: optionalText(form.membership_notes),
     },
   };
+}
+
+export function recurringStartForJoin(joinDate) {
+  if (!ISO_DATE.test(String(joinDate ?? ""))) throw new Error("membership start date is invalid");
+  const [year, month] = joinDate.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month, 1));
+  return next.toISOString().slice(0, 10);
+}
+
+export function buildCancellationPreview(requestedOn) {
+  if (!ISO_DATE.test(String(requestedOn ?? ""))) throw new Error("cancellation request date is invalid");
+  const [year, month, day] = requestedOn.split("-").map(Number);
+  const effective = new Date(Date.UTC(year, month - 1 + (day <= 10 ? 1 : 2), 1));
+  return { requestedOn, effectiveOn: effective.toISOString().slice(0, 10) };
+}
+
+export function attendancePaymentState(providerChargeStatus) {
+  if (providerChargeStatus === "succeeded") return { state: "settled", label: "שולם", symbol: "✓" };
+  if (providerChargeStatus === "failed") return { state: "failed", label: "לא שולם", symbol: "✕" };
+  return { state: "unknown", label: "לא אומת", symbol: "—" };
+}
+
+export function failedPaymentMessage(payerName) {
+  const greeting = payerName ? `שלום ${payerName}, ` : "שלום, ";
+  return `${greeting}התשלום נכשל. יש לפנות למשרד כדי לעדכן או להסדיר את כרטיס האשראי הרלוונטי.`;
 }

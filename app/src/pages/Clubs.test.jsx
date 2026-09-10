@@ -11,6 +11,7 @@ import Clubs from "./Clubs";
 
 const fromMock = vi.fn();
 const invokeMock = vi.fn();
+const rpcMock = vi.fn();
 const toastError = vi.fn();
 const toastSuccess = vi.fn();
 
@@ -18,6 +19,7 @@ vi.mock("@/api/supabaseClient", () => ({
   supabase: {
     from: (...args) => fromMock(...args),
     functions: { invoke: (...args) => invokeMock(...args) },
+    rpc: (...args) => rpcMock(...args),
   },
 }));
 
@@ -34,7 +36,7 @@ const clubs = [{
   site: "עכו",
   capacity: 14,
   monthly_price: 245,
-  default_billing_day: 12,
+  default_billing_day: 15,
   status: "active",
 }];
 
@@ -48,18 +50,22 @@ const memberships = [
     id: "membership-pending",
     club_id: "club-1",
     monthly_price: 245,
-    billing_day: 12,
+    billing_day: 15,
+    recurring_starts_on: "2026-10-01",
+    current_month_settlement_status: "manual_required",
     status: "pending_enrollment",
     payment_status: "not_enrolled",
     debt_amount: 0,
-    participant: { id: "participant-1", first_name: "דן", last_name: "כהן", primary_contact_name: "רות כהן", primary_contact_phone: "0500000000" },
+    participant: { id: "participant-1", first_name: "דן", last_name: "כהן", payer_name: "רות כהן", payer_phone: "0500000000" },
     agreement: { id: "agreement-1", status: "pending_enrollment", provider_recurring_id: null, last_charge_number: 0 },
   },
   {
     id: "membership-debt",
     club_id: "club-1",
     monthly_price: 245,
-    billing_day: 12,
+    billing_day: 15,
+    recurring_starts_on: "2026-09-01",
+    current_month_settlement_status: "not_required",
     status: "active",
     payment_status: "past_due",
     debt_amount: 245,
@@ -89,12 +95,20 @@ beforeEach(() => {
   toastSuccess.mockReset();
   invokeMock.mockReset();
   invokeMock.mockResolvedValue({ data: { ok: true }, error: null });
+  rpcMock.mockReset();
+  rpcMock.mockResolvedValue({ data: { effective_on: "2026-11-01" }, error: null });
   fromMock.mockReset();
   fromMock.mockImplementation((table) => {
     if (table === "clubs") return query(clubs);
     if (table === "instructors") return query([{ id: "instructor-1", full_name: "נועה מדריכה", status: "פעיל" }]);
     if (table === "club_schedule_rules") return query(rules);
     if (table === "club_memberships") return query(memberships);
+    if (table === "club_attendance_operations") return query([
+      { session_id: "session-1", membership_id: "membership-pending", club_id: "club-1", participant_name: "דן כהן", session_date: "2026-09-07", start_time: "16:00", attendance_status: "present", provider_charge_status: "succeeded" },
+      { session_id: "session-1", membership_id: "membership-debt", club_id: "club-1", participant_name: "נועה לוי", session_date: "2026-09-07", start_time: "16:00", attendance_status: "absent", provider_charge_status: "failed" },
+      { session_id: "session-2", membership_id: "membership-pending", club_id: "club-1", participant_name: "דן כהן", session_date: "2026-10-07", start_time: "16:00", attendance_status: null, provider_charge_status: null },
+    ]);
+    if (table === "club_payment_follow_ups") return query([{ id: "follow-1", membership_id: "membership-debt", payer_name: "אמא לוי", status: "pending", message: "התשלום נכשל. יש לפנות למשרד לעדכון כרטיס האשראי." }]);
     throw new Error(`Unexpected table ${table}`);
   });
   vi.stubGlobal("open", vi.fn());
@@ -122,8 +136,8 @@ describe("Clubs admin workspace", () => {
     expect(screen.getAllByText("נועה מדריכה").length).toBeGreaterThan(0);
     expect(screen.getByText("יום שני · 16:00–17:30")).toBeInTheDocument();
     expect(screen.getByText("יום חמישי · 17:00–18:00")).toBeInTheDocument();
-    expect(screen.getByText("דן כהן")).toBeInTheDocument();
-    expect(screen.getByText("נועה לוי")).toBeInTheDocument();
+    expect(screen.getAllByText("דן כהן").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("נועה לוי").length).toBeGreaterThan(0);
     expect(screen.getByText("חוב ₪245")).toBeInTheDocument();
   });
 
@@ -146,41 +160,41 @@ describe("Clubs admin workspace", () => {
     );
   });
 
-  test("keeps local state active when provider cancellation fails", async () => {
-    invokeMock.mockResolvedValueOnce({ data: { ok: false, error: "provider declined cancellation" }, error: null });
+  test("shows the calculated effective date before scheduling cancellation", async () => {
     render(<Clubs />);
 
     fireEvent.click(await screen.findByRole("button", { name: "ביטול חברות עבור נועה לוי" }));
-    fireEvent.click(screen.getByRole("button", { name: "אישור ביטול מיידי" }));
-
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith("provider declined cancellation"));
-    expect(screen.getByText("נועה לוי")).toBeInTheDocument();
-    expect(screen.getByText("פעילה")).toBeInTheDocument();
+    expect(screen.getByText(/תסיים את החברות החל מ־/)).toBeInTheDocument();
   });
 
-  test("reloads local membership state after provider cancellation succeeds", async () => {
+  test("schedules cancellation through the deterministic database boundary", async () => {
     render(<Clubs />);
-    await screen.findByText("נועה לוי");
+    await screen.findAllByText("נועה לוי");
     const initialCalls = fromMock.mock.calls.length;
 
     fireEvent.click(screen.getByRole("button", { name: "ביטול חברות עבור נועה לוי" }));
-    fireEvent.click(screen.getByRole("button", { name: "אישור ביטול מיידי" }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת בקשת ביטול" }));
 
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("club-recurring-cancel", {
-      body: { membershipId: "membership-debt" },
-    }));
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith("request_club_membership_cancellation", expect.objectContaining({ p_membership_id: "membership-debt" })));
     await waitFor(() => expect(fromMock.mock.calls.length).toBeGreaterThan(initialCalls));
   });
 
-  test("cancels a pending hosted enrollment through the server boundary", async () => {
+  test("schedules a pending hosted enrollment without calling a provider early", async () => {
     render(<Clubs />);
 
     fireEvent.click(await screen.findByRole("button", { name: "ביטול חברות עבור דן כהן" }));
-    fireEvent.click(screen.getByRole("button", { name: "אישור ביטול מיידי" }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת בקשת ביטול" }));
 
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("club-recurring-cancel", {
-      body: { membershipId: "membership-pending" },
-    }));
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith("request_club_membership_cancellation", expect.objectContaining({ p_membership_id: "membership-pending" })));
+    expect(invokeMock).not.toHaveBeenCalledWith("club-recurring-cancel", expect.anything());
+  });
+
+  test("shows provider-derived paid, failed, and follow-up states in attendance", async () => {
+    render(<Clubs />);
+    expect(await screen.findByText("✓ שולם")).toBeInTheDocument();
+    expect(screen.getByText("✕ לא שולם")).toBeInTheDocument();
+    expect(screen.getByText("— לא אומת")).toBeInTheDocument();
+    expect(screen.getByText(/ממתין לטיפול/)).toBeInTheDocument();
   });
 
   test("declares the Clubs route and navigation as admin-only", () => {

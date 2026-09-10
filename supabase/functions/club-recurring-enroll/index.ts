@@ -6,6 +6,7 @@ type MembershipRow = {
   monthly_price: number;
   billing_day: number;
   starts_on: string;
+  recurring_starts_on: string;
   status: string;
   club: { id: string; name: string };
   participant: {
@@ -13,6 +14,9 @@ type MembershipRow = {
     last_name: string;
     phone: string | null;
     email: string | null;
+    payer_name: string | null;
+    payer_phone: string | null;
+    payer_email: string | null;
     primary_contact_phone: string | null;
     primary_contact_email: string | null;
   };
@@ -44,10 +48,10 @@ Deno.serve(async (req: Request) => {
     const { data: membershipData, error: membershipError } = await adminClient
       .from("club_memberships")
       .select(`
-        id, monthly_price, billing_day, starts_on, status,
+        id, monthly_price, billing_day, starts_on, recurring_starts_on, status,
         club:clubs!inner(id, name),
         participant:club_participants!inner(
-          first_name, last_name, phone, email,
+          first_name, last_name, phone, email, payer_name, payer_phone, payer_email,
           primary_contact_phone, primary_contact_email
         )
       `)
@@ -70,17 +74,20 @@ Deno.serve(async (req: Request) => {
     const agreementId = String(prepared.agreement_id);
 
     const participant = membership.participant;
+    const payerNameParts = String(participant.payer_name || "").trim().split(/\s+/).filter(Boolean);
+    const payerFirstName = payerNameParts.shift() || participant.first_name;
+    const payerLastName = payerNameParts.join(" ") || participant.last_name;
     const payload = buildEnrollmentRequest({
       groupPrivateToken,
       agreementId,
       clubName: membership.club.name,
       amount: Number(membership.monthly_price),
       billingDay: membership.billing_day,
-      startsOn: membership.starts_on,
-      firstName: participant.first_name,
-      lastName: participant.last_name,
-      phone: participant.primary_contact_phone || participant.phone,
-      email: participant.primary_contact_email || participant.email,
+      startsOn: membership.recurring_starts_on,
+      firstName: payerFirstName,
+      lastName: payerLastName,
+      phone: participant.payer_phone || participant.primary_contact_phone || participant.phone,
+      email: participant.payer_email || participant.primary_contact_email || participant.email,
       redirectUrl,
       ipnUrl,
       failureIpnUrl,

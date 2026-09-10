@@ -19,8 +19,11 @@
 > Update at the **end of every phase** before reporting to the user.
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
-Last updated: 2026-09-09
-Latest work: **Pelecard → Rivhit payment accounting orchestration is code-complete locally on `workstream/payment-rivhit-clubs`.** Migration 027, the protected worker, provider-neutral retry/reconciliation lifecycle, and Hebrew operations UI are implemented and verified. Production activation remains fail-closed pending the terminal-specific Pelecard contract and accountant-approved `payment_success` Rivhit mapping.
+Last updated: 2026-09-10
+Active integration (2026-09-10): `integration/release-candidate-2` combines the approved Pelecard → Rivhit payment-accounting orchestration and Clubs operational rules on approved release base `0a36f0a`. Migration 027 remains provider-neutral and Pelecard-only; migration 028 keeps iCredit authoritative for Clubs. Combined verification and Preview deployment are pending in this integration worktree. No Production migration, deployment, provider, payment, accounting-document, or customer-message action has occurred.
+Approved Clubs workstream: migration `028_clubs_operational_rules.sql` and Clubs UI/tests implement payer/participant separation, day-15 current-month billing, next-month recurring start, cancellation cutoff, provider-derived attendance payment, and idempotent failed-payment follow-up rules.
+Approved Payment → Rivhit workstream: migration `027_payment_accounting_orchestration.sql`, protected worker, provider-neutral retry/reconciliation lifecycle, and Hebrew `בקרת הנה״ח` operations UI. Production activation remains fail-closed pending the terminal-specific Pelecard contract and accountant-approved `payment_success` Rivhit mapping.
+Latest work: **The two final visual-QA regressions were fixed locally on `workstream/final-qa-fixes`.** Orders now exposes one customer WhatsApp action only: the canonical order-confirmation PDF is sent through the existing `order_confirmation_pdf` Utility-template boundary, with bounded PDF/server steps and persistent Hebrew success/error feedback. Clubs source routing was already present; the QA failure came from an ignored stale `app/dist` bundle built before Clubs was integrated. A fresh build contains `/clubs`, the exact admin nav label `חוגים`, and the Clubs page; non-admin route access still redirects to `/schedule`. Clubs data-loading failures now render visibly with retry instead of resembling a missing route. No push, deployment, migration application, credential use, provider call, chatbot work, or payment-to-accounting work occurred.
 
 ## Final visual QA fixes (local-only; review pending)
 

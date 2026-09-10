@@ -16,6 +16,24 @@ Deno.serve(async (req: Request) => {
     const membershipId = String(body.membershipId ?? "").trim();
     if (!membershipId) throw new HttpError(400, "missing membershipId");
 
+    const { data: membership, error: membershipError } = await adminClient
+      .from("club_memberships")
+      .select("id, status, cancellation_effective_on")
+      .eq("id", membershipId)
+      .single();
+    if (membershipError || !membership) throw new HttpError(404, "membership not found");
+    if (membership.status !== "cancellation_scheduled" || !membership.cancellation_effective_on) {
+      throw new HttpError(409, "cancellation must be scheduled first");
+    }
+    const israelDateParts = new Intl.DateTimeFormat("en", {
+      timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(new Date());
+    const israelDateValues = Object.fromEntries(israelDateParts.map((part) => [part.type, part.value]));
+    const todayInIsrael = `${israelDateValues.year}-${israelDateValues.month}-${israelDateValues.day}`;
+    if (todayInIsrael < membership.cancellation_effective_on) {
+      throw new HttpError(409, `cancellation becomes effective on ${membership.cancellation_effective_on}`);
+    }
+
     const { data: agreement, error: agreementError } = await adminClient
       .from("recurring_agreements")
       .select("id, membership_id, provider_environment, provider_recurring_id, status")
