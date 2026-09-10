@@ -1,4 +1,5 @@
 import { createPelecardCallbackHandler } from "../_shared/payment-handlers.ts";
+import { schedulePaymentAccountingWake } from "../_shared/payment-accounting/runtime.ts";
 import {
   createPaymentEdgeRuntime,
   servePaymentHandler,
@@ -14,5 +15,9 @@ servePaymentHandler(() => {
     provider: unconfiguredVerificationProvider,
     decodeNotification: unconfiguredNotificationDecoder,
     config: runtime.config,
+    onPaymentSucceeded: (paymentId) => schedulePaymentAccountingWake(
+      runtime.accounting.wakePaymentAccounting,
+      paymentId,
+    ),
   });
 });

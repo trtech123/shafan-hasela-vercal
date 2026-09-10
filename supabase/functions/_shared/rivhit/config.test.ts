@@ -53,4 +53,20 @@ describe("Rivhit document configuration", () => {
       'Rivhit document mapping "paid_order" is not configured',
     );
   });
+
+  test("accepts an optional uppercase ISO currency code", () => {
+    const configured = { ...validMapping, currency_code: "ILS" };
+    const parsed = parseDocumentTypeMap(JSON.stringify({ payment_success: configured }));
+
+    expect(getDocumentMapping(parsed, "payment_success")).toEqual(configured);
+  });
+
+  test.each(["ils", "IL", "ILSS", "12$"])(
+    "rejects invalid semantic currency code %s",
+    (currencyCode) => {
+      expect(() => parseDocumentTypeMap(JSON.stringify({
+        payment_success: { ...validMapping, currency_code: currencyCode },
+      }))).toThrow('Invalid Rivhit mapping "payment_success": currency_code');
+    },
+  );
 });

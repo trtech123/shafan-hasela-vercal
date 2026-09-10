@@ -33,6 +33,20 @@ const renderAtClubs = (role) => {
   );
 };
 
+const renderAtAccounting = (role) => {
+  currentRole = role;
+  return render(
+    <MemoryRouter initialEntries={["/accounting-operations"]}>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/accounting-operations" element={<h1>מסך בקרת הנה״ח</h1>} />
+          <Route path="/schedule" element={<h1>לוח זמנים</h1>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>
+  );
+};
+
 afterEach(() => cleanup());
 
 describe("Clubs navigation and route authorization", () => {
@@ -48,6 +62,24 @@ describe("Clubs navigation and route authorization", () => {
 
     expect(screen.queryByRole("link", { name: "חוגים" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "מסך חוגים" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "לוח זמנים" })).toBeInTheDocument();
+  });
+});
+
+describe("Accounting operations navigation and route authorization", () => {
+  test.each(["admin", 'אחמ"ש'])("%s sees and can open accounting operations", (role) => {
+    renderAtAccounting(role);
+
+    expect(screen.getByRole("link", { name: "בקרת הנה״ח" }))
+      .toHaveAttribute("href", "/accounting-operations");
+    expect(screen.getByRole("heading", { name: "מסך בקרת הנה״ח" })).toBeInTheDocument();
+  });
+
+  test.each(["קופאי", "מדריך"])("%s cannot see or open accounting operations", (role) => {
+    renderAtAccounting(role);
+
+    expect(screen.queryByRole("link", { name: "בקרת הנה״ח" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "מסך בקרת הנה״ח" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "לוח זמנים" })).toBeInTheDocument();
   });
 });

@@ -17,8 +17,25 @@ interface SupabaseClientLike {
   rpc(name: string, args: Record<string, unknown>): PromiseLike<SupabaseResult>;
 }
 
+export class AccountingRepositoryIdempotencyError extends Error {
+  readonly kind: "customer" | "document";
+
+  constructor(kind: AccountingRepositoryIdempotencyError["kind"]) {
+    super(`Accounting ${kind} idempotency mismatch`);
+    this.name = "AccountingRepositoryIdempotencyError";
+    this.kind = kind;
+  }
+}
+
 function failureMessage(operation: string, error: { message?: string } | null | undefined): Error {
-  return new Error(`${operation} failed: ${error?.message || "unknown Supabase error"}`);
+  const message = error?.message || "unknown Supabase error";
+  if (message.includes("accounting customer idempotency mismatch")) {
+    return new AccountingRepositoryIdempotencyError("customer");
+  }
+  if (message.includes("accounting document idempotency mismatch")) {
+    return new AccountingRepositoryIdempotencyError("document");
+  }
+  return new Error(`${operation} failed: ${message}`);
 }
 
 function firstRow(operation: string, result: SupabaseResult): Record<string, unknown> {

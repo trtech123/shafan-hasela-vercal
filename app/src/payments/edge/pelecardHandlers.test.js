@@ -160,14 +160,17 @@ function notification(overrides = {}) {
 function callbackContext(overrides = {}) {
   const store = overrides.store ?? createMemoryStore();
   const provider = overrides.provider ?? createProvider();
+  const onPaymentSucceeded = overrides.onPaymentSucceeded;
   return {
     store,
     provider,
+    onPaymentSucceeded,
     handler: createPelecardCallbackHandler({
       store,
       provider,
       decodeNotification,
       config: config(),
+      onPaymentSucceeded,
     }),
   };
 }
@@ -176,16 +179,19 @@ function verifyContext(overrides = {}) {
   const store = overrides.store ?? createMemoryStore();
   const provider = overrides.provider ?? createProvider();
   const authenticator = overrides.auth ?? auth();
+  const onPaymentSucceeded = overrides.onPaymentSucceeded;
   return {
     store,
     provider,
     auth: authenticator,
+    onPaymentSucceeded,
     handler: createPelecardVerifyHandler({
       auth: authenticator,
       store,
       provider,
       decodeNotification,
       config: config(),
+      onPaymentSucceeded,
     }),
   };
 }
@@ -194,7 +200,8 @@ describe("Pelecard callback and verification", () => {
   test.each(["application/json", "application/x-www-form-urlencoded"])(
     "verifies a bounded %s callback and finalizes once",
     async (contentType) => {
-      const context = callbackContext();
+      const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+      const context = callbackContext({ onPaymentSucceeded });
       const response = await context.handler(request(notification(), { contentType }));
 
       expect(response.status).toBe(200);
@@ -209,6 +216,8 @@ describe("Pelecard callback and verification", () => {
         amountMinor: 12_000,
       });
       expect(context.store.finalize).toHaveBeenCalledOnce();
+      expect(onPaymentSucceeded).toHaveBeenCalledOnce();
+      expect(onPaymentSucceeded).toHaveBeenCalledWith(PAYMENT_ID);
     },
   );
 
@@ -357,7 +366,8 @@ describe("Pelecard callback and verification", () => {
   });
 
   test("makes a duplicate callback exactly-once and returns the existing sale", async () => {
-    const context = callbackContext();
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const context = callbackContext({ onPaymentSucceeded });
     const first = await context.handler(request(notification()));
     const second = await context.handler(request(notification()));
 
@@ -370,12 +380,172 @@ describe("Pelecard callback and verification", () => {
     });
     expect(context.store.writes).toBe(1);
     expect(context.store.finalize).toHaveBeenCalledOnce();
+    expect(onPaymentSucceeded).toHaveBeenCalledOnce();
+    expect(onPaymentSucceeded.mock.calls).toEqual([[PAYMENT_ID]]);
+  });
+
+  test("does not wake accounting from a forged notification targeting stored success", async () => {
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const store = createMemoryStore({
+      ...pendingPayment,
+      saleId: SALE_ID,
+      status: "succeeded",
+      providerTransactionId: PROVIDER_TRANSACTION_ID,
+      receiptNumber: "RCP-1001",
+      verifiedAt: "2026-09-08T08:01:00.000Z",
+    });
+    const context = callbackContext({ store, onPaymentSucceeded });
+
+    const response = await context.handler(request(notification({
+      antiForgeryReference: "attacker-controlled-key",
+      confirmationProof: "attacker-controlled-proof",
+    })));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "succeeded" });
+    expect(onPaymentSucceeded).not.toHaveBeenCalled();
+    expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
+  });
+
+  test("authenticated verification re-kicks correlated stored success once", async () => {
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const store = createMemoryStore({
+      ...pendingPayment,
+      saleId: SALE_ID,
+      status: "succeeded",
+      providerTransactionId: PROVIDER_TRANSACTION_ID,
+      receiptNumber: "RCP-1001",
+      verifiedAt: "2026-09-08T08:01:00.000Z",
+    });
+    const context = verifyContext({ store, onPaymentSucceeded });
+
+    const response = await context.handler(request(notification(), {
+      authorization: "Bearer valid-jwt",
+      origin: "https://app.example.test",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "succeeded" });
+    expect(onPaymentSucceeded.mock.calls).toEqual([[PAYMENT_ID]]);
+    expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
+  });
+
+  test("authenticated verification does not re-kick mismatched stored success", async () => {
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const store = createMemoryStore({
+      ...pendingPayment,
+      saleId: SALE_ID,
+      status: "succeeded",
+      providerTransactionId: PROVIDER_TRANSACTION_ID,
+      receiptNumber: "RCP-1001",
+      verifiedAt: "2026-09-08T08:01:00.000Z",
+    });
+    const context = verifyContext({ store, onPaymentSucceeded });
+
+    const response = await context.handler(request(notification({
+      antiForgeryReference: "attacker-controlled-key",
+    }), {
+      authorization: "Bearer valid-jwt",
+      origin: "https://app.example.test",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(onPaymentSucceeded).not.toHaveBeenCalled();
+    expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
+  });
+
+  test("keeps durable payment success when the accounting wake-up rejects", async () => {
+    const onPaymentSucceeded = vi.fn().mockRejectedValue(
+      new Error("do-not-expose-accounting-detail"),
+    );
+    const context = callbackContext({ onPaymentSucceeded });
+
+    const response = await context.handler(request(notification()));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      paymentId: PAYMENT_ID,
+      saleId: SALE_ID,
+      status: "succeeded",
+    });
+    expect(onPaymentSucceeded).toHaveBeenCalledWith(PAYMENT_ID);
+    expect(context.store.markFailed).not.toHaveBeenCalled();
+    expect(context.store.writes).toBe(1);
+  });
+
+  test("passes only the local UUID to accounting, never callback/provider fields", async () => {
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const context = callbackContext({ onPaymentSucceeded });
+
+    await context.handler(request(notification({
+      callbackReference: "callback-body-secret",
+      unrelatedProviderBody: { card: "4111111111111111" },
+    })));
+
+    expect(onPaymentSucceeded.mock.calls).toEqual([[PAYMENT_ID]]);
+    expect(JSON.stringify(onPaymentSucceeded.mock.calls)).not.toContain(PROVIDER_TRANSACTION_ID);
+    expect(JSON.stringify(onPaymentSucceeded.mock.calls)).not.toContain("callback-body-secret");
+    expect(JSON.stringify(onPaymentSucceeded.mock.calls)).not.toContain("4111111111111111");
+  });
+
+  test("never wakes accounting before verification or for pending/failed outcomes", async () => {
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const forged = callbackContext({
+      onPaymentSucceeded,
+      provider: createProvider({ validateConfirmation: vi.fn().mockResolvedValue(false) }),
+    });
+    const pending = callbackContext({
+      onPaymentSucceeded,
+      provider: createProvider({
+        lookup: vi.fn().mockRejectedValue(new PaymentError("provider_timeout")),
+      }),
+    });
+    const declined = callbackContext({
+      onPaymentSucceeded,
+      provider: createProvider({
+        lookup: vi.fn().mockResolvedValue({
+          transaction: { ...verifiedTransaction, statusCode: "006" },
+          correlationEvidence: { kind: "merchant_correlation", value: PAYMENT_ID },
+        }),
+      }),
+    });
+
+    await forged.handler(request(notification()));
+    await pending.handler(request(notification()));
+    await declined.handler(request(notification()));
+
+    expect(onPaymentSucceeded).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    "failed",
+    "refund_pending",
+    "refunded",
+    "void_pending",
+    "voided",
+  ])("does not wake accounting for stored %s state", async (status) => {
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const context = callbackContext({
+      onPaymentSucceeded,
+      store: createMemoryStore({ ...pendingPayment, status }),
+    });
+
+    const response = await context.handler(request(notification()));
+
+    expect(response.status).toBe(200);
+    expect(onPaymentSucceeded).not.toHaveBeenCalled();
+    expect(context.provider.validateConfirmation).not.toHaveBeenCalled();
   });
 
   test("supports callback before browser return and repeated authenticated return", async () => {
     const store = createMemoryStore();
-    const callback = callbackContext({ store });
-    const verify = verifyContext({ store, provider: callback.provider });
+    const onPaymentSucceeded = vi.fn().mockResolvedValue(undefined);
+    const callback = callbackContext({ store, onPaymentSucceeded });
+    const verify = verifyContext({
+      store,
+      provider: callback.provider,
+      onPaymentSucceeded,
+    });
 
     await callback.handler(request(notification()));
     const firstReturn = await verify.handler(request(notification(), {
@@ -390,6 +560,10 @@ describe("Pelecard callback and verification", () => {
     expect(firstReturn.status).toBe(200);
     expect(secondReturn.status).toBe(200);
     expect(store.writes).toBe(1);
+    expect(onPaymentSucceeded).toHaveBeenCalledTimes(3);
+    expect(onPaymentSucceeded.mock.calls).toEqual([
+      [PAYMENT_ID], [PAYMENT_ID], [PAYMENT_ID],
+    ]);
   });
 
   test("supports browser return before callback without double finalization", async () => {

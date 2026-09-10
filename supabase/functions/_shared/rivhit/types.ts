@@ -10,6 +10,7 @@ export interface DocumentMapping {
   document_type: number;
   sort_code: number;
   currency_id: number;
+  currency_code?: string;
   price_include_vat: boolean;
   send_mail: boolean;
   digital_signature: boolean;
@@ -66,7 +67,7 @@ export interface RivhitDocumentDraft {
 export interface MappedAccountingSource {
   provider: "rivhit";
   accountNamespace: string;
-  sourceType: "order";
+  sourceType: "order" | "payment_transaction";
   sourceId: string;
   documentTypeKey: string;
   identityKey: string;

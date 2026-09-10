@@ -91,6 +91,7 @@ interface VerificationDependencies {
   decodeNotification: PaymentNotificationDecoder;
   config: PaymentHandlerConfig;
   rejectionSource?: "callback" | "verify";
+  onPaymentSucceeded?: (paymentId: string) => void | Promise<void>;
 }
 
 interface AuthenticatedVerificationDependencies extends VerificationDependencies {
@@ -148,6 +149,27 @@ function pendingResult(payment: PaymentRecord): Record<string, unknown> {
   return { paymentId: payment.id, status: payment.status };
 }
 
+async function wakePaymentAccounting(
+  payment: PaymentRecord,
+  onPaymentSucceeded: VerificationDependencies["onPaymentSucceeded"],
+): Promise<void> {
+  if (
+    !onPaymentSucceeded
+    || payment.status !== "succeeded"
+    || !payment.verifiedAt
+    || !payment.providerTransactionId
+    || !payment.saleId
+  ) {
+    return;
+  }
+  try {
+    await onPaymentSucceeded(payment.id);
+  } catch {
+    // Payment success is authoritative. The durable accounting event remains
+    // available for retry even when the best-effort wake-up fails.
+  }
+}
+
 function paymentErrorResponse(
   error: unknown,
   payment: PaymentRecord | null,
@@ -184,6 +206,13 @@ async function verifyPayment(
     return paymentJson({ error: { code: "not_found" } }, 404, cors);
   }
   if (FINAL_STATUSES.has(payment.status)) {
+    if (
+      payment.status === "succeeded"
+      && dependencies.rejectionSource === "verify"
+      && notice.uniqueKey === payment.id
+    ) {
+      await wakePaymentAccounting(payment, dependencies.onPaymentSucceeded);
+    }
     return paymentJson(safePaymentResult(payment), 200, cors);
   }
 
@@ -233,6 +262,7 @@ async function verifyPayment(
         payment.id,
         decision.transaction,
       );
+      await wakePaymentAccounting(finalized, dependencies.onPaymentSucceeded);
       return paymentJson(safePaymentResult(finalized), 200, cors);
     }
     if (decision.kind === "mark_failed") {

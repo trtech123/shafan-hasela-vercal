@@ -11,6 +11,7 @@ import type {
 } from "./payment-handlers.ts";
 import { PaymentError } from "./payment-types.ts";
 import { createSupabasePaymentVerificationStore } from "./payment-store.ts";
+import { createPaymentAccountingRuntime } from "./payment-accounting/runtime.ts";
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name)?.trim();
@@ -25,7 +26,16 @@ function commaList(name: string): string[] {
   return values;
 }
 
-export function createPaymentEdgeRuntime() {
+function accountingEnv() {
+  return {
+    RIVHIT_API_TOKEN: Deno.env.get("RIVHIT_API_TOKEN"),
+    RIVHIT_ACCOUNTING_MODE: Deno.env.get("RIVHIT_ACCOUNTING_MODE"),
+    RIVHIT_ACCOUNT_NAMESPACE: Deno.env.get("RIVHIT_ACCOUNT_NAMESPACE"),
+    RIVHIT_DOCUMENT_TYPE_MAP: Deno.env.get("RIVHIT_DOCUMENT_TYPE_MAP"),
+  };
+}
+
+function createSupabaseEdgeRuntime() {
   const supabaseUrl = requireEnv("SUPABASE_URL");
   const anonKey = requireEnv("SUPABASE_ANON_KEY");
   const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -54,6 +64,11 @@ export function createPaymentEdgeRuntime() {
   const serviceClient = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  return { auth, serviceClient };
+}
+
+export function createPaymentEdgeRuntime() {
+  const { auth, serviceClient } = createSupabaseEdgeRuntime();
   const config: PaymentHandlerConfig = {
     allowedAppOrigins: commaList("PAYMENTS_APP_ORIGINS"),
     maxBodyBytes: 32_768,
@@ -66,6 +81,22 @@ export function createPaymentEdgeRuntime() {
     auth,
     config,
     store: createSupabasePaymentVerificationStore(serviceClient),
+    accounting: createPaymentAccountingRuntime({
+      serviceClient,
+      env: accountingEnv(),
+    }),
+  };
+}
+
+export function createPaymentAccountingEdgeRuntime() {
+  const { auth, serviceClient } = createSupabaseEdgeRuntime();
+  return {
+    auth,
+    allowedAppOrigins: commaList("PAYMENTS_APP_ORIGINS"),
+    accounting: createPaymentAccountingRuntime({
+      serviceClient,
+      env: accountingEnv(),
+    }),
   };
 }
 
