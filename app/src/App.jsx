@@ -26,6 +26,8 @@ import Login from './pages/Login';
 import PaymentReturn from './pages/PaymentReturn';
 import ChatbotHandoffs from './pages/ChatbotHandoffs';
 import AccountingOperations from './pages/AccountingOperations';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import DataDeletion from './pages/DataDeletion';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, authError } = useAuth();
@@ -82,6 +84,8 @@ function App() {
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/data-deletion" element={<DataDeletion />} />
             <Route path="/*" element={<AuthenticatedApp />} />
           </Routes>
         </Router>
