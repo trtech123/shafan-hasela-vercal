@@ -11,8 +11,6 @@ import {
   calculateCheckoutTotals,
 } from "@/payments/pelecardPayments";
 
-const frontendEnv = /** @type {ImportMeta & { env: Record<string, string | undefined> }} */ (import.meta);
-
 // SCREENS: menu | payment | receipt
 export default function CashRegister() {
   const location = useLocation();
@@ -169,7 +167,7 @@ export default function CashRegister() {
         location: window.location,
         createIdempotencyKey: () => crypto.randomUUID(),
         allowedRedirectOrigins:
-          (frontendEnv.env.VITE_PELECARD_REDIRECT_ORIGINS || "")
+          (import.meta.env.VITE_PELECARD_REDIRECT_ORIGINS || "")
             .split(",").map((origin) => origin.trim()).filter(Boolean),
       });
     } catch {

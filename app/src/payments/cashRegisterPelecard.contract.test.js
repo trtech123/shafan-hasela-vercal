@@ -11,7 +11,8 @@ describe("CashRegister hosted Pelecard wiring", () => {
   test("initiates the hosted flow with the safe checkout snapshot", () => {
     expect(cashRegister).toContain("beginHostedPelecardPayment");
     expect(cashRegister).toContain("schema_version: 1");
-    expect(cashRegister).toContain("VITE_PELECARD_REDIRECT_ORIGINS");
+    expect(cashRegister).toContain("import.meta.env.VITE_PELECARD_REDIRECT_ORIGINS");
+    expect(cashRegister).not.toContain("frontendEnv.env.VITE_PELECARD_REDIRECT_ORIGINS");
     expect(cashRegister).toContain("onPelecard={handlePelecardStart}");
   });
 
