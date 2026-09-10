@@ -28,6 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { attendancePaymentState, buildCancellationPreview } from "@/lib/clubDomain";
 
 const weekdays = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
@@ -35,6 +36,7 @@ const membershipLabels = {
   pending_enrollment: "ממתינה להרשמה",
   active: "פעילה",
   paused: "מוקפאת",
+  cancellation_scheduled: "ביטול מתוזמן",
   cancelled: "בוטלה",
   ended: "הסתיימה",
 };
@@ -55,12 +57,19 @@ const formatMoney = (amount) => new Intl.NumberFormat("he-IL", {
   maximumFractionDigits: 2,
 }).format(Number(amount || 0));
 const time = (value) => String(value || "").slice(0, 5);
+const currentIsraelDate = () => {
+  const parts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
 
 export default function Clubs() {
   const [clubs, setClubs] = useState([]);
   const [instructors, setInstructors] = useState([]);
   const [rules, setRules] = useState([]);
   const [memberships, setMemberships] = useState([]);
+  const [attendanceRows, setAttendanceRows] = useState([]);
+  const [followUps, setFollowUps] = useState([]);
   const [selectedClubId, setSelectedClubId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -73,14 +82,16 @@ export default function Clubs() {
   const loadData = useCallback(async () => {
     setLoading(true);
     setLoadError("");
-    const [clubsResult, instructorsResult, rulesResult, membershipsResult] = await Promise.all([
+    const [clubsResult, instructorsResult, rulesResult, membershipsResult, attendanceResult, followUpsResult] = await Promise.all([
       supabase.from("clubs").select("*, instructor:instructors(id, full_name)").order("created_at", { ascending: false }),
       supabase.from("instructors").select("id, full_name, status").order("full_name"),
       supabase.from("club_schedule_rules").select("*").order("weekday"),
       supabase.from("club_memberships").select("*, participant:club_participants(*), agreement:recurring_agreements(id, status, provider_recurring_id, last_charge_number)").order("created_at", { ascending: false }),
+      supabase.from("club_attendance_operations").select("*").order("session_date", { ascending: false }),
+      supabase.from("club_payment_follow_ups").select("*").order("created_at", { ascending: false }),
     ]);
 
-    const failure = [clubsResult, instructorsResult, rulesResult, membershipsResult].find((result) => result.error);
+    const failure = [clubsResult, instructorsResult, rulesResult, membershipsResult, attendanceResult, followUpsResult].find((result) => result.error);
     if (failure) {
       toast.error("שגיאה בטעינת החוגים");
       setLoadError("לא ניתן לטעון את נתוני החוגים. ייתכן שמסד הנתונים טרם עודכן.");
@@ -93,6 +104,8 @@ export default function Clubs() {
     setInstructors(instructorsResult.data ?? []);
     setRules(rulesResult.data ?? []);
     setMemberships(membershipsResult.data ?? []);
+    setAttendanceRows(attendanceResult.data ?? []);
+    setFollowUps(followUpsResult.data ?? []);
     setSelectedClubId((current) => loadedClubs.some((club) => club.id === current)
       ? current
       : loadedClubs[0]?.id ?? null);
@@ -108,6 +121,8 @@ export default function Clubs() {
   const selectedMemberships = memberships.filter((membership) => membership.club_id === selectedClubId);
   const activeCount = selectedMemberships.filter((membership) => membership.status === "active").length;
   const debtTotal = selectedMemberships.reduce((sum, membership) => sum + Number(membership.debt_amount || 0), 0);
+  const selectedAttendance = attendanceRows.filter((row) => row.club_id === selectedClubId);
+  const selectedFollowUps = followUps.filter((followUp) => selectedMemberships.some((membership) => membership.id === followUp.membership_id));
 
   const startEnrollment = async (membership) => {
     setBusyId(membership.id);
@@ -135,28 +150,33 @@ export default function Clubs() {
     if (!membership) return;
     setBusyId(membership.id);
     try {
-      const agreement = relationOne(membership.agreement);
-      if (agreement?.id) {
-        const { data, error } = await supabase.functions.invoke("club-recurring-cancel", {
-          body: { membershipId: membership.id },
-        });
-        if (error) throw error;
-        if (!data?.ok) throw new Error(data?.error || "ביטול הוראת הקבע נכשל");
-      } else {
-        const { error } = await supabase.from("club_memberships").update({
-          status: "cancelled",
-          payment_status: "cancelled",
-          cancelled_at: new Date().toISOString(),
-          ends_on: new Date().toISOString().slice(0, 10),
-        }).eq("id", membership.id);
-        if (error) throw error;
-      }
-      toast.success("החברות בוטלה");
+      const requestedOn = currentIsraelDate();
+      const { data, error } = await supabase.rpc("request_club_membership_cancellation", {
+        p_membership_id: membership.id,
+        p_requested_on: requestedOn,
+      });
+      if (error) throw error;
+      toast.success(`הביטול נקלט וייכנס לתוקף ב־${data.effective_on}`);
       setCancellingMembership(null);
       await loadData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "ביטול החברות נכשל");
+      toast.error(error instanceof Error ? error.message : "שמירת בקשת הביטול נכשלה");
       setCancellingMembership(null);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const finalizeDueCancellation = async (membership) => {
+    setBusyId(membership.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("club-recurring-cancel", { body: { membershipId: membership.id } });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "ביטול iCredit נכשל");
+      toast.success("iCredit אישר את הביטול והחברות נסגרה");
+      await loadData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "ביטול iCredit נכשל");
     } finally {
       setBusyId(null);
     }
@@ -176,6 +196,12 @@ export default function Clubs() {
           <Button type="button" variant="outline" className="mt-4 border-red-300 bg-white" onClick={loadData}>
             נסה שוב
           </Button>
+          <button type="button" className="mt-3 block w-full text-sm font-semibold underline" onClick={() => {
+            const demo = demoClubsData();
+            setClubs(demo.clubs); setInstructors(demo.instructors); setRules(demo.rules);
+            setMemberships(demo.memberships); setAttendanceRows(demo.attendance); setFollowUps(demo.followUps);
+            setSelectedClubId("demo-club"); setLoadError("");
+          }}>פתיחת תצוגת הדגמה ללא מסד נתונים</button>
         </div>
       </div>
     );
@@ -239,6 +265,7 @@ export default function Clubs() {
                     <span className="flex items-center gap-1.5"><BadgeCheck className="h-4 w-4 text-emerald-600" />{relationOne(selectedClub.instructor)?.full_name || "ללא מדריך"}</span>
                     {selectedClub.site && <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-amber-600" />{selectedClub.site}</span>}
                     <span className="flex items-center gap-1.5"><Banknote className="h-4 w-4 text-emerald-600" />₪{formatMoney(selectedClub.monthly_price)} לחודש</span>
+                    <span className="flex items-center gap-1.5 font-semibold text-amber-700"><CalendarDays className="h-4 w-4" />חיוב קבוע ב־15 עבור החודש הנוכחי</span>
                   </div>
                 </div>
                 <Button variant="outline" className="gap-2" onClick={() => setClubDialog({ open: true, club: selectedClub })}>
@@ -281,27 +308,35 @@ export default function Clubs() {
                   return (
                     <article key={membership.id} className="grid gap-4 p-5 xl:grid-cols-[1.4fr_1fr_1fr_auto] xl:items-center">
                       <div>
+                        <p className="text-xs font-semibold text-emerald-700">משתתף / ילד</p>
                         <h3 className="font-bold">{name}</h3>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {participant.primary_contact_name ? `איש קשר: ${participant.primary_contact_name}` : "משתתף עצמאי"}
-                          {participant.primary_contact_phone || participant.phone ? ` · ${participant.primary_contact_phone || participant.phone}` : ""}
+                          <span className="font-semibold text-slate-700">הורה / משלם: {participant.payer_name || participant.primary_contact_name || "לא הוזן"}</span>
+                          {participant.payer_phone || participant.primary_contact_phone ? ` · ${participant.payer_phone || participant.primary_contact_phone}` : ""}
+                          {participant.payer_email || participant.primary_contact_email ? ` · ${participant.payer_email || participant.primary_contact_email}` : ""}
                         </p>
                       </div>
                       <div className="text-sm">
                         <p className="font-semibold">{membershipLabels[membership.status] || membership.status}</p>
-                        <p className="text-xs text-muted-foreground">₪{formatMoney(membership.monthly_price)} · חיוב ב־{membership.billing_day} בחודש</p>
+                        <p className="text-xs text-muted-foreground">₪{formatMoney(membership.monthly_price)} · חיוב ב־15 עבור אותו חודש</p>
+                        <p className="text-xs text-muted-foreground">הוראת קבע מתחילה: {membership.recurring_starts_on || "בחודש הבא"}</p>
+                        {membership.current_month_settlement_status === "manual_required" && <p className="mt-1 text-xs font-semibold text-amber-700">החודש הנוכחי: הסדרה ידנית בקופה · ללא חיוב יחסי</p>}
+                        {membership.cancellation_effective_on && <p className="mt-1 text-xs font-semibold text-red-700">בקשת ביטול: {String(membership.cancellation_requested_at || "").slice(0, 10)} · סיום אפקטיבי: {membership.cancellation_effective_on}</p>}
                       </div>
                       <div className="text-sm">
                         <p className={cn("font-semibold", debt > 0 ? "text-red-700" : "text-emerald-700")}>{paymentLabels[membership.payment_status] || membership.payment_status}</p>
                         {debt > 0 ? <p className="text-xs font-bold text-red-700">חוב ₪{formatMoney(debt)}</p> : <p className="text-xs text-muted-foreground">אין חוב פתוח</p>}
                       </div>
                       <div className="flex flex-wrap gap-2 xl:justify-end">
-                        {!agreement?.provider_recurring_id && membership.status !== "cancelled" && (
+                        {membership.status === "cancellation_scheduled" && membership.cancellation_effective_on <= currentIsraelDate() && (
+                          <Button size="sm" variant="destructive" disabled={busyId === membership.id} onClick={() => finalizeDueCancellation(membership)}>השלמת ביטול ב־iCredit</Button>
+                        )}
+                        {!agreement?.provider_recurring_id && !["cancelled", "cancellation_scheduled"].includes(membership.status) && (
                           <Button size="sm" className="gap-1.5 bg-amber-400 text-emerald-950 hover:bg-amber-300" disabled={busyId === membership.id} onClick={() => startEnrollment(membership)} aria-label={`התחלת הוראת קבע עבור ${name}`}>
                             <CreditCard className="h-4 w-4" /> הוראת קבע
                           </Button>
                         )}
-                        {membership.status !== "cancelled" && (
+                        {!["cancelled", "cancellation_scheduled"].includes(membership.status) && (
                           <Button size="sm" variant="outline" disabled={busyId === membership.id} onClick={() => setCancellingMembership(membership)} aria-label={`ביטול חברות עבור ${name}`}>ביטול</Button>
                         )}
                       </div>
@@ -309,6 +344,29 @@ export default function Clubs() {
                   );
                 })}
                 {!selectedMemberships.length && <div className="p-10 text-center text-sm text-muted-foreground">עדיין אין משתתפים בחוג הזה.</div>}
+              </div>
+            </section>
+
+            <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+              <div className="border-b p-5"><h2 className="text-lg font-bold">נוכחות וסטטוס תשלום iCredit</h2><p className="text-sm text-muted-foreground">הסימון הכספי נגזר מנתוני הספק ואינו ניתן לעריכה ידנית.</p></div>
+              <div className="divide-y">
+                {selectedAttendance.map((row) => {
+                  const payment = attendancePaymentState(row.provider_charge_status);
+                  return <div key={`${row.session_id}-${row.membership_id}`} className="grid gap-2 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
+                    <div><p className="font-semibold">{row.participant_name}</p><p className="text-xs text-muted-foreground">{row.session_date} · {time(row.start_time)}</p></div>
+                    <p className="text-sm">נוכחות: {row.attendance_status === "present" ? "נוכח/ת" : row.attendance_status === "absent" ? "נעדר/ת" : "טרם סומן"}</p>
+                    <span className={cn("rounded-full px-3 py-1 text-sm font-bold", payment.state === "settled" ? "bg-emerald-100 text-emerald-800" : payment.state === "failed" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-700")}>{payment.symbol} {payment.label}</span>
+                  </div>;
+                })}
+                {!selectedAttendance.length && <p className="p-6 text-sm text-muted-foreground">אין עדיין מפגשים להצגת נוכחות.</p>}
+              </div>
+            </section>
+
+            <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+              <div className="border-b p-5"><h2 className="text-lg font-bold">מעקב תשלומים שנכשלו</h2><p className="text-sm text-muted-foreground">נוצר אוטומטית פעם אחת לכל חיוב שנכשל. לא נשלחת הודעה אוטומטית.</p></div>
+              <div className="divide-y">
+                {selectedFollowUps.map((item) => <div key={item.id} className="p-4"><div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">הורה / משלם: {item.payer_name || "לא ידוע"}</p><span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">{item.status === "resolved" ? "טופל" : item.status === "contacted" ? "נוצר קשר" : "ממתין לטיפול"} · לא נשלח</span></div><p className="mt-2 text-sm text-muted-foreground">{item.payer_phone} {item.payer_email}</p><p className="mt-2 text-sm">{item.message}</p></div>)}
+                {!selectedFollowUps.length && <p className="p-6 text-sm text-muted-foreground">אין תשלומים שנכשלו הממתינים לטיפול.</p>}
               </div>
             </section>
           </main>
@@ -330,12 +388,12 @@ export default function Clubs() {
       <AlertDialog open={Boolean(cancellingMembership)} onOpenChange={(open) => !open && setCancellingMembership(null)}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>ביטול חברות מיידי</AlertDialogTitle>
-            <AlertDialogDescription>הוראת הקבע תבוטל תחילה ב־iCredit TEST. החברות המקומית תבוטל רק לאחר אישור הספק.</AlertDialogDescription>
+            <AlertDialogTitle>תזמון ביטול חברות</AlertDialogTitle>
+            <AlertDialogDescription>{cancellingMembership ? `בקשה היום תסיים את החברות החל מ־${buildCancellationPreview(currentIsraelDate()).effectiveOn}. עד יום 10: החודש הבא; אחרי יום 10: החודש שאחריו. ביטול הספק יבוצע provider-first במועד האפקטיבי, ללא החזר אוטומטי.` : ""}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-row-reverse gap-2">
             <AlertDialogCancel>חזרה</AlertDialogCancel>
-            <AlertDialogAction onClick={cancelMembership} className="bg-red-700 hover:bg-red-800">אישור ביטול מיידי</AlertDialogAction>
+            <AlertDialogAction onClick={cancelMembership} className="bg-red-700 hover:bg-red-800">שמירת בקשת ביטול</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -350,4 +408,22 @@ function Metric({ icon: Icon, label, value, alert = false }) {
       <div><p className="text-xs text-muted-foreground">{label}</p><p className="font-black">{value}</p></div>
     </div>
   );
+}
+
+function demoClubsData() {
+  return {
+    clubs: [{ id: "demo-club", name: "חוג טיפוס נוער — הדגמה", description: "נתוני הדגמה לתצוגה מקדימה בלבד", instructor_id: "demo-instructor", instructor: { id: "demo-instructor", full_name: "נועה מדריכה" }, site: "עכו", monthly_price: 245, default_billing_day: 15, status: "active" }],
+    instructors: [{ id: "demo-instructor", full_name: "נועה מדריכה" }],
+    rules: [{ id: "demo-rule", club_id: "demo-club", weekday: 1, start_time: "16:00", end_time: "17:30", is_active: true }],
+    memberships: [
+      { id: "demo-paid", club_id: "demo-club", monthly_price: 245, billing_day: 15, status: "active", payment_status: "current", debt_amount: 0, recurring_starts_on: "2026-10-01", current_month_settlement_status: "manual_required", participant: { first_name: "נועה", last_name: "לוי", payer_name: "רונית לוי", payer_phone: "050-1234567", payer_email: "parent@example.com" }, agreement: { id: "demo-agreement", provider_recurring_id: "demo" } },
+      { id: "demo-failed", club_id: "demo-club", monthly_price: 245, billing_day: 15, status: "cancellation_scheduled", payment_status: "past_due", debt_amount: 245, recurring_starts_on: "2026-09-01", current_month_settlement_status: "not_required", cancellation_requested_at: "2026-09-11", cancellation_effective_on: "2026-11-01", participant: { first_name: "דן", last_name: "כהן", payer_name: "אייל כהן", payer_phone: "052-7654321", payer_email: "eyal@example.com" }, agreement: { id: "demo-agreement-2", provider_recurring_id: "demo-2" } },
+    ],
+    attendance: [
+      { session_id: "demo-session", membership_id: "demo-paid", club_id: "demo-club", participant_name: "נועה לוי", session_date: "2026-09-07", start_time: "16:00", attendance_status: "present", provider_charge_status: "succeeded" },
+      { session_id: "demo-session", membership_id: "demo-failed", club_id: "demo-club", participant_name: "דן כהן", session_date: "2026-09-07", start_time: "16:00", attendance_status: "absent", provider_charge_status: "failed" },
+      { session_id: "demo-session-2", membership_id: "demo-paid", club_id: "demo-club", participant_name: "משתתף ללא אימות", session_date: "2026-10-05", start_time: "16:00", attendance_status: null, provider_charge_status: null },
+    ],
+    followUps: [{ id: "demo-follow-up", membership_id: "demo-failed", payer_name: "אייל כהן", payer_phone: "052-7654321", payer_email: "eyal@example.com", status: "pending", delivery_status: "not_sent", message: "שלום אייל כהן, התשלום נכשל. יש לפנות למשרד כדי לעדכן או להסדיר את כרטיס האשראי הרלוונטי." }],
+  };
 }

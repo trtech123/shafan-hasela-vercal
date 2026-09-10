@@ -26,7 +26,7 @@ const emptyForm = () => ({
   site: "",
   capacity: "",
   monthly_price: "",
-  default_billing_day: "1",
+  default_billing_day: "15",
   status: "active",
   notes: "",
   schedule_rules: [emptyRule()],
@@ -56,7 +56,7 @@ export default function ClubFormDialog({
       site: club.site || "",
       capacity: club.capacity ?? "",
       monthly_price: club.monthly_price ?? "",
-      default_billing_day: club.default_billing_day ?? 1,
+      default_billing_day: "15",
       status: club.status || "active",
       notes: club.notes || "",
       schedule_rules: scheduleRules?.length
@@ -149,7 +149,7 @@ export default function ClubFormDialog({
             </div>
             <div>
               <Label htmlFor="club-billing-day">יום חיוב</Label>
-              <Input id="club-billing-day" type="number" min="1" max="28" value={form.default_billing_day} onChange={(e) => change("default_billing_day", e.target.value)} required />
+              <Input id="club-billing-day" value="15 בכל חודש (עבור אותו חודש)" readOnly className="bg-muted font-semibold" />
             </div>
             <div>
               <Label htmlFor="club-status">סטטוס</Label>

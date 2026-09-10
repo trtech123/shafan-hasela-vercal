@@ -75,3 +75,23 @@ No `orders` or one-off recurring session rows are loaded or generated.
 11. Provider cancellation failure leaves local state active; provider success cancels agreement and membership.
 12. Browser code never receives merchant credentials, raw card data or provider/card tokens.
 13. No Rivhit accounting-document endpoint is called.
+# Clubs operational rules (2026-09-10)
+
+## Action map
+
+- `חוג חדש` / `עריכת חוג`: club, instructor, site, monthly price, weekly schedule. Billing is read-only: day 15 for the current month.
+- `רישום משתתף`: separate `משתתף / ילד` and required `הורה / משלם` contact sections. Joining month is flagged for manual cashier settlement; iCredit recurring starts on the first of the next month without automatic proration.
+- Membership cards load Clubs, schedule, participant, payer/contact, membership, iCredit agreement/debt, recurring start, and cancellation dates.
+- `ביטול`: previews the deterministic effective month, then stores a scheduled request. On/after the effective date, `השלמת ביטול ב־iCredit` calls the existing provider-first cancellation boundary.
+- Attendance reads `club_attendance_operations`; its ✓ / ✕ / unknown payment badge is derived from the authoritative iCredit charge for the session month and is not editable.
+- Failed-payment follow-up reads `club_payment_follow_ups`; one pending, unsent operational item is created per failed provider charge. This workstream does not deliver messages.
+- If migration 028 is unavailable in Preview, `פתיחת תצוגת הדגמה ללא מסד נתונים` renders a visibly synthetic inspection state and performs no writes.
+
+## Acceptance criteria
+
+- Parent and child remain distinct and legacy primary-contact values are backfilled into payer fields.
+- Billing day cannot differ from 15; charge month is explicit and provider-authoritative.
+- Day 10 / day 11 / year-boundary cancellation calculations are deterministic.
+- Failed, successful, and unknown states render as ✕, ✓, and neutral respectively.
+- Duplicate provider events cannot create duplicate charges or follow-ups.
+- No Clubs accounting-document route, automatic proration, new freeze workflow, or real customer message exists.

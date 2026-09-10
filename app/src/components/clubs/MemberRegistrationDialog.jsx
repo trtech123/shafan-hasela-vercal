@@ -25,13 +25,12 @@ const emptyForm = (club) => ({
   birth_date: "",
   phone: "",
   email: "",
-  primary_contact_name: "",
-  primary_contact_relationship: "",
-  primary_contact_phone: "",
-  primary_contact_email: "",
+  payer_name: "",
+  payer_relationship: "",
+  payer_phone: "",
+  payer_email: "",
   starts_on: today(),
   monthly_price: club?.monthly_price ?? "",
-  billing_day: club?.default_billing_day ?? 1,
   notes: "",
   membership_notes: "",
 });
@@ -87,7 +86,7 @@ export default function MemberRegistrationDialog({ open, onClose, club, onSaved 
         </DialogHeader>
         <form className="space-y-5" onSubmit={handleSubmit}>
           <section className="space-y-3">
-            <h3 className="font-semibold">פרטי משתתף</h3>
+            <h3 className="font-semibold">משתתף / ילד</h3>
             <div className="grid gap-3 md:grid-cols-2">
               <div><Label htmlFor="member-first-name">שם פרטי</Label><Input id="member-first-name" value={form.first_name} onChange={(e) => change("first_name", e.target.value)} required /></div>
               <div><Label htmlFor="member-last-name">שם משפחה</Label><Input id="member-last-name" value={form.last_name} onChange={(e) => change("last_name", e.target.value)} required /></div>
@@ -99,23 +98,26 @@ export default function MemberRegistrationDialog({ open, onClose, club, onSaved 
 
           <section className="space-y-3 rounded-2xl border bg-muted/20 p-4">
             <div>
-              <h3 className="font-semibold">איש קשר עיקרי</h3>
-              <p className="text-xs text-muted-foreground">יכול להיות הורה, אפוטרופוס או המשתתף עצמו.</p>
+              <h3 className="font-semibold">הורה / משלם</h3>
+              <p className="text-xs text-muted-foreground">ההורה הוא המשלם, איש הקשר לחיוב ואיש הקשר הראשי.</p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div><Label htmlFor="contact-name">שם איש קשר</Label><Input id="contact-name" value={form.primary_contact_name} onChange={(e) => change("primary_contact_name", e.target.value)} /></div>
-              <div><Label htmlFor="contact-relation">קרבה</Label><Input id="contact-relation" value={form.primary_contact_relationship} onChange={(e) => change("primary_contact_relationship", e.target.value)} /></div>
-              <div><Label htmlFor="contact-phone">טלפון איש קשר</Label><Input id="contact-phone" value={form.primary_contact_phone} onChange={(e) => change("primary_contact_phone", e.target.value)} /></div>
-              <div><Label htmlFor="contact-email">אימייל איש קשר</Label><Input id="contact-email" type="email" value={form.primary_contact_email} onChange={(e) => change("primary_contact_email", e.target.value)} /></div>
+              <div><Label htmlFor="contact-name">שם הורה / משלם</Label><Input id="contact-name" value={form.payer_name} onChange={(e) => change("payer_name", e.target.value)} required /></div>
+              <div><Label htmlFor="contact-relation">קרבה לילד</Label><Input id="contact-relation" value={form.payer_relationship} onChange={(e) => change("payer_relationship", e.target.value)} /></div>
+              <div><Label htmlFor="contact-phone">טלפון הורה / משלם</Label><Input id="contact-phone" value={form.payer_phone} onChange={(e) => change("payer_phone", e.target.value)} required /></div>
+              <div><Label htmlFor="contact-email">אימייל הורה / משלם</Label><Input id="contact-email" type="email" value={form.payer_email} onChange={(e) => change("payer_email", e.target.value)} /></div>
             </div>
           </section>
 
           <section className="space-y-3">
             <h3 className="font-semibold">פרטי חברות</h3>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2">
               <div><Label htmlFor="membership-start">תאריך התחלה</Label><Input id="membership-start" type="date" value={form.starts_on} onChange={(e) => change("starts_on", e.target.value)} required /></div>
               <div><Label htmlFor="membership-price">מחיר חודשי</Label><Input id="membership-price" type="number" min="0" step="0.01" value={form.monthly_price} onChange={(e) => change("monthly_price", e.target.value)} required /></div>
-              <div><Label htmlFor="membership-billing-day">יום חיוב</Label><Input id="membership-billing-day" type="number" min="1" max="28" value={form.billing_day} onChange={(e) => change("billing_day", e.target.value)} required /></div>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              <p className="font-bold">החודש הנוכחי: הסדרה ידנית בקופה</p>
+              <p>אין חיוב יחסי אוטומטי. הוראת הקבע ב־iCredit מתחילה בחודש הבא והחיוב הקבוע הוא ב־15 עבור אותו חודש.</p>
             </div>
           </section>
 

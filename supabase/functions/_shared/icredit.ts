@@ -84,7 +84,7 @@ export function buildEnrollmentRequest(input: EnrollmentInput) {
   const amount = requireAmount(input.amount);
   if (amount <= 0) throw new Error("Recurring amount must be positive");
   const billingDay = requireInteger(input.billingDay, "billingDay", 1);
-  if (billingDay > 28) throw new Error("billingDay must be between 1 and 28");
+  if (billingDay !== 15) throw new Error("billingDay must be 15 for Clubs");
   const clubName = String(input.clubName ?? "").trim();
   const lastName = String(input.lastName ?? "").trim();
   if (!clubName || !lastName) throw new Error("Club and customer names are required");

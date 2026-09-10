@@ -4,7 +4,8 @@
 > Update at the **end of every phase** before reporting to the user.
 > **Never** put secrets, API keys, JWTs, or service-role tokens in this file.
 
-Last updated: 2026-09-08
+Last updated: 2026-09-10
+Active isolated workstream (2026-09-10): `workstream/clubs-operations` from approved RC `0a36f0a`. Migration `028_clubs_operational_rules.sql` and Clubs UI/tests implement the client-confirmed payer/participant, day-15 current-month billing, next-month recurring start, cancellation cutoff, provider-derived attendance payment, and idempotent failed-payment follow-up rules. Verified 52/52 focused Clubs tests and 428/428 full-app tests; focused lint, production build, touched-file TypeScript diagnostics, and `git diff --check` pass. Project-wide typecheck retains unrelated baseline errors; Deno is unavailable locally. Production remains untouched; Preview deployment is the only external deployment action.
 Latest work: **The two final visual-QA regressions were fixed locally on `workstream/final-qa-fixes`.** Orders now exposes one customer WhatsApp action only: the canonical order-confirmation PDF is sent through the existing `order_confirmation_pdf` Utility-template boundary, with bounded PDF/server steps and persistent Hebrew success/error feedback. Clubs source routing was already present; the QA failure came from an ignored stale `app/dist` bundle built before Clubs was integrated. A fresh build contains `/clubs`, the exact admin nav label `חוגים`, and the Clubs page; non-admin route access still redirects to `/schedule`. Clubs data-loading failures now render visibly with retry instead of resembling a missing route. No push, deployment, migration application, credential use, provider call, chatbot work, or payment-to-accounting work occurred.
 
 ## Final visual QA fixes (local-only; review pending)

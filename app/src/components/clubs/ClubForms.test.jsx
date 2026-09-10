@@ -44,7 +44,7 @@ describe("ClubFormDialog", () => {
 
     fireEvent.change(screen.getByLabelText("שם החוג"), { target: { value: "חוג נוער" } });
     fireEvent.change(screen.getByLabelText("מחיר חודשי"), { target: { value: "245" } });
-    fireEvent.change(screen.getByLabelText("יום חיוב"), { target: { value: "12" } });
+    expect(screen.getByLabelText("יום חיוב")).toHaveValue("15 בכל חודש (עבור אותו חודש)");
     fireEvent.change(screen.getByLabelText("שעת התחלה 1"), { target: { value: "16:00" } });
     fireEvent.change(screen.getByLabelText("שעת סיום 1"), { target: { value: "17:30" } });
 
@@ -147,6 +147,8 @@ describe("MemberRegistrationDialog", () => {
 
     fireEvent.change(screen.getByLabelText("שם פרטי"), { target: { value: "נועה" } });
     fireEvent.change(screen.getByLabelText("שם משפחה"), { target: { value: "לוי" } });
+    fireEvent.change(screen.getByLabelText("שם הורה / משלם"), { target: { value: "רונית לוי" } });
+    fireEvent.change(screen.getByLabelText("טלפון הורה / משלם"), { target: { value: "0501234567" } });
     fireEvent.click(screen.getByRole("button", { name: "רישום משתתף" }));
 
     await waitFor(() => expect(membershipInsert).toHaveBeenCalled());
@@ -154,7 +156,9 @@ describe("MemberRegistrationDialog", () => {
       club_id: "club-1",
       participant_id: "participant-1",
       monthly_price: 245,
-      billing_day: 12,
+      billing_day: 15,
+      recurring_starts_on: expect.any(String),
+      current_month_settlement_status: "manual_required",
       status: "pending_enrollment",
     }));
   });
