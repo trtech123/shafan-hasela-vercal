@@ -94,7 +94,7 @@ describe("Chatbot handoff queue", () => {
     render(<ChatbotHandoffs />);
 
     expect(await screen.findByText("תור שפן")).toBeInTheDocument();
-    expect(screen.getAllByText("דנה כהן").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("דנה כהן")).length).toBeGreaterThan(0);
     expect(screen.getByText("יוסי לוי")).toBeInTheDocument();
     expect(screen.getAllByText("ממתין לטיפול").length).toBeGreaterThan(0);
     expect(screen.getAllByText("בטיפול").length).toBeGreaterThan(0);
