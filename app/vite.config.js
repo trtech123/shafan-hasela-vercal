@@ -14,5 +14,13 @@ export default defineConfig({
   },
   plugins: [
     react(),
-  ]
+  ],
+  test: {
+    // Every test in this suite is deterministic and finishes in ~0.1-2.1s in
+    // isolation. The 5s default was only ever exceeded under worker CPU
+    // starvation across the 48-file jsdom suite, which made roughly 40% of
+    // full runs fail on a different file each time. 20s removes those false
+    // failures while still catching a genuinely hung test.
+    testTimeout: 20000,
+  },
 });
