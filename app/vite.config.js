@@ -22,5 +22,9 @@ export default defineConfig({
     // full runs fail on a different file each time. 20s removes those false
     // failures while still catching a genuinely hung test.
     testTimeout: 20000,
+    // The Edge Function tests are plain vitest suites living outside app/, so
+    // the default include silently skipped all 13 files / 156 tests. List both
+    // roots explicitly so one `npm test` covers frontend and Edge Functions.
+    include: ['src/**/*.{test,spec}.?(c|m)[jt]s?(x)', '../supabase/functions/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
   },
 });
