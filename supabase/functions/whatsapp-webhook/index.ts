@@ -26,7 +26,7 @@ const sender = createWhatsAppSender({
 const handler = createWhatsAppWebhookHandler({
   appSecret: Deno.env.get("META_APP_SECRET"),
   verifyToken: Deno.env.get("META_WEBHOOK_VERIFY_TOKEN"),
-  processEvent: async (event) => {
+  processEvent: async (event: unknown) => {
     if (!repository) throw new Error("chatbot_repository_not_configured");
     return processVerifiedEvent({ event, repository, sender });
   },
