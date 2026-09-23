@@ -188,7 +188,9 @@ export function createSupabasePaymentStore(
 ): PaymentStore {
   return {
     async reserve(input) {
-      const row = await rpc(client, "reserve_pelecard_payment", {
+      const row = await rpc(client, input.orderId
+        ? "reserve_pelecard_order_payment"
+        : "reserve_pelecard_payment", {
         p_payment_id: input.proposedPaymentId,
         p_order_id: input.orderId,
         p_created_by: input.createdBy,

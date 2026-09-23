@@ -1,5 +1,13 @@
 # PROGRESS — Shafan Hasela / Adventure Ops Pro
 
+## One-off payment finalization checkpoint — 2026-09-23
+
+Priority is the existing Pelecard one-off order flow. Customer activation, digital signatures, Clubs/iCredit and WhatsApp work are paused and preserved. Local branch `fix/payment-finalization-20260923` is based on completed quotations `eb810b9`; main and the customer branch were not modified.
+
+Added order-authoritative reservation/amount checks, cross-key duplicate protection, pending-order guards, safe unknown statuses, retry continuity and provider readiness checks. Migration 030 was rehearsed only in isolated PostgreSQL; production is untouched. Final regression: 703/703 tests, build, focused lint and four payment Edge checks pass. Existing six unrelated lint errors and 175 baseline typecheck diagnostics remain.
+
+Provider TEST E2E remains blocked: actual provider transports/notification decoder are unwired; authorized test-terminal configuration and exact authoritative lookup/retry contract are not established. Current production callback/verify/status preflights return `invalid_configuration`; current production secret-name inspection returns 401. No charge, deployment, migration, push or accounting document was performed. Full 25-point handoff and approval boundary: [payment finalization checkpoint](docs/payment-finalization-checkpoint-20260923.md).
+
 ## Unified release candidate 2 (Preview-only; rollout authorization pending)
 
 **Date:** 2026-09-10

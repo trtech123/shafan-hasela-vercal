@@ -10,6 +10,7 @@ import {
   createSupabasePaymentStore,
 } from "../../../../supabase/functions/_shared/payment-store.ts";
 import { PaymentError } from "../../../../supabase/functions/_shared/payment-types.ts";
+import { createPelecardClient } from "../../../../supabase/functions/_shared/pelecard-client.ts";
 
 const PAYMENT_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "22222222-2222-4222-8222-222222222222";
@@ -137,6 +138,34 @@ async function invoke(request, overrides = {}) {
 }
 
 describe("Pelecard initiation handler", () => {
+  test('order-only runtime rejects an unlinked checkout before privileged access', async () => {
+    const context = createDependencies();
+    context.dependencies.config.requireOrder = true;
+    const response = await createPelecardInitiateHandler(context.dependencies)(jsonRequest({ ...requestBody, orderId: null }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: { code: 'order_required' } });
+    expect(context.store.reserve).not.toHaveBeenCalled();
+    expect(context.provider.initiate).not.toHaveBeenCalled();
+  });
+  test('accepts a canonical server snapshot instead of requiring browser order metadata', async () => {
+    const store = createMemoryStore();
+    const original = store.reserve.getMockImplementation();
+    store.reserve.mockImplementation(async (input) => {
+      const result = await original(input);
+      result.payment.checkoutSnapshot = { canonical: 'server order data' };
+      return result;
+    });
+    const result = await invoke(jsonRequest(), { store });
+    expect(result.response.status).toBe(201);
+    expect(result.context.provider.initiate).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 12000 }));
+  });
+  test('unwired provider fails before reserving or locking an order', async () => {
+    const provider = createPelecardClient({ allowedRedirectOrigins: ['https://gateway20.pelecard.biz'] });
+    const result = await invoke(jsonRequest(), { provider });
+    expect(result.response.status).toBe(503);
+    expect(result.context.store.reserve).not.toHaveBeenCalled();
+    expect(result.context.store.markInitiationUncertain).not.toHaveBeenCalled();
+  });
   test("rejects a missing bearer token before store or provider access", async () => {
     const auth = { authenticate: vi.fn() };
     const store = createMemoryStore();

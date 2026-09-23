@@ -127,6 +127,10 @@ function normalizeAllowedOrigins(origins) {
 }
 
 function safeHostedResult(data, allowedRedirectOrigins) {
+  if (UUID_PATTERN.test(String(data.paymentId)) && PAYMENT_STATUSES.has(data.status)
+    && data.status !== 'pending_provider' && data.redirectUrl === undefined) {
+    return { paymentId: data.paymentId, status: data.status };
+  }
   if (!UUID_PATTERN.test(String(data.paymentId)) ||
     data.status !== "pending_provider" || !validString(data.redirectUrl)) {
     throw new PelecardFrontendError("invalid_response");
@@ -164,6 +168,7 @@ function readAttempt(storage) {
     }
     return {
       idempotencyKey: value.idempotencyKey,
+      ...(UUID_PATTERN.test(String(value.orderId)) ? { orderId: value.orderId } : {}),
       ...(value.paymentId ? { paymentId: value.paymentId } : {}),
     };
   } catch {
@@ -177,7 +182,8 @@ export function getPendingPelecardAttempt(storage = window.sessionStorage) {
 
 export async function beginHostedPelecardPayment(input, options) {
   const existing = readAttempt(options?.storage);
-  const idempotencyKey = (existing && !existing.paymentId
+  const sameOrder = input.orderId && (!existing?.orderId || existing.orderId === input.orderId);
+  let idempotencyKey = (existing && (input.orderId ? sameOrder : !existing.paymentId)
     ? existing.idempotencyKey
     : undefined) ??
     options?.createIdempotencyKey?.();
@@ -186,18 +192,29 @@ export async function beginHostedPelecardPayment(input, options) {
   }
   options.storage.setItem(
     PELECARD_PENDING_PAYMENT_KEY,
-    JSON.stringify({ idempotencyKey }),
+    JSON.stringify({ idempotencyKey, ...(input.orderId ? { orderId: input.orderId } : {}) }),
   );
-  const result = await initiatePelecardPayment({
+  let result = await initiatePelecardPayment({
     idempotencyKey,
     orderId: input.orderId ?? null,
     checkout: input.checkout,
   }, options);
+  if (input.orderId && result.status === 'failed') {
+    idempotencyKey = options?.createIdempotencyKey?.();
+    if (!IDEMPOTENCY_PATTERN.test(String(idempotencyKey))) {
+      throw new PelecardFrontendError('invalid_configuration');
+    }
+    options.storage.setItem(PELECARD_PENDING_PAYMENT_KEY,
+      JSON.stringify({ idempotencyKey, orderId: input.orderId }));
+    result = await initiatePelecardPayment({ idempotencyKey,
+      orderId: input.orderId, checkout: input.checkout }, options);
+  }
   options.storage.setItem(
     PELECARD_PENDING_PAYMENT_KEY,
-    JSON.stringify({ idempotencyKey, paymentId: result.paymentId }),
+    JSON.stringify({ idempotencyKey, paymentId: result.paymentId,
+      ...(input.orderId ? { orderId: input.orderId } : {}) }),
   );
-  options.location.assign(result.redirectUrl);
+  options.location.assign(result.redirectUrl ?? '/payment/return');
   return result;
 }
 

@@ -83,6 +83,7 @@ export interface PaymentHandlerConfig {
   maxBodyBytes: number;
   terminalReference: string;
   successfulProviderStatusCodes: readonly string[];
+  failedProviderStatusCodes?: readonly string[];
 }
 
 interface VerificationDependencies {
@@ -248,6 +249,7 @@ async function verifyPayment(
       providerSessionReference: payment.providerSessionReference ?? undefined,
       successfulProviderStatusCodes:
         dependencies.config.successfulProviderStatusCodes,
+      failedProviderStatusCodes: dependencies.config.failedProviderStatusCodes,
     }, {
       confirmationValid: true,
       providerTransactionId: notice.providerTransactionId,

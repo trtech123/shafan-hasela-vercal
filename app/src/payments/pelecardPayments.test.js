@@ -23,6 +23,43 @@ function clientWith(data) {
 }
 
 describe("Pelecard frontend API", () => {
+  test('a server-confirmed failed order attempt permits a fresh retry', async () => {
+    const client = { functions: { invoke: vi.fn()
+      .mockResolvedValueOnce({ data: { paymentId: PAYMENT_ID, status: 'failed' }, error: null })
+      .mockResolvedValueOnce({ data: { paymentId: '20000000-0000-4000-8000-000000000002',
+        status: 'pending_provider', redirectUrl: 'https://sandbox.pelecard.example/checkout/retry' }, error: null }) } };
+    await beginHostedPelecardPayment({ orderId: '20000000-0000-4000-8000-000000000001', checkout }, {
+      client, storage: { getItem: () => JSON.stringify({ idempotencyKey: 'failed-attempt-1', paymentId: PAYMENT_ID }), setItem: vi.fn() },
+      location: { assign: vi.fn() }, createIdempotencyKey: () => 'fresh-attempt-1',
+      allowedRedirectOrigins: ['https://sandbox.pelecard.example'],
+    });
+    expect(client.functions.invoke).toHaveBeenNthCalledWith(2, 'pelecard-initiate', {
+      body: expect.objectContaining({ idempotencyKey: 'fresh-attempt-1' }),
+    });
+  });
+  test('an ambiguous initiation retry opens local verification without a new provider page', async () => {
+    const client = clientWith({ paymentId: PAYMENT_ID, status: 'timed_out' });
+    const storage = { getItem: () => JSON.stringify({ idempotencyKey: 'existing-attempt-1' }), setItem: vi.fn() };
+    const location = { assign: vi.fn() };
+    await beginHostedPelecardPayment({ orderId: '20000000-0000-4000-8000-000000000001', checkout }, {
+      client, storage, location, allowedRedirectOrigins: ['https://sandbox.pelecard.example'],
+    });
+    expect(location.assign).toHaveBeenCalledWith('/payment/return');
+    expect(storage.setItem).toHaveBeenLastCalledWith(PELECARD_PENDING_PAYMENT_KEY,
+      expect.stringContaining(PAYMENT_ID));
+  });
+  test('a linked-order browser retry retains the existing payment identity', async () => {
+    const client = clientWith({ paymentId: PAYMENT_ID, status: 'pending_provider',
+      redirectUrl: 'https://sandbox.pelecard.example/checkout/abc' });
+    const storage = { getItem: () => JSON.stringify({ idempotencyKey: 'existing-attempt-1', paymentId: PAYMENT_ID }), setItem: vi.fn() };
+    await beginHostedPelecardPayment({ orderId: '20000000-0000-4000-8000-000000000001', checkout }, {
+      client, storage, location: { assign: vi.fn() }, createIdempotencyKey: () => 'new-attempt-1',
+      allowedRedirectOrigins: ['https://sandbox.pelecard.example'],
+    });
+    expect(client.functions.invoke).toHaveBeenCalledWith('pelecard-initiate', {
+      body: expect.objectContaining({ idempotencyKey: 'existing-attempt-1' }),
+    });
+  });
   test("initiates through the Edge Function and returns only the hosted URL and local ID", async () => {
     const client = clientWith({
       paymentId: PAYMENT_ID,

@@ -276,6 +276,11 @@ export function createPelecardClient(config: PelecardConfig): PaymentProvider {
   );
 
   return {
+    assertReady() {
+      if (!capabilities.initiate || !capabilities.validateConfirmation || !capabilities.lookup) {
+        throw new PaymentError("capability_unconfigured");
+      }
+    },
     async initiate(input) {
       const capability = capabilities.initiate;
       if (!capability) throw new PaymentError("capability_unconfigured");

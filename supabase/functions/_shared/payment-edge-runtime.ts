@@ -76,6 +76,8 @@ export function createPaymentEdgeRuntime() {
     successfulProviderStatusCodes: commaList(
       "PELECARD_SUCCESS_STATUS_CODES",
     ),
+    failedProviderStatusCodes: (Deno.env.get("PELECARD_FAILURE_STATUS_CODES") ?? "")
+      .split(",").map((value) => value.trim()).filter(Boolean),
   };
   return {
     auth,

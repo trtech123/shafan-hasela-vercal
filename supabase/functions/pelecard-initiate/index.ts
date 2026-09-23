@@ -70,6 +70,7 @@ function runtimeHandler() {
       callbackUrl: requireEnv("PAYMENTS_CALLBACK_URL"),
       currencyCode: "ILS",
       maxBodyBytes: 32_768,
+      requireOrder: true,
     },
   });
 }

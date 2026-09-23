@@ -18,6 +18,7 @@ import {
 type UnknownRecord = Record<string, unknown>;
 
 export interface InitiationProvider {
+  assertReady?(): void;
   initiate(input: InitiateProviderPayment): Promise<HostedPaymentSession>;
 }
 
@@ -28,6 +29,7 @@ export interface PelecardInitiationConfig {
   callbackUrl: string;
   currencyCode: string;
   maxBodyBytes: number;
+  requireOrder?: boolean;
 }
 
 export interface PelecardInitiationDependencies {
@@ -263,7 +265,8 @@ function identityMatches(
     existing.idempotencyKey === requested.idempotencyKey &&
     existing.amountMinor === requested.amountMinor &&
     existing.currencyCode === currencyCode &&
-    stableJson(existing.checkoutSnapshot) === stableJson(requested.checkout);
+    (requested.orderId !== null ||
+      stableJson(existing.checkoutSnapshot) === stableJson(requested.checkout));
 }
 
 function configuredUrl(value: string): boolean {
@@ -341,12 +344,16 @@ export function createPelecardInitiateHandler(
 
       const body = await parsePaymentJson(request, dependencies.config.maxBodyBytes);
       const input = validatePelecardInitiation(body);
+      if (dependencies.config.requireOrder && !input.orderId) {
+        throw new PaymentHttpError(400, "order_required");
+      }
       if (!CURRENCY_PATTERN.test(dependencies.config.currencyCode) ||
         !configuredUrl(dependencies.config.returnUrl) ||
         !configuredUrl(dependencies.config.callbackUrl)) {
         throw new PaymentHttpError(500, "invalid_configuration");
       }
 
+      dependencies.provider.assertReady?.();
       const reservation = await dependencies.store.reserve({
         proposedPaymentId: dependencies.createPaymentId(),
         orderId: input.orderId,
@@ -375,8 +382,8 @@ export function createPelecardInitiateHandler(
 
       try {
         const session = await dependencies.provider.initiate({
-          amountMinor: input.amountMinor,
-          currencyCode: dependencies.config.currencyCode,
+          amountMinor: reservation.payment.amountMinor,
+          currencyCode: reservation.payment.currencyCode,
           merchantKey: reservation.payment.merchantCorrelation,
           returnUrl: dependencies.config.returnUrl,
           callbackUrl: dependencies.config.callbackUrl,
@@ -412,6 +419,9 @@ export function createPelecardInitiateHandler(
     } catch (error) {
       if (error instanceof PaymentHttpError) {
         return paymentJson({ error: { code: error.code } }, error.status, cors);
+      }
+      if (error instanceof PaymentError) {
+        return paymentJson({ error: { code: error.code } }, providerErrorStatus(error.code), cors);
       }
       return paymentJson({ error: { code: "internal_error" } }, 500, cors);
     }

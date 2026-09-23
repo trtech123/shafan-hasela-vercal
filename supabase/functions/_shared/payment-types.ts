@@ -72,6 +72,7 @@ export interface ProviderAdjustmentCapabilityInput extends ProviderAdjustment {
 }
 
 export interface PaymentProvider {
+  assertReady(): void;
   initiate(input: InitiateProviderPayment): Promise<HostedPaymentSession>;
   validateConfirmation(input: ConfirmationValidation): Promise<true>;
   lookup(input: LookupProviderPayment): Promise<VerifiedProviderTransaction>;

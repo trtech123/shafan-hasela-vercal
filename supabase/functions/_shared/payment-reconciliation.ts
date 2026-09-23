@@ -29,6 +29,7 @@ export interface LocalPaymentForReconciliation {
   providerSessionReference?: string;
   /** Provider success codes come from confirmed runtime configuration. */
   successfulProviderStatusCodes: readonly string[];
+  failedProviderStatusCodes?: readonly string[];
 }
 
 export interface CallbackNotice {
@@ -54,7 +55,7 @@ export type ReconciliationDecision =
   | { kind: "already_finalized" }
   | { kind: "reject"; code: RejectionCode }
   | { kind: "mark_failed"; code: "provider_declined" }
-  | { kind: "remain_pending"; code: "provider_timeout" };
+  | { kind: "remain_pending"; code: "provider_timeout" | "provider_unknown_status" };
 
 const FINAL_STATES: ReadonlySet<PaymentLifecycleStatus> = new Set([
   "succeeded",
@@ -157,7 +158,9 @@ export function reconcilePayment(
   }
 
   if (!localPayment.successfulProviderStatusCodes.includes(transaction.statusCode)) {
-    return { kind: "mark_failed", code: "provider_declined" };
+    return localPayment.failedProviderStatusCodes?.includes(transaction.statusCode)
+      ? { kind: "mark_failed", code: "provider_declined" }
+      : { kind: "remain_pending", code: "provider_unknown_status" };
   }
 
   return { kind: "finalize", transaction: safeTransaction(transaction) };

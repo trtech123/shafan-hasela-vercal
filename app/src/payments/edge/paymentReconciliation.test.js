@@ -11,6 +11,7 @@ const localPayment = {
   terminalNumber: "sandbox-terminal-fixture",
   merchantCorrelation: "payment-uuid",
   successfulProviderStatusCodes: ["000"],
+  failedProviderStatusCodes: ["006"],
 };
 
 const callbackNotice = {

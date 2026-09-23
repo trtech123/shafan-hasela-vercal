@@ -128,6 +128,7 @@ function config() {
     maxBodyBytes: 32_768,
     terminalReference: "sandbox-terminal",
     successfulProviderStatusCodes: ["000"],
+    failedProviderStatusCodes: ["006"],
   };
 }
 
