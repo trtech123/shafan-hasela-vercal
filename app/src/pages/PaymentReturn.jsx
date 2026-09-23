@@ -52,7 +52,14 @@ export default function PaymentReturn() {
 
     const reconcile = async () => {
       const attempt = getPendingPelecardAttempt(window.sessionStorage);
-      if (!attempt?.paymentId) {
+      const params = new URLSearchParams(location.search);
+      const returnedId = params.getAll("paymentId");
+      // A locator only: the authenticated server still verifies the payment.
+      const paymentId = returnedId.length === 1 &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(returnedId[0])
+        ? returnedId[0]
+        : attempt?.paymentId;
+      if (!paymentId) {
         if (active) setView("missing");
         return;
       }
@@ -63,7 +70,7 @@ export default function PaymentReturn() {
       });
       if (Object.keys(notification).length > 0) {
         try {
-          await verifyPelecardReturn(attempt.paymentId, notification, {
+          await verifyPelecardReturn(paymentId, notification, {
             client: supabase,
           });
         } catch {
@@ -73,7 +80,7 @@ export default function PaymentReturn() {
       }
 
       try {
-        const result = await pollPelecardStatus(attempt.paymentId, {
+        const result = await pollPelecardStatus(paymentId, {
           client: supabase,
           signal: controller.signal,
           onStatus: (status) => {

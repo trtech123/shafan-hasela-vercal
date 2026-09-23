@@ -47,6 +47,15 @@ function renderPage(path = "/payment/return?opaque=notice") {
 }
 
 describe("PaymentReturn", () => {
+  test("recovers the payment locator from the return URL after session storage is lost", async () => {
+    pendingMock.mockReturnValue(null);
+    pollMock.mockResolvedValue({ id: PAYMENT_ID, status: "timed_out", amount: "1.00", currency: "ILS" });
+    renderPage(`/payment/return?paymentId=${PAYMENT_ID}&PelecardStatusCode=000`);
+    await screen.findByText("1.00 ILS");
+    expect(pollMock).toHaveBeenCalledWith(PAYMENT_ID, expect.anything());
+    expect(verifyMock).toHaveBeenCalledWith(PAYMENT_ID, expect.objectContaining({ PelecardStatusCode: "000" }), expect.anything());
+    expect(screen.queryByText("RCP-1001")).not.toBeInTheDocument();
+  });
   test("shows an already callback-verified payment from sanitized local status", async () => {
     window.sessionStorage.setItem(
       "pelecard.pendingPayment.v1",
