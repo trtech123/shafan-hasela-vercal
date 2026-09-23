@@ -8,9 +8,24 @@ const env = { PELECARD_USER: "fixture-user", PELECARD_PASSWORD: "fixture-secret"
 const response = (body) => new Response(JSON.stringify(body));
 const input = { amountMinor: 100, currencyCode: "ILS", merchantKey: paymentId, returnUrl: "https://app.example.test/payment/return", callbackUrl: "https://edge.example.test/callback" };
 const lookup = { localPaymentId: paymentId, merchantCorrelation: paymentId, terminalReference: env.PELECARD_TERMINAL, providerTransactionId: transactionId };
-const wire = { StatusCode: "000", ShvaResult: "000", TransactionId: transactionId, ConfirmationKey: "fixture-confirmation", DebitApproveNumber: "12345", DebitTotal: "100", DebitCurrency: "1" };
+const wire = { StatusCode: "000", ShvaResult: "000", JParam: "4", TransactionId: transactionId, ConfirmationKey: "fixture-confirmation", DebitApproveNumber: "12345", DebitTotal: "100", DebitCurrency: "1" };
 
 describe("documented Pelecard HTTP adapter", () => {
+  test("accepts a bounded callback larger than a URL and discards unrelated provider fields", () => {
+    const result = JSON.stringify({ ConfirmationKey: "fixture-confirmation", PelecardTransactionId: transactionId, Unused: "x".repeat(3000) });
+    expect(decodePelecardNotification({ contentType: "application/x-www-form-urlencoded", body: { result }, paymentIdHint: paymentId })).toEqual({ paymentId, uniqueKey: paymentId, confirmationKey: "fixture-confirmation", providerTransactionId: transactionId });
+  });
+  test.each([null, {}, { result: "not-json" }, { ConfirmationKey: 123 }])("rejects malformed notifications as invalid input", body => {
+    expect(() => decodePelecardNotification({ contentType: "application/json", body, paymentIdHint: paymentId })).toThrow("invalid_input");
+  });
+  test("keeps a timeout while reading the provider response classified as timeout", async () => {
+    const unreadable = new Response(new ReadableStream({ start(controller) { controller.error(new DOMException("fixture", "TimeoutError")); } }));
+    await expect(createPelecardTransport(env, vi.fn().mockResolvedValue(unreadable)).initiate(input)).rejects.toThrow("provider_timeout");
+  });
+  test.each([undefined, "2", "5", "9"])("never finalizes a non-J4 or unspecified operation (%s)", async JParam => {
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ ...wire, JParam })).mockResolvedValueOnce(response(1));
+    await expect(createPelecardTransport(env, fetcher).lookup(lookup)).rejects.toThrow("invalid_provider_response");
+  });
   test("defers missing provider configuration until readiness check so auth and OPTIONS still work", () => {
     const provider = lazyPelecardTransport({});
     expect(() => provider.assertReady()).toThrow("invalid_configuration");

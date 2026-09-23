@@ -49,7 +49,10 @@ export function createPelecardTransport(env: Environment, fetcher: typeof fetch 
       body: JSON.stringify(body), signal, redirect: "error",
     });
     if (!response.ok) throw new PaymentError("provider_unavailable");
-    try { return await response.json(); } catch { throw new PaymentError("invalid_provider_response"); }
+    try { return await response.json(); } catch (error) {
+      if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError")) throw error;
+      throw new PaymentError("invalid_provider_response");
+    }
   }
   async function validate(key: string, uniqueKey: string, amount: number, signal: AbortSignal) {
     const result = await post("ValidateByUniqueKey", { ConfirmationKey: key, UniqueKey: uniqueKey, TotalX100: String(amount) }, signal);
@@ -93,6 +96,8 @@ export function createPelecardTransport(env: Environment, fetcher: typeof fetch 
           // This key is read directly from Pelecard, never from browser input.
           if (!await validate(text(result.ConfirmationKey), input.merchantCorrelation, amountMinor, signal)) throw new PaymentError("forged_callback");
           const statusCode = text(result.ShvaResult);
+          // J5 authorizations and J2 token registration are not a J4 charge.
+          if (statusCode === "000" && String(result.JParam) !== "4") throw new PaymentError("invalid_provider_response");
           if (result.ShvaResultEmv !== undefined && result.ShvaResultEmv !== "" && result.ShvaResultEmv !== statusCode) throw new PaymentError("invalid_provider_response");
           return {
             providerTransactionId: input.providerTransactionId,
@@ -133,16 +138,23 @@ export function lazyPelecardTransport(env: Environment): PaymentProvider {
 }
 
 export const decodePelecardNotification: PaymentNotificationDecoder = (input) => {
-  let body = record(input.body);
-  const paymentId = input.paymentIdHint ?? body.paymentId;
-  if (body.notification !== undefined) body = record(body.notification);
-  if (body.result !== undefined) {
-    try { body = record(JSON.parse(text(body.result))); } catch { throw new PaymentError("invalid_input"); }
+  try {
+    let body = record(input.body);
+    const paymentId = input.paymentIdHint ?? body.paymentId;
+    if (body.notification !== undefined) body = record(body.notification);
+    if (body.result !== undefined) {
+      // The HTTP parser already caps the complete request at 32 KiB. A full
+      // transaction envelope must not inherit the 2 KiB URL/identifier limit.
+      if (typeof body.result !== "string" || body.result.length > 32_768) throw new PaymentError("invalid_input");
+      body = record(JSON.parse(body.result));
+    }
+    if (typeof paymentId !== "string") throw new PaymentError("invalid_input");
+    return {
+      paymentId, uniqueKey: paymentId,
+      confirmationKey: text(body.ConfirmationKey),
+      providerTransactionId: text(body.PelecardTransactionId ?? body.TransactionId),
+    };
+  } catch {
+    throw new PaymentError("invalid_input");
   }
-  if (typeof paymentId !== "string") throw new PaymentError("invalid_input");
-  return {
-    paymentId, uniqueKey: paymentId,
-    confirmationKey: text(body.ConfirmationKey),
-    providerTransactionId: text(body.PelecardTransactionId ?? body.TransactionId),
-  };
 };
