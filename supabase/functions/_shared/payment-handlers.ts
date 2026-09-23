@@ -76,6 +76,7 @@ export interface PaymentVerificationProvider {
 export type PaymentNotificationDecoder = (input: {
   contentType: string;
   body: unknown;
+  paymentIdHint?: string;
 }) => PaymentNotification;
 
 export interface PaymentHandlerConfig {
@@ -326,7 +327,7 @@ export function createPelecardCallbackHandler(
         dependencies.config.maxBodyBytes,
       );
       const notice = validateNotification(
-        dependencies.decodeNotification(parsed),
+        dependencies.decodeNotification({ ...parsed, paymentIdHint: new URL(request.url).searchParams.get("paymentId") ?? undefined }),
       );
       return await verifyPayment(notice, dependencies, cors);
     } catch (error) {

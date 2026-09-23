@@ -12,6 +12,7 @@ import type {
 import { PaymentError } from "./payment-types.ts";
 import { createSupabasePaymentVerificationStore } from "./payment-store.ts";
 import { createPaymentAccountingRuntime } from "./payment-accounting/runtime.ts";
+import { lazyPelecardTransport, verificationAdapter } from "./pelecard-transport.ts";
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name)?.trim();
@@ -88,6 +89,20 @@ export function createPaymentEdgeRuntime() {
       env: accountingEnv(),
     }),
   };
+}
+
+export function createPelecardVerificationRuntime() {
+  const runtime = createPaymentEdgeRuntime();
+  // Only the documented charge-success code is allowed. Failure codes remain
+  // empty until terminal retry/final-state semantics are confirmed by Pelecard.
+  if (runtime.config.successfulProviderStatusCodes.join(",") !== "000" ||
+    runtime.config.failedProviderStatusCodes?.length) throw new Error("invalid_configuration");
+  return { ...runtime, provider: verificationAdapter(lazyPelecardTransport({
+    PELECARD_USER: Deno.env.get("PELECARD_USER"),
+    PELECARD_PASSWORD: Deno.env.get("PELECARD_PASSWORD"),
+    PELECARD_TERMINAL: Deno.env.get("PELECARD_TERMINAL"),
+    PELECARD_BASE_URL: Deno.env.get("PELECARD_BASE_URL"),
+  })) };
 }
 
 export function createPaymentAccountingEdgeRuntime() {

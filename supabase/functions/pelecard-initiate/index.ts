@@ -8,7 +8,7 @@ import {
   createPelecardInitiateHandler,
 } from "../_shared/payment-initiation.ts";
 import { createSupabasePaymentStore } from "../_shared/payment-store.ts";
-import { createPelecardClient } from "../_shared/pelecard-client.ts";
+import { lazyPelecardTransport } from "../_shared/pelecard-transport.ts";
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name);
@@ -51,11 +51,11 @@ function runtimeHandler() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Intentionally fail closed: Pelecard's initiation request/response mapping
-  // must be injected only after its written terminal-specific contract is known.
-  const provider = createPelecardClient({
-    allowedRedirectOrigins: allowedProviderRedirectOrigins,
-    capabilities: {},
+  const provider = lazyPelecardTransport({
+    PELECARD_USER: Deno.env.get("PELECARD_USER"),
+    PELECARD_PASSWORD: Deno.env.get("PELECARD_PASSWORD"),
+    PELECARD_TERMINAL: Deno.env.get("PELECARD_TERMINAL"),
+    PELECARD_BASE_URL: Deno.env.get("PELECARD_BASE_URL"),
   });
 
   return createPelecardInitiateHandler({

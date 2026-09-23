@@ -1,20 +1,18 @@
 import { createPelecardVerifyHandler } from "../_shared/payment-handlers.ts";
 import { schedulePaymentAccountingWake } from "../_shared/payment-accounting/runtime.ts";
 import {
-  createPaymentEdgeRuntime,
+  createPelecardVerificationRuntime,
   servePaymentHandler,
-  unconfiguredNotificationDecoder,
-  unconfiguredVerificationProvider,
 } from "../_shared/payment-edge-runtime.ts";
+import { decodePelecardNotification } from "../_shared/pelecard-transport.ts";
 
-// capability_unconfigured until Pelecard confirms the return and lookup map.
 servePaymentHandler(() => {
-  const runtime = createPaymentEdgeRuntime();
+  const runtime = createPelecardVerificationRuntime();
   return createPelecardVerifyHandler({
     auth: runtime.auth,
     store: runtime.store,
-    provider: unconfiguredVerificationProvider,
-    decodeNotification: unconfiguredNotificationDecoder,
+    provider: runtime.provider,
+    decodeNotification: decodePelecardNotification,
     config: runtime.config,
     onPaymentSucceeded: (paymentId) => schedulePaymentAccountingWake(
       runtime.accounting.wakePaymentAccounting,

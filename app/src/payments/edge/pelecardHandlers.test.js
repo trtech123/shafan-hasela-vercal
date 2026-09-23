@@ -774,10 +774,12 @@ describe("Pelecard Edge entry points", () => {
     (name) => expect(existsSync(functionPath(name))).toBe(true),
   );
 
-  test("keeps live notification and lookup contracts fail-closed", () => {
+  test("wires server verification without exposing credentials or provider payloads", () => {
     for (const name of ["pelecard-callback", "pelecard-verify"]) {
       const source = readFileSync(functionPath(name), "utf8");
-      expect(source).toContain("capability_unconfigured");
+      expect(source).toContain("createPelecardVerificationRuntime");
+      expect(source).toContain("decodePelecardNotification");
+      expect(source).toContain("provider: runtime.provider");
       expect(source).not.toMatch(/gateway\d*\.pelecard\.biz/i);
       expect(source).not.toMatch(/console\.(log|error|warn)/);
       expect(source).not.toMatch(/card.?number|cvv|expiry|\bpan\b/i);
