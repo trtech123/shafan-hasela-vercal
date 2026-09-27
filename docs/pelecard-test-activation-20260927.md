@@ -61,4 +61,14 @@ Exposure checks scan runtime frontend source/build for provider credential ident
 
 ## Deployment and preflight evidence
 
-Actual deployment results and the final checkpoint are recorded below after verification. No actual TEST transaction is part of this activation.
+Implementation commit: `e57be8a0e84baafb7b9d1d4dd5beb291c34759b8`, branch `workstream/pelecard-test-isolation`.
+
+Final local verification passed: 66 test files / 733 tests; production frontend build; Deno checks for all nine payment/TEST/accounting entrypoints listed above; all five SQL suites on native PostgreSQL; frontend/build/server-log/staging exposure checks; `git diff --check`. Independent review identified the opaque provider-ID issue, which was fixed and re-reviewed before final verification.
+
+**Production changes: none.** At the final pre-deployment recheck, `supabase functions list --project-ref divzxsynczeifkpnpupl --output json` returned HTTP 401 Unauthorized twice. The user has been asked to restore CLI login again. No migration, function deployment, secret/configuration write, provider credential preflight, initialization or transaction was performed. The existing LIVE secrets and global Rivhit configuration are untouched.
+
+The earlier successful metadata check confirmed all three TEST secret names exist without inspecting their values. It also showed no `PELECARD_BASE_URL`, `PELECARD_MODE`, or `PELECARD_TEST_TRANSACTION_ENABLED` entries. The downloaded existing initialization adapter requires PELECARD_BASE_URL before initiating/reserving a payment; the new unconditional commercial guards are **not yet deployed**. This is a point-in-time observation, not a claim about configuration after access was lost.
+
+Resume by re-verifying deployed versions/source and TEST-table absence. Deploy only the three changed existing execution functions (initiate/callback/verify), apply migration 031 explicitly, and deploy TEST/feedback functions with `PELECARD_MODE=test` and `PELECARD_TEST_TRANSACTION_ENABLED=false`. The refund function was absent in production and need not be added. Do not redeploy unchanged status/accounting/frontend artifacts. For the read-only credential probe, temporarily deploy `pelecard-test-preflight` with a new short-lived secret authorization key; execute GetTerminalName only, then delete that probe deployment and unset its two temporary authorization settings. Do not retrieve provider credentials to the local machine.
+
+Before requesting transaction approval, report actual deployment versions, verification results and fresh DB counts. A successful credential probe alone does not establish non-settlement or cross-host session compatibility. Provider-approved test-card instructions remain required; support's verbal `00` still lacks a field/API mapping. Never use a real card or silently relax status checks. No actual TEST session may be initialized until the user explicitly approves the transaction checkpoint.

@@ -1,5 +1,17 @@
 # PROGRESS — Shafan Hasela / Adventure Ops Pro
 
+## Pelecard TEST isolation — local implementation verified; deployment blocked
+
+**Date:** 2026-09-27. **Branch:** `workstream/pelecard-test-isolation`.
+
+- Reconciled the supplied January 2025 REST manual, Hebrew manual and status-code document with official IFrame documentation. Provider PDFs remain untracked, not committed.
+- Read-only production source verification found newer deployed payment source `4c539f5`; imported the relevant existing payment commits before adding TEST changes.
+- Implemented TEST-only credentials/mode, unconditional commercial execution guards, admin-only isolated TEST operations, public feedback with authoritative REST verification, and additive TEST-only ledger migration 031. No order/sale/accounting link or global Rivhit change.
+- Final verification: 733 tests pass; production build and all relevant Deno checks pass; five SQL suites pass on disposable native PostgreSQL with assertion compatibility functions; exposure checks pass. Independent review finding about opaque provider transaction IDs was fixed and re-reviewed.
+- **No production mutation or provider credential call occurred.** CLI access worked after user login but returned HTTP 401 again at the final deployment recheck. Requested restored login; deployment remains pending.
+- No actual TEST initialization, payment, real card, refund, void, accounting document or other monetary action. Retain hard stop before the first actual TEST transaction.
+- Detailed contract, state effects, commands and resume instructions: `docs/pelecard-test-activation-20260927.md`.
+
 ## One-off payment finalization checkpoint — 2026-09-23
 
 Priority is the existing Pelecard one-off order flow. Customer activation, digital signatures, Clubs/iCredit and WhatsApp work are paused and preserved. Local branch `fix/payment-finalization-20260923` is based on completed quotations `eb810b9`; main and the customer branch were not modified.
