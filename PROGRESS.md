@@ -1,6 +1,6 @@
 # PROGRESS — Shafan Hasela / Adventure Ops Pro
 
-## Pelecard TEST isolation — local implementation verified; deployment blocked
+## Pelecard TEST isolation — guards deployed; stopped before first TEST transaction
 
 **Date:** 2026-09-27. **Branch:** `workstream/pelecard-test-isolation`.
 
@@ -8,7 +8,8 @@
 - Read-only production source verification found newer deployed payment source `4c539f5`; imported the relevant existing payment commits before adding TEST changes.
 - Implemented TEST-only credentials/mode, unconditional commercial execution guards, admin-only isolated TEST operations, public feedback with authoritative REST verification, and additive TEST-only ledger migration 031. No order/sale/accounting link or global Rivhit change.
 - Final verification: 733 tests pass; production build and all relevant Deno checks pass; five SQL suites pass on disposable native PostgreSQL with assertion compatibility functions; exposure checks pass. Independent review finding about opaque provider transaction IDs was fixed and re-reviewed.
-- **No production mutation or provider credential call occurred.** CLI access worked after user login but returned HTTP 401 again at the final deployment recheck. Requested restored login; deployment remains pending.
+- After restored CLI access and a fresh unchanged production baseline, deployed the three commercial guards and isolated TEST/feedback functions, applied migration 031, and set TEST mode with initialization disabled. All 29 downloaded source files match local code. Untouched status/accounting artifact hashes are unchanged.
+- Non-charging GetTerminalName preflight authenticated TEST credentials successfully; the temporary probe deployment and authorization settings were removed. Production remains at 12 orders, 10 sales, zero commercial payments/accounting records and zero TEST records; TEST RLS/access restrictions verified. See detailed checkpoint for remaining cross-host/non-settlement and test-card readiness limits.
 - No actual TEST initialization, payment, real card, refund, void, accounting document or other monetary action. Retain hard stop before the first actual TEST transaction.
 - Detailed contract, state effects, commands and resume instructions: `docs/pelecard-test-activation-20260927.md`.
 
