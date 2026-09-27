@@ -1,4 +1,5 @@
 import { createPelecardCallbackHandler } from "../_shared/payment-handlers.ts";
+import { assertCommercialPaymentsDisabled } from "../_shared/pelecard-test-config.ts";
 import { schedulePaymentAccountingWake } from "../_shared/payment-accounting/runtime.ts";
 import {
   createPelecardVerificationRuntime,
@@ -7,6 +8,7 @@ import {
 import { decodePelecardNotification } from "../_shared/pelecard-transport.ts";
 
 servePaymentHandler(() => {
+  assertCommercialPaymentsDisabled();
   const runtime = createPelecardVerificationRuntime();
   return createPelecardCallbackHandler({
     store: runtime.store,

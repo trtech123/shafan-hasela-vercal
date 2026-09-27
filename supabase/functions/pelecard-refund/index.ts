@@ -1,10 +1,12 @@
 import { createPelecardRefundHandler } from "../_shared/payment-refund.ts";
 import { createPaymentEdgeRuntime, servePaymentHandler } from "../_shared/payment-edge-runtime.ts";
 import { PaymentError } from "../_shared/payment-types.ts";
+import { assertCommercialPaymentsDisabled } from "../_shared/pelecard-test-config.ts";
 
 // The terminal-specific adjustment contract is intentionally absent until
 // Pelecard confirms whether this account supports refund and/or void.
 servePaymentHandler(() => {
+  assertCommercialPaymentsDisabled();
   const enabled = Deno.env.get("PELECARD_REFUND_ENABLED")?.trim() === "true";
   const unavailable = async (): Promise<never> => {
     throw new PaymentError("capability_unconfigured");

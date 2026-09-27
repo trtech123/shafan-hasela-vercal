@@ -9,6 +9,7 @@ import {
 } from "../_shared/payment-initiation.ts";
 import { createSupabasePaymentStore } from "../_shared/payment-store.ts";
 import { lazyPelecardTransport } from "../_shared/pelecard-transport.ts";
+import { assertCommercialPaymentsDisabled } from "../_shared/pelecard-test-config.ts";
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name);
@@ -17,6 +18,7 @@ function requireEnv(name: string): string {
 }
 
 function runtimeHandler() {
+  assertCommercialPaymentsDisabled();
   const supabaseUrl = requireEnv("SUPABASE_URL");
   const anonKey = requireEnv("SUPABASE_ANON_KEY");
   const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
