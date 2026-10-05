@@ -73,6 +73,29 @@ describe('Attendance navigation', () => {
   });
 });
 
+describe('Instructor attendance navigation',()=>{
+  const renderInstructor=role=>{
+    currentRole=role;
+    return render(<MemoryRouter initialEntries={['/instructor-attendance']}><Routes><Route element={<Layout/>}>
+      <Route path="/instructor-attendance" element={<h1>מפגשי המדריך</h1>}/>
+      <Route path="/schedule" element={<h1>לוח זמנים</h1>}/>
+    </Route></Routes></MemoryRouter>);
+  };
+  test('instructor has own mobile/desktop route but no admin attendance or Clubs links',()=>{
+    renderInstructor('מדריך');
+    const link=screen.getByRole('link',{name:'נוכחות בחוגים'});
+    expect(link).toHaveAttribute('href','/instructor-attendance');
+    expect(link.className).toContain('bg-sidebar-primary');
+    fireEvent.click(link);expect(screen.getByRole('heading',{name:'מפגשי המדריך'})).toBeInTheDocument();
+    expect(screen.queryByRole('link',{name:'נוכחות חוגים'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('link',{name:'חוגים'})).not.toBeInTheDocument();
+  });
+  test.each(['קופאי','אחמ"ש'])('%s cannot enter instructor attendance',role=>{
+    renderInstructor(role);expect(screen.queryByRole('link',{name:'נוכחות בחוגים'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading',{name:'מפגשי המדריך'})).not.toBeInTheDocument();
+  });
+});
+
 describe("Clubs navigation and route authorization", () => {
   test("an admin sees the חוגים navigation entry and direct route content", () => {
     renderAtClubs("admin");

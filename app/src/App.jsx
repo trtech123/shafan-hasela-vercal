@@ -13,6 +13,7 @@ import Activities from './pages/Activities';
 import Instructors from './pages/Instructors';
 import Clubs from './pages/Clubs';
 import ClubAttendance from './pages/ClubAttendance';
+import InstructorAttendance from './pages/InstructorAttendance';
 import Tasks from './pages/Tasks';
 import Maintenance from './pages/Maintenance';
 import Quotes from './pages/Quotes';
@@ -59,6 +60,7 @@ const AuthenticatedApp = () => {
         <Route path="/instructors" element={<Instructors />} />
         <Route path="/clubs" element={<Clubs />} />
         <Route path="/club-attendance" element={<ClubAttendance />} />
+        <Route path="/instructor-attendance" element={<InstructorAttendance />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/maintenance" element={<Maintenance />} />
         <Route path="/quotes" element={<Quotes />} />

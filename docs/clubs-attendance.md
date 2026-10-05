@@ -1,5 +1,9 @@
 # Clubs + Attendance deployment candidate
 
+This document records the admin checkpoint (`7fb45af`, `2e7903d`). The subsequent
+instructor phase is implemented in [instructor-attendance.md](instructor-attendance.md),
+which supersedes the instructor deferral and extends the combined staging candidate.
+
 ## Scope and workspace
 
 Prepared on `workstream/clubs-attendance` from refreshed `origin/main`,

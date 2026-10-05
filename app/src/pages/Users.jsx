@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { UserPlus, Loader2, ShieldAlert, Trash2 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import InstructorUserLinks from "@/components/clubs/InstructorUserLinks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,7 @@ import {
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 
-// DB enum → Hebrew label. instructor shown for visibility only (legacy users).
+// DB enum → Hebrew label.
 const ROLE_LABELS = {
   admin: "מנהל",
   operations: 'אחמ"ש',
@@ -23,8 +24,8 @@ const ROLE_LABELS = {
   instructor: "מדריך",
 };
 
-// Roles the admin may CREATE or ASSIGN. instructor intentionally excluded.
-const ASSIGNABLE_ROLES = ["admin", "operations", "cashier"];
+// Instructor attendance still requires a separate explicit business-record link.
+const ASSIGNABLE_ROLES = ["admin", "operations", "cashier", "instructor"];
 
 const emptyForm = { email: "", password: "", full_name: "", role: "operations" };
 
@@ -319,6 +320,8 @@ export default function Users() {
           </div>
         )}
       </div>
+
+      <InstructorUserLinks users={users} />
 
       {/* Delete confirmation */}
       <AlertDialog

@@ -10,7 +10,7 @@
 //     function (never returned, never logged). The frontend never sees it.
 //
 // Request body:
-//   { email, password, full_name, role }   role ∈ { admin, operations, cashier }
+//   { email, password, full_name, role }   role ∈ { admin, operations, cashier, instructor }
 //
 // Auto-injected secrets (no Dashboard config needed):
 //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
@@ -30,8 +30,8 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-// Roles the UI is allowed to assign. 'instructor' is intentionally excluded.
-const ALLOWED_ROLES = ["admin", "operations", "cashier"];
+// Instructor attendance also requires an explicit, separately administered link.
+const ALLOWED_ROLES = ["admin", "operations", "cashier", "instructor"];
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {

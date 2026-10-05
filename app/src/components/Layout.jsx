@@ -13,6 +13,7 @@ const allNavItems = [
 { path: "/instructors", label: "מדריכים", icon: Users, roles: ["admin"] },
 { path: "/clubs", label: "חוגים", icon: Trophy, roles: ["admin"] },
 { path: "/club-attendance", label: "נוכחות חוגים", icon: ClipboardList, roles: ["admin"] },
+{ path: "/instructor-attendance", label: "נוכחות בחוגים", icon: ClipboardList, roles: ["מדריך"] },
 { path: "/quotes", label: "הצעות מחיר", icon: FileText, roles: ["admin"] },
 { path: "/leads", label: "לידים", icon: UserSearch, roles: ["admin"] },
 { path: "/chatbot-handoffs", label: "תור שפן", icon: MessageSquareText, roles: ["admin", "אחמ\"ש"] },
