@@ -7,12 +7,14 @@ const paymentStyles = {
 };
 
 export default function PaymentBadge({ status }) {
+  const label = status === "פלאקארד" ? "שולם במלואו · אשראי — פלאקארד" : status;
+  const normalizedStatus = status === "פלאקארד" ? "שולם במלואו" : status;
   return (
     <span className={cn(
       "inline-flex px-2.5 py-1 rounded-full text-xs font-medium border",
-      paymentStyles[status] || "bg-muted text-muted-foreground border-border"
+      paymentStyles[normalizedStatus] || "bg-muted text-muted-foreground border-border"
     )}>
-      {status || "—"}
+      {label || "—"}
     </span>
   );
 }

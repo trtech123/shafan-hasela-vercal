@@ -1,19 +1,21 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import ActivityGrid from "@/components/cashregister/ActivityGrid";
 import Cart from "@/components/cashregister/Cart";
 import PaymentScreen from "@/components/cashregister/PaymentScreen";
 import ReceiptScreen from "@/components/cashregister/ReceiptScreen";
-import {
-  beginHostedPelecardPayment,
-  calculateCheckoutTotals,
-} from "@/payments/pelecardPayments";
+import { calculateCheckoutTotals } from "@/payments/pelecardPayments";
+import { useAuth } from "@/lib/AuthContext";
+import { orderPaymentPath } from "@/payments/orderPayments";
 
 // SCREENS: menu | payment | receipt
 export default function CashRegister() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canPayOrder = user?.role === "admin";
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cartItems, setCartItems] = useState([]);
@@ -24,7 +26,6 @@ export default function CashRegister() {
   const [discount, setDiscount] = useState(null);
   // null = standalone sale; else { id, order_number, client_name, client_phone, organization }
   const [linkedOrder, setLinkedOrder] = useState(null);
-  const [pelecardBusy, setPelecardBusy] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -79,6 +80,18 @@ export default function CashRegister() {
   const discountValid = checkoutTotals.valid;
 
   const handlePaymentConfirm = async (method, paymentDetails = null) => {
+    if (["חשבונית", "הקפה", "שובר"].includes(method) || paymentDetails?.lines?.some(line => ["חשבונית", "הקפה", "שובר"].includes(line.method))) {
+      if (!linkedOrder?.id) { toast.error('יש לקשר הזמנה לפני יצירת שובר הקפה'); return; }
+      navigate('/vouchers?orderId=' + encodeURIComponent(linkedOrder.id));
+      return;
+    }
+    // Linked immediate payments must pass canonical billing review and the
+    // atomic payment RPC; never create a direct sale or local receipt here.
+    if (linkedOrder?.id && ["מזומן", "צ'ק"].includes(method)) {
+      if (!canPayOrder) { toast.error('רישום תשלום להזמנה זמין למנהלי מערכת בלבד'); return; }
+      navigate(`/accounting-operations?orderId=${encodeURIComponent(linkedOrder.id)}&method=${method === 'מזומן' ? 'cash' : 'check'}`);
+      return;
+    }
     setPaymentMethod(method);
     const saleItems = cartItems.map(i => ({ id: i.id, name: i.name, qty: i.qty, customPrice: i.customPrice }));
 
@@ -127,53 +140,8 @@ export default function CashRegister() {
     setScreen("receipt");
   };
 
-  const handlePelecardStart = async () => {
-    if (pelecardBusy) return;
-    setPelecardBusy(true);
-    const saleItems = cartItems.map((item) => ({
-      id: item.id,
-      name: item.name,
-      qty: item.qty,
-      customPrice: item.customPrice,
-    }));
-    try {
-      await beginHostedPelecardPayment({
-        orderId: linkedOrder?.id || null,
-        checkout: {
-          schema_version: 1,
-          items: saleItems,
-          discount: discount
-            ? {
-                type: discount.type,
-                mode: discount.mode,
-                value: discountValue,
-                original_total: subtotal,
-                final_total: total,
-              }
-            : null,
-          linked_order_info: linkedOrder
-            ? {
-                order_number: linkedOrder.order_number,
-                client_name: linkedOrder.client_name,
-                client_phone: linkedOrder.client_phone,
-                organization: linkedOrder.organization || "",
-              }
-            : null,
-          sale_date: new Date().toISOString().slice(0, 10),
-        },
-      }, {
-        client: supabase,
-        storage: window.sessionStorage,
-        location: window.location,
-        createIdempotencyKey: () => crypto.randomUUID(),
-        allowedRedirectOrigins:
-          (import.meta.env.VITE_PELECARD_REDIRECT_ORIGINS || "")
-            .split(",").map((origin) => origin.trim()).filter(Boolean),
-      });
-    } catch {
-      toast.error("לא ניתן להתחיל תשלום מאומת בפלאקארד כרגע");
-      setPelecardBusy(false);
-    }
+  const handlePelecardStart = () => {
+    if (canPayOrder && linkedOrder?.id) navigate(orderPaymentPath(linkedOrder.id));
   };
 
   const handleNewSale = () => {
@@ -203,8 +171,9 @@ export default function CashRegister() {
         total={total}
         cartItems={cartItems}
         onConfirm={handlePaymentConfirm}
+        onManualOrder={linkedOrder?.id ? handlePaymentConfirm : undefined}
         onPelecard={handlePelecardStart}
-        pelecardBusy={pelecardBusy}
+        pelecardEnabled={canPayOrder && Boolean(linkedOrder?.id)}
         onBack={() => setScreen("menu")}
       />
     );
@@ -221,6 +190,7 @@ export default function CashRegister() {
             <p className="text-slate-400 text-sm">בחר פעילות להוספה לסל</p>
           </div>
         </div>
+        <button type="button" className="mb-4 rounded border px-4 py-2" onClick={() => { if (linkedOrder?.id) navigate('/vouchers?orderId=' + encodeURIComponent(linkedOrder.id)); else toast.error('יש לקשר הזמנה לפני יצירת שובר הקפה'); }}>שובר הקפה — ללא תשלום</button>
         <ActivityGrid activities={activities} onAdd={addToCart} />
       </div>
 
@@ -233,6 +203,8 @@ export default function CashRegister() {
           discountAmount={discountAmount}
           discountValid={discountValid}
           total={total}
+          canPayOrder={canPayOrder}
+          onOrderPayment={handlePelecardStart}
           linkedOrder={linkedOrder}
           onLinkOrder={setLinkedOrder}
           onSetDiscount={setDiscount}

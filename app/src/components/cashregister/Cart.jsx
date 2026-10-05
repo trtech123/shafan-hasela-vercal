@@ -6,7 +6,7 @@ const DISCOUNT_TYPES = ["הנחת עובד", "הנחת נכה", "הנחה כלל
 
 export default function Cart({
   items, subtotal, discount, discountAmount, discountValid, total,
-  linkedOrder, onLinkOrder,
+  linkedOrder, onLinkOrder, canPayOrder = false, onOrderPayment,
   onSetDiscount, onUpdateQty, onUpdatePrice, onRemove, onCheckout,
 }) {
   const selectType = (type) => {
@@ -75,13 +75,15 @@ export default function Cart({
 
       <div className="p-4 border-t border-slate-700 space-y-3">
         {/* Link to existing order/customer */}
-        {items.length > 0 && (
-          <LinkOrderSearch
-            linkedOrder={linkedOrder}
-            onSelect={onLinkOrder}
-            onClear={() => onLinkOrder(null)}
-          />
-        )}
+        <LinkOrderSearch
+          linkedOrder={linkedOrder}
+          onSelect={onLinkOrder}
+          onClear={() => onLinkOrder(null)}
+        />
+        {canPayOrder && <>
+          <Button className="w-full" disabled={!linkedOrder?.id} onClick={onOrderPayment}>פלאקארד — תשלום באשראי</Button>
+          <p className="text-xs text-slate-500">{linkedOrder ? "התשלום לפי סכום ההזמנה השמור, ללא קשר לסל." : "יש לקשר הזמנה קיימת לפני תשלום באשראי."}</p>
+        </>}
 
         {/* Discount controls */}
         {items.length > 0 && (

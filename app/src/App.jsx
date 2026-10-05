@@ -1,13 +1,16 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
+import { safePaymentContinuation } from '@/lib/payment-continuation';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
+import Customers from './pages/Customers';
+import Vouchers from './pages/Vouchers';
 import Schedule from './pages/Schedule';
 import Activities from './pages/Activities';
 import Instructors from './pages/Instructors';
@@ -26,13 +29,21 @@ import Products from './pages/Products';
 import Templates from './pages/Templates';
 import Login from './pages/Login';
 import PaymentReturn from './pages/PaymentReturn';
+import OrderPayment from './pages/OrderPayment';
 import ChatbotHandoffs from './pages/ChatbotHandoffs';
 import AccountingOperations from './pages/AccountingOperations';
+import PelecardTransactions from './pages/PelecardTransactions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import DataDeletion from './pages/DataDeletion';
 
+const PaymentReturnRoute = () => {
+  const location = useLocation();
+  return new URLSearchParams(location.search).has('orderId') ? <OrderPayment /> : <PaymentReturn />;
+};
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, authError } = useAuth();
+  const location = useLocation();
 
   if (isLoadingAuth) {
     return (
@@ -47,7 +58,7 @@ const AuthenticatedApp = () => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ paymentReturnTo: safePaymentContinuation(location.pathname + location.search) }} />;
   }
 
   return (
@@ -55,6 +66,8 @@ const AuthenticatedApp = () => {
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/vouchers" element={<Vouchers />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/activities" element={<Activities />} />
         <Route path="/instructors" element={<Instructors />} />
@@ -66,7 +79,8 @@ const AuthenticatedApp = () => {
         <Route path="/quotes" element={<Quotes />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/cashregister" element={<CashRegister />} />
-        <Route path="/payment/return" element={<PaymentReturn />} />
+        <Route path="/payment/order" element={<OrderPayment />} />
+        <Route path="/payment/return" element={<PaymentReturnRoute />} />
         <Route path="/sales-report" element={<DailySalesReport />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/users" element={<Users />} />
@@ -74,6 +88,7 @@ const AuthenticatedApp = () => {
         <Route path="/templates" element={<Templates />} />
         <Route path="/chatbot-handoffs" element={<ChatbotHandoffs />} />
         <Route path="/accounting-operations" element={<AccountingOperations />} />
+        <Route path="/pelecard-transactions" element={<PelecardTransactions />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>

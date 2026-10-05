@@ -1,3 +1,4 @@
+import { isOrderPaid } from "@/payments/orderPayments";
 import { useState, useEffect } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { ClipboardList, Users, CalendarDays, Banknote, ShieldCheck, Mail, Link } from "lucide-react";
@@ -44,7 +45,7 @@ export default function Dashboard() {
   }
 
   const thisMonth = orders.filter(o => moment(o.activity_date).isSame(moment(), "month") && o.status !== "בוטל");
-  const totalRevenue = orders.filter(o => o.status === "שולם").reduce((sum, o) => sum + (o.total_price || 0), 0);
+  const totalRevenue = orders.filter(o => isOrderPaid(o.payment_status)).reduce((sum, o) => sum + (o.total_price || 0), 0);
   const totalParticipants = thisMonth.reduce((sum, o) => sum + (o.num_participants || 0), 0);
   const pendingOrders = orders.filter(o => o.status === "ממתין לאישור");
 

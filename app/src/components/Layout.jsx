@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
-import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText, Trophy, Landmark } from "lucide-react";
+import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText, Trophy, Landmark, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -8,6 +8,9 @@ import SiteOpeningPrompt from "@/components/SiteOpeningPrompt";
 const allNavItems = [
 { path: "/", label: "דשבורד", icon: LayoutDashboard, roles: ["admin"] },
 { path: "/orders", label: "הזמנות", icon: ClipboardList, roles: ["admin", "אחמ\"ש", "קופאי"] },
+{ path: "/customers", label: "לקוחות", icon: Users, roles: ["admin", "אחמ\"ש", "קופאי"] },
+{ path: "/vouchers", label: "שוברי הקפה", icon: FileText, roles: ["admin", "אחמ\"ש", "קופאי"] },
+{ path: "/pelecard-transactions", label: "עסקאות פלאקארד", icon: CreditCard, roles: ["admin"], showInSidebar: false },
 { path: "/schedule", label: "לוח זמנים", icon: CalendarDays, roles: ["admin", "אחמ\"ש", "מדריך", "קופאי"] },
 { path: "/activities", label: "פעילויות", icon: Mountain, roles: ["admin"] },
 { path: "/instructors", label: "מדריכים", icon: Users, roles: ["admin"] },
@@ -34,7 +37,8 @@ export default function Layout() {
   const { user, logout } = useAuth();
 
   const role = user?.role || "מדריך";
-  const navItems = allNavItems.filter((item) => item.roles.includes(role));
+  // Hidden navigation entries still participate in the unchanged route guard below.
+  const navItems = allNavItems.filter((item) => item.showInSidebar !== false && item.roles.includes(role));
 
   // Redirect if user tries to access a page they don't have access to
   const currentItem = allNavItems.find((item) => item.path === location.pathname);
@@ -53,8 +57,8 @@ export default function Layout() {
       }
 
       {/* Sidebar */}
-      <aside className={cn(
-        "fixed lg:static inset-y-0 right-0 z-50 w-64 bg-sidebar text-sidebar-foreground flex flex-col transition-transform duration-300",
+      <aside id="main-navigation" className={cn(
+        "fixed lg:sticky lg:top-0 h-dvh shrink-0 inset-y-0 right-0 z-50 w-64 bg-sidebar text-sidebar-foreground flex flex-col transition-transform duration-300",
         mobileOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
       )}>
         <div className="p-4 border-b border-sidebar-border">
@@ -66,13 +70,14 @@ export default function Layout() {
           />
         </div>
 
-        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
+        <nav aria-label="ניווט ראשי" className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link
                 key={item.path}
                 to={item.path}
+                aria-current={isActive ? "page" : undefined}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
@@ -106,7 +111,7 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-h-screen">
+      <main className="flex-1 min-w-0 min-h-screen">
         {/* Mobile header */}
         <div className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-card">
           <div className="flex items-center gap-2">
@@ -116,7 +121,7 @@ export default function Layout() {
               className="h-8 object-contain"
             />
           </div>
-          <button onClick={() => setMobileOpen(true)} className="p-2 hover:bg-muted rounded-lg">
+          <button aria-label="פתיחת תפריט ניווט" aria-expanded={mobileOpen} aria-controls="main-navigation" onClick={() => setMobileOpen((old) => !old)} className="p-2 hover:bg-muted rounded-lg">
             <Menu className="w-5 h-5" />
           </button>
         </div>

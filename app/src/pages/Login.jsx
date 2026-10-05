@@ -1,13 +1,23 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/api/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
+import { safePaymentContinuation } from '@/lib/payment-continuation';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated, authError } = useAuth();
+  const destination = safePaymentContinuation(location.state?.paymentReturnTo);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated) navigate(destination, { replace: true });
+    else if (authError?.type === 'user_not_registered') navigate('/', { replace: true });
+  }, [isAuthenticated, authError?.type, destination, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,9 +35,7 @@ export default function Login() {
       return;
     }
 
-    // onAuthStateChange in AuthContext will update session;
-    // navigate to root after successful sign-in.
-    navigate('/', { replace: true });
+    // Wait for AuthContext to finish loading the staff profile before resuming.
   };
 
   return (

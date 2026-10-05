@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Clock3,
+  CreditCard,
   FileCheck2,
   Landmark,
   Loader2,
@@ -17,6 +18,8 @@ import { toast } from "sonner";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
+import ImmediateAccountingPanel from "@/components/accounting/ImmediateAccountingPanel";
 
 const OPERATION_COLUMNS = [
   "event_id", "source_type", "source_id", "purpose", "accounting_provider",
@@ -128,6 +131,7 @@ function SummaryCard({ icon: Icon, label, value, tone = "slate" }) {
 }
 
 export default function AccountingOperations() {
+  const { user } = useAuth();
   const [operations, setOperations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -226,14 +230,23 @@ export default function AccountingOperations() {
             <h1 className="text-3xl font-black tracking-tight md:text-4xl">בקרת הנה״ח</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-200">מעקב אחרי מסמכי Rivhit בלי לשנות את הצלחת התשלום, המכירה או ההזמנה.</p>
           </div>
-          <Button variant="outline" className="gap-2 border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white" onClick={loadOperations}>
-            <RefreshCw className="h-4 w-4" /> רענון
-          </Button>
+          <div className="flex flex-wrap gap-2 sm:shrink-0">
+            {user?.role === 'admin' && (
+              <Button asChild variant="outline" className="gap-2 border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white">
+                <a href="/pelecard-transactions"><CreditCard className="h-4 w-4" /> עסקאות פלאקארד</a>
+              </Button>
+            )}
+            <Button variant="outline" className="gap-2 border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white" onClick={loadOperations}>
+              <RefreshCw className="h-4 w-4" /> רענון
+            </Button>
+          </div>
         </div>
       </header>
 
+      <ImmediateAccountingPanel />
+
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="סיכום הנהלת חשבונות">
-        <SummaryCard icon={CheckCircle2} label="תשלומים שהצליחו" value={counts.payments} tone="green" />
+        <SummaryCard icon={CheckCircle2} label="תשלומים עם אירוע הנה״ח" value={counts.payments} tone="green" />
         <SummaryCard icon={FileCheck2} label="מסמכים שהושלמו" value={counts.completed} tone="green" />
         <SummaryCard icon={Clock3} label="בטיפול או בהמתנה" value={counts.waiting} tone="amber" />
         <SummaryCard icon={AlertTriangle} label="דורשים תשומת לב" value={counts.attention} tone="red" />
@@ -257,7 +270,7 @@ export default function AccountingOperations() {
           <div className="px-6 py-16 text-center text-muted-foreground">
             <Landmark className="mx-auto mb-3 h-9 w-9 opacity-40" />
             <p className="font-semibold">אין אירועי הנהלת חשבונות להצגה</p>
-            <p className="mt-1 text-sm">אירוע יופיע כאן לאחר שתשלום Pelecard אומת ונשמר בהצלחה.</p>
+            <p className="mt-1 text-sm">מסמכי תשלומי פלאקארד מיועדים ל-PAYPER, הממתין להפעלה. לא מופק עבורם מסמך נוסף בריווחית. הפקת מסמכים למזומן ולהמחאות נשארת מושהית.</p>
           </div>
         ) : (
           <div>

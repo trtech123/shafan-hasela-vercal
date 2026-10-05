@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { orderPaymentPath } from "@/payments/orderPayments";
+import { Link } from "react-router-dom";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +12,7 @@ import OrderConfirmationPDF from "../components/orders/OrderConfirmationPDF";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
 import PaymentBadge from "../components/orders/PaymentBadge";
 import OrderFormDialog from "../components/orders/OrderFormDialog";
+import OrderQuotationSnapshot from "../components/quotes/OrderQuotationSnapshot";
 import moment from "moment";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -43,6 +46,7 @@ export default function Orders() {
   const [pdfOrder, setPdfOrder] = useState(null); // combined order-confirmation PDF
   // Order being prepared for "lock this slot" — null when no confirm dialog open.
   const [lockingOrder, setLockingOrder] = useState(null);
+  const openedRequestedOrder = useRef(false);
 
   const loadData = async () => {
     try {
@@ -63,7 +67,12 @@ export default function Orders() {
       if (eI) console.error('instructors error:', eI);
       if (eQ) console.error('quotes error:', eQ);
 
-      setOrders(o ?? []);
+      const requestedOrderId = new URLSearchParams(window.location.search).get('orderId');
+      if (requestedOrderId && /^[0-9a-f-]{36}$/i.test(requestedOrderId)) {
+        const { data: requested } = await supabase.from('orders').select('*').eq('id', requestedOrderId).single();
+        if (requested) { setOrders([requested, ...(o || []).filter((row) => row.id !== requested.id)]); if (!openedRequestedOrder.current) { openedRequestedOrder.current = true; setEditingOrder(requested); setDialogOpen(true); } }
+        else setOrders(o ?? []);
+      } else setOrders(o ?? []);
       setActivities(a ?? []);
       setInstructors(ins ?? []);
       setQuotes(q ?? []);
@@ -195,9 +204,10 @@ export default function Orders() {
           <h1 className="text-3xl font-bold tracking-tight">הזמנות</h1>
           <p className="text-muted-foreground mt-1">{orders.length} הזמנות סה״כ</p>
         </div>
+        <div className="flex flex-wrap items-center gap-2"><Button variant="outline" asChild><Link to="/vouchers">שוברי הקפה</Link></Button>
         <Button onClick={() => { setEditingOrder(null); setDialogOpen(true); }} className="gap-2 hidden sm:inline-flex">
           <Plus className="w-4 h-4" /> הזמנה חדשה
-        </Button>
+        </Button></div>
       </div>
 
       <div className="space-y-3">
@@ -313,6 +323,9 @@ export default function Orders() {
               <div className="flex items-center justify-between pt-1">
                 <PaymentBadge status={order.payment_status} />
                 <div className="flex gap-0.5">
+                  {isAdminOrOps && <OrderQuotationSnapshot order={order} />}
+                  <a href={`/vouchers?orderId=${encodeURIComponent(order.id)}`} className="p-2 text-xs text-primary rounded-lg">שובר הקפה</a>
+                  {user?.role === 'admin' && <a href={orderPaymentPath(order.id)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
                   <button onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     <Pencil className="w-4 h-4 text-muted-foreground" />
                   </button>
@@ -400,6 +413,9 @@ export default function Orders() {
                     <td className="px-4 py-3 hidden lg:table-cell font-medium">₪{(order.total_price || 0).toLocaleString()}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
+                        {isAdminOrOps && <OrderQuotationSnapshot order={order} />}
+                        <a href={`/vouchers?orderId=${encodeURIComponent(order.id)}`} className="p-2 text-xs text-primary rounded-lg">שובר הקפה</a>
+                  {user?.role === 'admin' && <a href={orderPaymentPath(order.id)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
                         <button onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                           <Pencil className="w-4 h-4 text-muted-foreground" />
                         </button>

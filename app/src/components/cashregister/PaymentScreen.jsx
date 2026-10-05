@@ -8,7 +8,7 @@ const PAYMENT_METHODS = [
   { key: "צ'ק",        label: "צ'ק",            icon: FileText,     color: "from-rose-600 to-rose-700",      hint: "הזנה ידנית של פרטי הצ'ק" },
   { key: "העברה",      label: "העברה בנקאית",  icon: Building2,    color: "from-purple-600 to-purple-700",  hint: "העברה / ביט / פייבוקס" },
   { key: "אפליקציה",   label: "ביט / Paybox",   icon: Smartphone,   color: "from-orange-600 to-orange-700", hint: "סלק דרך אפליקציה" },
-  { key: "חשבונית",   label: "חשבונית / חח״ד", icon: Receipt,      color: "from-slate-600 to-slate-700",   hint: "חיוב מאוחר / ארגון" },
+  { key: "חשבונית",   label: "שובר הקפה", icon: Receipt,      color: "from-slate-600 to-slate-700",   hint: "חתימה לשירות שלא שולם" },
 ];
 
 const CHECK_METHOD = "צ'ק";
@@ -51,9 +51,11 @@ export default function PaymentScreen({
   total,
   cartItems,
   onConfirm,
+  onManualOrder,
   onPelecard = () => {},
   onBack,
   pelecardBusy = false,
+  pelecardEnabled = false,
 }) {
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
   const [detailFor, setDetailFor] = useState(null);
@@ -62,6 +64,10 @@ export default function PaymentScreen({
   const [lines, setLines] = useState([makeLine("מזומן", total)]);
 
   const handleMethodClick = (key) => {
+    if (onManualOrder && ["מזומן", CHECK_METHOD].includes(key)) {
+      onManualOrder(key);
+      return;
+    }
     if (key === CHECK_METHOD) {
       setCheck({ ...emptyCheck, amount: String(total) });
       setDetailFor(CHECK_METHOD);
@@ -279,7 +285,7 @@ export default function PaymentScreen({
           <p className="text-slate-400 text-sm font-medium text-center mb-4">בחר אמצעי תשלום</p>
           <button
             onClick={onPelecard}
-            disabled={pelecardBusy}
+            disabled={pelecardBusy || !pelecardEnabled}
             className="w-full bg-gradient-to-l from-cyan-600 to-sky-700 rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right disabled:opacity-60 disabled:cursor-wait"
           >
             <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -288,8 +294,8 @@ export default function PaymentScreen({
                 : <ShieldCheck className="w-6 h-6 text-white" />}
             </div>
             <div>
-              <p className="font-bold text-lg">פלאקארד — תשלום מאומת</p>
-              <p className="text-white/70 text-sm">מעבר מאובטח לעמוד התשלום של פלאקארד</p>
+              <p className="font-bold text-lg">פלאקארד — תשלום באשראי</p>
+              <p className="text-white/70 text-sm">{pelecardEnabled ? 'מעבר מאובטח לתשלום ההזמנה השמורה' : 'יש לקשר הזמנה קיימת; זמין למנהלי מערכת בלבד'}</p>
             </div>
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import moment from "moment";
+import CustomerSelector from "@/components/customers/CustomerSelector";
+import { customerToRecord, customerErrorMessage } from "@/lib/customers";
 import { findConflictingBlocks } from "@/lib/blocking";
 
 const timeSlots = [
@@ -19,7 +21,7 @@ const timeSlots = [
 ];
 
 const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
-const PAYMENT_METHODS = ["לא שולם", "שובר", "אשראי", "צ'ק", "מזומן"];
+const PAYMENT_METHODS = ["לא שולם", "אשראי", "צ'ק", "מזומן"];
 const TASK_CATEGORIES = ["סדנת שטח"];
 
 // Radix Select requires every SelectItem to have a non-empty `value`.
@@ -42,6 +44,14 @@ const emptyForm = {
 export default function OrderFormDialog({ open, onClose, order, activities, onSaved }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [reviewingCustomer, setReviewingCustomer] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [uncertain, setUncertain] = useState(false);
+  const inFlight = useRef(false);
+  const pendingRequest = useRef(null);
+  const customerLocked = Boolean(order?.customer_snapshot_id || selectedCustomer);
+  const displayedForm = selectedCustomer ? { ...form, ...customerToRecord(selectedCustomer), billing_institution_name: selectedCustomer.billing_name || selectedCustomer.display_name || '' } : form;
   const [instructors, setInstructors] = useState([]);
   const [quotes, setQuotes] = useState([]);
   // Same-day blocked_slots for the picked activity_date; used for conflict warning.
@@ -155,7 +165,15 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
     }
   }, [order, open]);
 
+  useEffect(() => {
+    setSelectedCustomer(null); setReviewingCustomer(false); setSaveError(''); setUncertain(false);
+    pendingRequest.current = null;
+  }, [order, open]);
+
   const handleChange = (field, value) => {
+    if (field === 'activity_id' && TASK_CATEGORIES.includes(activities.find(activity => activity.id === value)?.category)) {
+      setSelectedCustomer(null); setReviewingCustomer(false);
+    }
     setForm(prev => {
       const updated = { ...prev, [field]: value };
       // Auto-calc total from price_per_person * num_participants
@@ -179,7 +197,12 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
+    if (inFlight.current || (conflicts.length > 0 && !overrideAck)) return;
+    if (selectedCustomer && typeof selectedCustomer.vat_applicable !== 'boolean') {
+      setSaveError('יש לבחור מדיניות מע״מ בכרטיס הלקוח לפני שמירה.'); return;
+    }
+    inFlight.current = true;
+    setSaving(true); setSaveError('');
     try {
       const data = {
         ...form,
@@ -216,19 +239,27 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         data.client_name = data.client_name || "משימה פנימית";
         data.client_phone = data.client_phone || "—";
       }
-
-      let error;
-      if (order) {
-        ({ error } = await supabase.from('orders').update(data).eq('id', order.id));
-      } else {
-        ({ error } = await supabase.from('orders').insert(data));
+      // Snapshot fields may contain nulls; never rewrite them from display-normalized inputs.
+      if (order?.customer_snapshot_id) {
+        for (const key of ['client_name', 'client_phone', 'client_email', 'organization', 'billing_institution_name', 'billing_company_id', 'billing_accounting_email']) delete data[key];
       }
 
+      // Unknown transport outcomes must retry the exact request, including its key.
+      pendingRequest.current ??= {
+        p_request_id: crypto.randomUUID(), p_order_id: order?.id || null,
+        p_data: data, p_customer_id: isTaskMode ? null : selectedCustomer?.id || null,
+        p_expected_version: order?.customer_record_version ?? 0,
+      };
+      const { error, data: saved } = await supabase.rpc('save_order_form', pendingRequest.current);
       if (error) {
-        console.error('save order error:', error);
-        toast.error('שגיאה בשמירת ההזמנה');
+        if (/^[0-9A-Z]{5}$/.test(error.code || '') && !error.code.startsWith('PGRST')) {
+          pendingRequest.current = null; setUncertain(false);
+        } else setUncertain(true);
+        setSaveError(customerErrorMessage(error));
         return;
       }
+      if (!saved?.id) throw new Error('order_save_result_missing');
+      pendingRequest.current = null; setUncertain(false);
 
       if (data.instructor_id) {
         const instructor = instructors.find(i => i.id === data.instructor_id);
@@ -246,14 +277,16 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
       onClose();
     } catch (err) {
       console.error('handleSubmit error:', err);
+      setUncertain(true);
+      setSaveError('תוצאת השמירה אינה ידועה. לחצו שוב על שמירה כדי לבדוק את אותה בקשה בלי ליצור הזמנה נוספת.');
       toast.error('שגיאה בשמירת ההזמנה');
     } finally {
-      setSaving(false);
+      inFlight.current = false; setSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={() => { if (!saving && !uncertain) onClose(); }}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle>
@@ -266,7 +299,15 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
             </p>
           )}
         </DialogHeader>
+        {!isTaskMode && <fieldset disabled={saving || uncertain} className="space-y-3">
+          {order?.customer_snapshot_id && <p className="rounded border p-3 text-sm">פרטי הלקוח נשמרו להזמנה: {order.vat_applicable === true ? 'חייב במע״מ' : order.vat_applicable === false ? 'לא חייב במע״מ' : 'טרם נבדק'}. שינויים בכרטיס הלקוח אינם משנים את ההזמנה.</p>}
+          {order?.customer_snapshot_id && order.payment_status === 'לא שולם' && !reviewingCustomer && <Button type="button" variant="outline" onClick={() => setReviewingCustomer(true)}>עדכון פרטי חיוב מהלקוח</Button>}
+          {(!order?.customer_snapshot_id || reviewingCustomer) && <CustomerSelector value={selectedCustomer?.id} onSelect={setSelectedCustomer} onClear={() => setSelectedCustomer(null)} initialValues={form} />}
+          {selectedCustomer && <p role="status" className="text-sm">נבחר לקוח: {selectedCustomer.display_name}. פרטי הלקוח והחיוב יישמרו עם שמירת ההזמנה.</p>}
+          {reviewingCustomer && <Button type="button" variant="ghost" onClick={() => { setSelectedCustomer(null); setReviewingCustomer(false); }}>ביטול עדכון הלקוח</Button>}
+        </fieldset>}
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          <fieldset disabled={saving || uncertain}>
           <Tabs defaultValue="order" dir="rtl">
             <TabsList className="w-full">
               <TabsTrigger value="order" className="flex-1">פרטי הזמנה</TabsTrigger>
@@ -322,19 +363,19 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>שם הלקוח *</Label>
-                <Input value={form.client_name} onChange={e => handleChange("client_name", e.target.value)} required />
+                <Input aria-label="שם הלקוח" disabled={customerLocked} value={displayedForm.client_name} onChange={e => handleChange("client_name", e.target.value)} required />
               </div>
               <div>
                 <Label>טלפון *</Label>
-                <Input value={form.client_phone} onChange={e => handleChange("client_phone", e.target.value)} required />
+                <Input aria-label="טלפון" disabled={customerLocked} value={displayedForm.client_phone} onChange={e => handleChange("client_phone", e.target.value)} required />
               </div>
               <div>
                 <Label>אימייל</Label>
-                <Input type="email" value={form.client_email} onChange={e => handleChange("client_email", e.target.value)} />
+                <Input aria-label="אימייל" type="email" disabled={customerLocked} value={displayedForm.client_email} onChange={e => handleChange("client_email", e.target.value)} />
               </div>
               <div>
                 <Label>ארגון / חברה</Label>
-                <Input value={form.organization} onChange={e => handleChange("organization", e.target.value)} />
+                <Input aria-label="ארגון / חברה" disabled={customerLocked} value={displayedForm.organization} onChange={e => handleChange("organization", e.target.value)} />
               </div>
             </div>
           )}
@@ -344,8 +385,8 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
               <p className="text-xs font-medium text-orange-700 mb-2">📋 פרטי המשימה</p>
               <div>
                 <Label>תיאור / שם המשימה</Label>
-                <Input
-                  value={form.organization}
+                <Input aria-label="תיאור המשימה"
+                  disabled={customerLocked} value={displayedForm.organization}
                   onChange={e => handleChange("organization", e.target.value)}
                   placeholder="לדוגמה: סיור הכנה לאירוע, תחזוקת ציוד..."
                 />
@@ -376,7 +417,7 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>תאריך הפעילות *</Label>
-              <Input type="date" value={form.activity_date} onChange={e => handleChange("activity_date", e.target.value)} required />
+              <Input aria-label="תאריך הפעילות" type="date" value={form.activity_date} onChange={e => handleChange("activity_date", e.target.value)} required />
             </div>
             <div>
               <Label>שעת התחלה</Label>
@@ -402,26 +443,26 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>מספר משתתפים</Label>
-                <Input type="number" min="0" value={form.num_participants} onChange={e => handleChange("num_participants", e.target.value)} />
+                <Input aria-label="מספר משתתפים" type="number" min="0" value={form.num_participants} onChange={e => handleChange("num_participants", e.target.value)} />
               </div>
               <div>
                 <Label>עלות כוללת (₪)</Label>
-                <Input type="number" min="0" value={form.total_price} onChange={e => handleChange("total_price", e.target.value)} />
+                <Input aria-label="סך הכל לתשלום" type="number" min="0" value={form.total_price} onChange={e => handleChange("total_price", e.target.value)} />
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-2">
               <div>
                 <Label>מספר משתתפים *</Label>
-                <Input type="number" min="1" value={form.num_participants} onChange={e => handleChange("num_participants", e.target.value)} required />
+                <Input aria-label="מספר משתתפים" type="number" min="1" value={form.num_participants} onChange={e => handleChange("num_participants", e.target.value)} required />
               </div>
               <div>
                 <Label>מחיר למשתתף (₪)</Label>
-                <Input type="number" min="0" value={form.price_per_person} onChange={e => handleChange("price_per_person", e.target.value)} />
+                <Input aria-label="מחיר למשתתף" type="number" min="0" value={form.price_per_person} onChange={e => handleChange("price_per_person", e.target.value)} />
               </div>
               <div>
                 <Label>סה״כ לתשלום (₪)</Label>
-                <Input type="number" min="0" value={form.total_price} onChange={e => handleChange("total_price", e.target.value)} />
+                <Input aria-label="סך הכל לתשלום" type="number" min="0" value={form.total_price} onChange={e => handleChange("total_price", e.target.value)} />
               </div>
             </div>
           )}
@@ -474,7 +515,7 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
                     <Label>שם המוסד / ארגון</Label>
-                    <Input value={form.billing_institution_name} onChange={e => handleChange("billing_institution_name", e.target.value)} placeholder="לדוגמה: עיריית חיפה" />
+                    <Input aria-label="שם המוסד / ארגון" disabled={customerLocked} value={displayedForm.billing_institution_name} onChange={e => handleChange("billing_institution_name", e.target.value)} placeholder="לדוגמה: עיריית חיפה" />
                   </div>
                   <div>
                     <Label>שם החותם</Label>
@@ -494,11 +535,11 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
                   </div>
                   <div>
                     <Label>ח.פ / ע.מ</Label>
-                    <Input value={form.billing_company_id} onChange={e => handleChange("billing_company_id", e.target.value)} placeholder="מספר ח.פ או ע.מ" />
+                    <Input aria-label="ח.פ / ע.מ" disabled={customerLocked} value={displayedForm.billing_company_id} onChange={e => handleChange("billing_company_id", e.target.value)} placeholder="מספר ח.פ או ע.מ" />
                   </div>
                   <div>
                     <Label>מייל הנהח</Label>
-                    <Input type="email" value={form.billing_accounting_email} onChange={e => handleChange("billing_accounting_email", e.target.value)} placeholder="accounting@company.com" />
+                    <Input aria-label="מייל הנהלת חשבונות" type="email" disabled={customerLocked} value={displayedForm.billing_accounting_email} onChange={e => handleChange("billing_accounting_email", e.target.value)} placeholder="accounting@company.com" />
                   </div>
                 </div>
               </TabsContent>
@@ -537,8 +578,10 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
             </div>
           )}
 
+          </fieldset>
+          {saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}
           <div className="flex gap-3 justify-end pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+            <Button type="button" variant="outline" disabled={saving || uncertain} onClick={onClose}>ביטול</Button>
             <Button type="submit" disabled={saving || (conflicts.length > 0 && !overrideAck)}>
               {saving ? "שומר..." : order ? "עדכון" : isTaskMode ? "צור משימה" : "צור הזמנה"}
             </Button>
