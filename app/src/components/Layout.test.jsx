@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -48,6 +48,30 @@ const renderAtAccounting = (role) => {
 };
 
 afterEach(() => cleanup());
+
+describe('Attendance navigation', () => {
+  const attendance = role => {
+    currentRole = role;
+    return render(<MemoryRouter initialEntries={['/club-attendance']}><Routes><Route element={<Layout />}>
+      <Route path="/club-attendance" element={<h1>מסך נוכחות</h1>} />
+      <Route path="/schedule" element={<h1>לוח זמנים</h1>} />
+    </Route></Routes></MemoryRouter>);
+  };
+  test('admin has one active attendance link in shared desktop/mobile navigation', () => {
+    attendance('admin');
+    const link = screen.getByRole('link', { name: 'נוכחות חוגים' });
+    expect(link).toHaveAttribute('href', '/club-attendance');
+    expect(link.className).toContain('bg-sidebar-primary');
+    fireEvent.click(link);
+    expect(screen.getByRole('heading', { name: 'מסך נוכחות' })).toBeInTheDocument();
+  });
+  test.each(['מדריך', 'קופאי', 'אחמ"ש'])('%s cannot access attendance route or navigation', role => {
+    attendance(role);
+    expect(screen.queryByRole('link', { name: 'נוכחות חוגים' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'מסך נוכחות' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'לוח זמנים' })).toBeInTheDocument();
+  });
+});
 
 describe("Clubs navigation and route authorization", () => {
   test("an admin sees the חוגים navigation entry and direct route content", () => {

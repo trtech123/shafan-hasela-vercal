@@ -216,6 +216,7 @@ export default function Clubs() {
           <div>
             <p className="mb-2 text-xs font-semibold tracking-[0.22em] text-amber-200">מועדון · קהילה · תשלום חודשי</p>
             <h1 className="text-3xl font-black tracking-tight md:text-4xl">חוגים ומנויים</h1>
+            <a href="/club-attendance" className="mt-3 inline-flex items-center gap-2 rounded-lg bg-white/15 px-4 py-2 font-semibold hover:bg-white/25"><CalendarDays className="h-4 w-4" />מפגשים ונוכחות</a>
             <p className="mt-2 max-w-xl text-sm text-emerald-50/80">ניהול מערכת שבועית, משתתפים וחיובים חוזרים — בלי ליצור הזמנה לכל מפגש.</p>
           </div>
           <Button className="gap-2 bg-amber-400 text-emerald-950 hover:bg-amber-300" onClick={() => setClubDialog({ open: true, club: null })}>

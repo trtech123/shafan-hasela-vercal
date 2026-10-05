@@ -12,6 +12,7 @@ const allNavItems = [
 { path: "/activities", label: "פעילויות", icon: Mountain, roles: ["admin"] },
 { path: "/instructors", label: "מדריכים", icon: Users, roles: ["admin"] },
 { path: "/clubs", label: "חוגים", icon: Trophy, roles: ["admin"] },
+{ path: "/club-attendance", label: "נוכחות חוגים", icon: ClipboardList, roles: ["admin"] },
 { path: "/quotes", label: "הצעות מחיר", icon: FileText, roles: ["admin"] },
 { path: "/leads", label: "לידים", icon: UserSearch, roles: ["admin"] },
 { path: "/chatbot-handoffs", label: "תור שפן", icon: MessageSquareText, roles: ["admin", "אחמ\"ש"] },
@@ -64,7 +65,7 @@ export default function Layout() {
           />
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
