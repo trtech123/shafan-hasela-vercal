@@ -5,6 +5,7 @@ import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
+import { instructorAttendanceCases } from './instructor-attendance.cases.mjs';
 const root=resolve(import.meta.dirname,'../..');
 const runtime=resolve(process.env.CLUBS_TEST_RUNTIME || resolve(root,'.tmp/clubs-runtime'));
 const {default:EmbeddedPostgres}=await import(pathToFileURL(resolve(runtime,'node_modules/embedded-postgres/dist/index.js')));
@@ -26,7 +27,7 @@ try {
  CREATE FUNCTION public.is_admin() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$ SELECT coalesce((SELECT role='admin' FROM public.profiles WHERE id=auth.uid()),false) $$;
  CREATE FUNCTION public.update_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at=now(); RETURN NEW; END $$;
  `);
- for(const name of ['023_clubs_and_recurring_billing.sql','028_clubs_operational_rules.sql',...(await readdir(resolve(root,'supabase/migrations'))).filter(n=>n.endsWith('_clubs_attendance.sql'))]){
+ for(const name of ['023_clubs_and_recurring_billing.sql','028_clubs_operational_rules.sql',...(await readdir(resolve(root,'supabase/migrations'))).filter(n=>n.endsWith('_clubs_attendance.sql') || n.endsWith('_instructor_attendance.sql')).sort()]){
   await c.query(await readFile(resolve(root,'supabase/migrations',name),'utf8'));
  }
  const admin=randomUUID(),other=randomUUID(),club=randomUUID(),participant=randomUUID(),member=randomUUID(),rule=randomUUID();
@@ -167,5 +168,7 @@ try {
  await c.query("INSERT INTO club_sessions(id,club_id,session_date,start_time,end_time) VALUES($1,$2,current_date,'09:00','10:00')",[fresh,club2]);
  await login(c,admin);
  await assert.rejects(c.query('SELECT prepare_club_roster($1)',[fresh]),/ambiguous_membership_dates/);checks++;
- console.log('PASS '+checks+' PostgreSQL attendance assertions; operational calls left financial state unchanged');
+ console.log('PASS '+checks+' PostgreSQL admin attendance assertions; operational calls left financial state unchanged');
+ await c.query('RESET ROLE');
+ await instructorAttendanceCases({c,db,login,admin});
 } finally {if(c)await c.end();await db.stop();}
