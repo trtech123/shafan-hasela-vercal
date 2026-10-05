@@ -29,3 +29,13 @@ Post-application verification confirmed:
 - application-time counts immediately after rollout were zero accounting events, zero accounting documents, and zero failed-payment follow-ups.
 
 No historical payment/accounting backfill, provider request, customer message, real payment, recurring charge, refund, cancellation, or Rivhit document was created while applying or verifying these migrations.
+
+## Clubs attendance rollout ? 2026-10-05
+
+Applied exactly once, in order, to divzxsynczeifkpnpupl:
+
+- 202610050001_clubs_attendance.sql ? verified 2026-10-05T20:01:53.125Z; SHA256 69486c3a411ce971bf804127bc9ad6f9940e4d10d0e82e2d0b1d5ad80d454ca9.
+- 202610050002_instructor_attendance.sql ? verified 2026-10-05T20:03:41.779Z; SHA256 a78dc879efbb53ced086f760f6badde5441f28eb048514aeb4b11aa5f21a42b2.
+
+Existing project convention preserved: no internal migration ledger was created. Gate future execution on the release record and live schema markers. Both migrations are already installed and must not be rerun.
+All new operational/link/audit tables were empty after rollout; existing financial and Clubs data fingerprints were unchanged. See docs/releases/clubs-attendance-20261005-rollout.json for exact evidence and deployment identity.

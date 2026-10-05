@@ -14,3 +14,15 @@ Migration application records will be appended after each verified application. 
 
 ## Scope
 No provider calls, financial writes, test users, instructor links, sessions or attendance marks are created by rollout smoke testing.
+
+## Applied and verified
+
+Frontend production: dpl_Di8vkxx243HJ276ctBHGiNS3Ujsy.
+Release source commit: 7ca9ae0d64b9c74b6697a920e0ac58cdfcca36f8.
+create-user: version 46, verify_jwt=true; all other Edge versions and secret digests unchanged.
+Migration 001: applied once 2026-10-05T20:01:15.159Z; verified 2026-10-05T20:01:53.125Z.
+Migration 002: applied once 2026-10-05T20:03:10.716Z; verified 2026-10-05T20:03:41.779Z.
+Exact SHA256 values and object verification are in the adjacent rollout JSON. Do not rerun either migration.
+Read-only authenticated page checks passed for Orders, Quotations, accounting, Pelecard page, Clubs and admin attendance. Instructor route is present and redirects the admin role as designed. Actual instructor functional QA remains manual.
+Browser message-channel listener errors also occurred before deployment; no application load errors observed.
+All 22 financial-table and existing operational-data fingerprints unchanged. New attendance/link/audit tables remain empty. No provider calls or QA records created.
