@@ -39,3 +39,17 @@ Applied exactly once, in order, to divzxsynczeifkpnpupl:
 
 Existing project convention preserved: no internal migration ledger was created. Gate future execution on the release record and live schema markers. Both migrations are already installed and must not be rerun.
 All new operational/link/audit tables were empty after rollout; existing financial and Clubs data fingerprints were unchanged. See docs/releases/clubs-attendance-20261005-rollout.json for exact evidence and deployment identity.
+
+## Manual club sessions - 2026-10-06
+
+Applied exactly once to `divzxsynczeifkpnpupl`:
+
+- `202610060001_manual_club_session.sql`; verified `2026-10-06T11:49:50.245Z`.
+- SHA256: `912832971c9e83d9ef7b65f827053208a73fbdfd4362a9962790fad67d40d6ae`.
+- Live marker: `public.create_manual_club_session(uuid,date,time,time,uuid,text)`.
+
+This migration is installed and must not be rerun. The existing no-internal-ledger convention is unchanged. Only an additive admin-authorized RPC was installed; existing attendance functions and all monitored operational/financial table fingerprints remained unchanged. No production session or attendance record was created during verification.
+
+Source commit: `25d33655b265a06eb89a96ada983a861260b33f4`.
+Production deployment: `dpl_5WtSueoErqvGhFWztJ4B2Pr68nYV`, replacing `dpl_Di8vkxx243HJ276ctBHGiNS3Ujsy`.
+See `docs/releases/clubs-manual-session-20261006-rollout.json` and the matching source manifest for verification evidence, unchanged baseline failures, and exact release scope.

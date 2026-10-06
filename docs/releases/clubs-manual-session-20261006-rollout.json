@@ -1,0 +1,70 @@
+{
+  "checkedAt": "2026-10-06T11:54:12.933Z",
+  "deployment": {
+    "id": "dpl_5WtSueoErqvGhFWztJ4B2Pr68nYV",
+    "url": "https://shafan-hasela-vercal-1z1hnnh3f-trtechs-projects.vercel.app",
+    "baseline": "dpl_Di8vkxx243HJ276ctBHGiNS3Ujsy",
+    "commit": "25d33655b265a06eb89a96ada983a861260b33f4",
+    "promoted": true,
+    "sourceFilesVerified": 185,
+    "unrelatedFilesPreserved": 180
+  },
+  "migration": {
+    "file": "202610060001_manual_club_session.sql",
+    "sha256": "912832971c9e83d9ef7b65f827053208a73fbdfd4362a9962790fad67d40d6ae",
+    "attempts": 1,
+    "startedAt": "2026-10-06T11:49:26.511Z",
+    "status": "APPLIED + VERIFIED",
+    "project": "divzxsynczeifkpnpupl",
+    "verifiedAt": "2026-10-06T11:49:50.245Z",
+    "existingFunctionsUnchanged": true,
+    "allDataFingerprintsUnchanged": true,
+    "createdSessions": 0
+  },
+  "allDataFingerprintsUnchanged": true,
+  "productionSessionsCreated": 0,
+  "productionAttendanceMarked": 0,
+  "financialWrites": 0,
+  "externalPaymentAccountingProviderCalls": 0,
+  "smoke": {
+    "adminManualForm": true,
+    "todayDefault": "2026-10-06",
+    "explicitSubmitRequired": true,
+    "clubsLegacyIcreditPresentationHidden": true,
+    "orders": true,
+    "quotes": true,
+    "accounting": true,
+    "pelecardPageWithoutProviderLookup": true
+  },
+  "tests": {
+    "focused": {
+      "passed": 42,
+      "suites": 6
+    },
+    "databaseAssertions": 135,
+    "productionSchemaRehearsal": true,
+    "mobileAndDesktopMockedBrowser": true,
+    "accountingPassed": 30,
+    "provider": {
+      "passed": 56,
+      "preExistingFailed": 4,
+      "baselineIdentical": true
+    },
+    "application": {
+      "candidatePassed": 630,
+      "baselinePassed": 626,
+      "preExistingFailed": 27,
+      "baselineFailuresIdentical": true
+    },
+    "typecheck": {
+      "productionBaselineErrors": 203,
+      "candidateErrors": 203,
+      "diagnosticsIdentical": true
+    },
+    "productionBuild": true
+  },
+  "limitations": [
+    "Production form was opened but deliberately not submitted; user performs functional production QA.",
+    "Existing application, provider metadata tests and typecheck failures reproduced on unchanged production baseline."
+  ]
+}
