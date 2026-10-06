@@ -20,6 +20,39 @@ beforeEach(() => {
   state.rpc.mockReset().mockImplementation(async name => ({ data: name === 'get_club_attendance_history' ? state.rows : 0, error: null }));
 });
 afterEach(cleanup);
+async function openManual(){render(<ClubAttendance/>);fireEvent.click(await screen.findByRole('button',{name:'+ מפגש חדש'}));}
+test('manual defaults to Israel today; creates only on explicit submit',async()=>{
+ await openManual();expect(screen.getByLabelText('תאריך המפגש')).toHaveValue(israelDate());
+ expect(state.rpc.mock.calls.every(([n])=>n==='get_club_attendance_history')).toBe(true);
+ fireEvent.change(screen.getByLabelText('שעת התחלה'),{target:{value:'10:00'}});
+ fireEvent.change(screen.getByLabelText('שעת סיום'),{target:{value:'11:00'}});
+ fireEvent.change(screen.getByLabelText('הערה למפגש החדש'),{target:{value:'השלמה'}});
+ fireEvent.click(screen.getByRole('button',{name:'יצירת מפגש'}));
+ await waitFor(()=>expect(state.rpc).toHaveBeenCalledWith('create_manual_club_session',{p_club_id:'c',p_date:israelDate(),p_start:'10:00',p_end:'11:00',p_instructor_id:null,p_notes:'השלמה'}));
+});
+test('manual duplicate is clear and never automatically retries',async()=>{
+ await openManual();fireEvent.change(screen.getByLabelText('שעת התחלה'),{target:{value:'10:00'}});fireEvent.change(screen.getByLabelText('שעת סיום'),{target:{value:'11:00'}});
+ state.rpc.mockImplementation(async n=>n==='create_manual_club_session'?{error:{message:'session_exists'}}:{data:[],error:null});
+ fireEvent.click(screen.getByRole('button',{name:'יצירת מפגש'}));
+ expect(await screen.findByRole('alert')).toHaveTextContent('כבר קיים מפגש');
+ expect(state.rpc.mock.calls.filter(([n])=>n==='create_manual_club_session')).toHaveLength(1);
+});
+test('manual invalid time cannot submit; cancelling makes no writes',async()=>{
+ await openManual();fireEvent.change(screen.getByLabelText('שעת התחלה'),{target:{value:'11:00'}});fireEvent.change(screen.getByLabelText('שעת סיום'),{target:{value:'10:00'}});
+ expect(screen.getByRole('button',{name:'יצירת מפגש'})).toBeDisabled();
+ fireEvent.click(screen.getByRole('button',{name:'סגירת טופס מפגש'}));expect(state.rpc.mock.calls.every(([n])=>n==='get_club_attendance_history')).toBe(true);
+});
+test('manual creation freezes selected instructor and blocks a double submit',async()=>{
+ state.clubs[0].instructor_id='i';
+ state.from.mockImplementation(t=>query(t==='clubs'?state.clubs:t==='instructors'?[{id:'i',full_name:'מדריך בדיקה'}]:[]));
+ await openManual();expect(screen.getByLabelText('מדריך למפגש החדש')).toHaveValue('i');
+ fireEvent.change(screen.getByLabelText('שעת התחלה'),{target:{value:'12:00'}});fireEvent.change(screen.getByLabelText('שעת סיום'),{target:{value:'13:00'}});
+ let release=(_value)=>{};const pending=new Promise(resolve=>{release=resolve;});state.rpc.mockImplementation(n=>n==='create_manual_club_session'?pending:Promise.resolve({data:[],error:null}));
+ const button=screen.getByRole('button',{name:'יצירת מפגש'});fireEvent.click(button);fireEvent.click(button);
+ expect(state.rpc.mock.calls.filter(([n])=>n==='create_manual_club_session')).toHaveLength(1);
+ expect(state.rpc).toHaveBeenCalledWith('create_manual_club_session',expect.objectContaining({p_instructor_id:'i'}));
+ release({data:'s',error:null});expect(await screen.findByText(/המפגש נוצר/)).toBeInTheDocument();
+});
 test('Israel calendar dates and bounded ranges survive DST and UTC midnight', () => {
   expect(israelDate(new Date('2026-10-24T22:30:00Z'))).toBe('2026-10-25');
   expect(shiftDate('2026-10-25', 1)).toBe('2026-10-26');

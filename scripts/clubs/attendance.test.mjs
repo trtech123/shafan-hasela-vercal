@@ -1,3 +1,4 @@
+import { manualSessionCases } from './manual-session.cases.mjs';
 // Disposable loopback PostgreSQL only. No environment/database credentials used.
 // Install embedded-postgres in .tmp/clubs-runtime or set CLUBS_TEST_RUNTIME to its directory.
 import {readFile,readdir,mkdir} from 'node:fs/promises';
@@ -23,11 +24,11 @@ try {
  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  GRANT USAGE ON SCHEMA auth,public TO authenticated,anon,service_role;
  CREATE TABLE public.profiles(id uuid PRIMARY KEY,full_name text,role text);
- CREATE TABLE public.instructors(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),full_name text);
+ CREATE TABLE public.instructors(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),full_name text,phone text);
  CREATE FUNCTION public.is_admin() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$ SELECT coalesce((SELECT role='admin' FROM public.profiles WHERE id=auth.uid()),false) $$;
  CREATE FUNCTION public.update_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at=now(); RETURN NEW; END $$;
  `);
- for(const name of ['023_clubs_and_recurring_billing.sql','028_clubs_operational_rules.sql',...(await readdir(resolve(root,'supabase/migrations'))).filter(n=>n.endsWith('_clubs_attendance.sql') || n.endsWith('_instructor_attendance.sql')).sort()]){
+ for(const name of ['023_clubs_and_recurring_billing.sql','028_clubs_operational_rules.sql',...(await readdir(resolve(root,'supabase/migrations'))).filter(n=>n.endsWith('_clubs_attendance.sql') || n.endsWith('_instructor_attendance.sql') || n.endsWith('_manual_club_session.sql')).sort()]){
   await c.query(await readFile(resolve(root,'supabase/migrations',name),'utf8'));
  }
  const admin=randomUUID(),other=randomUUID(),club=randomUUID(),participant=randomUUID(),member=randomUUID(),rule=randomUUID();
@@ -171,4 +172,5 @@ try {
  console.log('PASS '+checks+' PostgreSQL admin attendance assertions; operational calls left financial state unchanged');
  await c.query('RESET ROLE');
  await instructorAttendanceCases({c,db,login,admin});
+ await manualSessionCases({c,db,login,admin});
 } finally {if(c)await c.end();await db.stop();}

@@ -30,6 +30,10 @@ import {
 import { cn } from "@/lib/utils";
 import { attendancePaymentState, buildCancellationPreview } from "@/lib/clubDomain";
 
+// Historical provider data/code remain available for maintenance only.
+// Enrollment, provider cancellation and provider-linked attendance are not product UI.
+const showLegacyIcreditUi = false;
+
 const weekdays = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
 const membershipLabels = {
@@ -217,7 +221,7 @@ export default function Clubs() {
             <p className="mb-2 text-xs font-semibold tracking-[0.22em] text-amber-200">מועדון · קהילה · תשלום חודשי</p>
             <h1 className="text-3xl font-black tracking-tight md:text-4xl">חוגים ומנויים</h1>
             <a href="/club-attendance" className="mt-3 inline-flex items-center gap-2 rounded-lg bg-white/15 px-4 py-2 font-semibold hover:bg-white/25"><CalendarDays className="h-4 w-4" />מפגשים ונוכחות</a>
-            <p className="mt-2 max-w-xl text-sm text-emerald-50/80">ניהול מערכת שבועית, משתתפים וחיובים חוזרים — בלי ליצור הזמנה לכל מפגש.</p>
+            <p className="mt-2 max-w-xl text-sm text-emerald-50/80">ניהול מערכת שבועית, משתתפים ומפגשי חוגים.</p>
           </div>
           <Button className="gap-2 bg-amber-400 text-emerald-950 hover:bg-amber-300" onClick={() => setClubDialog({ open: true, club: null })}>
             <Plus className="h-4 w-4" /> חוג חדש
@@ -320,7 +324,7 @@ export default function Clubs() {
                       <div className="text-sm">
                         <p className="font-semibold">{membershipLabels[membership.status] || membership.status}</p>
                         <p className="text-xs text-muted-foreground">₪{formatMoney(membership.monthly_price)} · חיוב ב־15 עבור אותו חודש</p>
-                        <p className="text-xs text-muted-foreground">הוראת קבע מתחילה: {membership.recurring_starts_on || "בחודש הבא"}</p>
+                        {showLegacyIcreditUi && <p className="text-xs text-muted-foreground">הוראת קבע מתחילה: {membership.recurring_starts_on || "בחודש הבא"}</p>}
                         {membership.current_month_settlement_status === "manual_required" && <p className="mt-1 text-xs font-semibold text-amber-700">החודש הנוכחי: הסדרה ידנית בקופה · ללא חיוב יחסי</p>}
                         {membership.cancellation_effective_on && <p className="mt-1 text-xs font-semibold text-red-700">בקשת ביטול: {String(membership.cancellation_requested_at || "").slice(0, 10)} · סיום אפקטיבי: {membership.cancellation_effective_on}</p>}
                       </div>
@@ -329,10 +333,10 @@ export default function Clubs() {
                         {debt > 0 ? <p className="text-xs font-bold text-red-700">חוב ₪{formatMoney(debt)}</p> : <p className="text-xs text-muted-foreground">אין חוב פתוח</p>}
                       </div>
                       <div className="flex flex-wrap gap-2 xl:justify-end">
-                        {membership.status === "cancellation_scheduled" && membership.cancellation_effective_on <= currentIsraelDate() && (
+                        {showLegacyIcreditUi && membership.status === "cancellation_scheduled" && membership.cancellation_effective_on <= currentIsraelDate() && (
                           <Button size="sm" variant="destructive" disabled={busyId === membership.id} onClick={() => finalizeDueCancellation(membership)}>השלמת ביטול ב־iCredit</Button>
                         )}
-                        {!agreement?.provider_recurring_id && !["cancelled", "cancellation_scheduled"].includes(membership.status) && (
+                        {showLegacyIcreditUi && !agreement?.provider_recurring_id && !["cancelled", "cancellation_scheduled"].includes(membership.status) && (
                           <Button size="sm" className="gap-1.5 bg-amber-400 text-emerald-950 hover:bg-amber-300" disabled={busyId === membership.id} onClick={() => startEnrollment(membership)} aria-label={`התחלת הוראת קבע עבור ${name}`}>
                             <CreditCard className="h-4 w-4" /> הוראת קבע
                           </Button>
@@ -348,7 +352,7 @@ export default function Clubs() {
               </div>
             </section>
 
-            <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+            {showLegacyIcreditUi && <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
               <div className="border-b p-5"><h2 className="text-lg font-bold">נוכחות וסטטוס תשלום iCredit</h2><p className="text-sm text-muted-foreground">הסימון הכספי נגזר מנתוני הספק ואינו ניתן לעריכה ידנית.</p></div>
               <div className="divide-y">
                 {selectedAttendance.map((row) => {
@@ -361,7 +365,7 @@ export default function Clubs() {
                 })}
                 {!selectedAttendance.length && <p className="p-6 text-sm text-muted-foreground">אין עדיין מפגשים להצגת נוכחות.</p>}
               </div>
-            </section>
+            </section>}
 
             <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
               <div className="border-b p-5"><h2 className="text-lg font-bold">מעקב תשלומים שנכשלו</h2><p className="text-sm text-muted-foreground">נוצר אוטומטית פעם אחת לכל חיוב שנכשל. לא נשלחת הודעה אוטומטית.</p></div>

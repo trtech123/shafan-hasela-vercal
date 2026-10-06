@@ -4,6 +4,7 @@ import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import ManualClubSession from '@/components/clubs/ManualClubSession';
 import { attendanceError, attendanceLabels, israelDate, sessionLabels, shiftDate, validAttendanceRange } from '@/lib/clubAttendance';
 
 const selectClass = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm';
@@ -35,6 +36,7 @@ function AttendanceWorkspace() {
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const mutation = useRef(false);
   const request = useRef(0);
   const auditRequest = useRef(0);
@@ -45,7 +47,7 @@ function AttendanceWorkspace() {
     (async () => {
       try {
         const results = await Promise.all([
-          supabase.from('clubs').select('id,name,status').order('name'),
+          supabase.from('clubs').select('id,name,status,instructor_id').order('name'),
           supabase.from('instructors').select('id,full_name').order('full_name'),
         ]);
         if (results.some(r => r.error)) throw results.find(r => r.error).error;
@@ -110,6 +112,21 @@ function AttendanceWorkspace() {
     }
   }
   const selected = sessions.find(s => s.id === selectedId);
+  async function createManual(params) {
+    if (mutation.current) return;
+    mutation.current=true;setBusy(true);setError('');setNotice('');
+    try {
+      const result=await supabase.rpc('create_manual_club_session',params);
+      if(result.error)throw result.error;
+      setManualOpen(false);setNotice('המפגש נוצר. ניתן לפתוח אותו ולהכין רשימת משתתפים.');
+    } catch(e) { setError(attendanceError(e)); }
+    finally {
+      // A timed-out request may have committed. Show its date before any retry.
+      setFrom(params.p_date);setUntil(params.p_date);setClubId(params.p_club_id);
+      await load(params.p_club_id,params.p_date,params.p_date);
+      mutation.current=false;setBusy(false);
+    }
+  }
   const rangeChanged = !loadedRange || loadedRange.id !== clubId || loadedRange.start !== from || loadedRange.end !== until;
   const locked = busy || loading || rangeChanged;
   const readonly = locked || selected?.status === 'cancelled' || selected?.session_date > israelDate();
@@ -135,12 +152,14 @@ function AttendanceWorkspace() {
         <label className="space-y-1">עד תאריך<Input aria-label="עד תאריך" type="date" value={until} disabled={busy} onChange={e => setUntil(e.target.value)} /></label>
       </div>
       <div className="flex flex-wrap gap-3">
+        <Button disabled={busy || loading || !clubs.some(c=>c.status==='active')} variant="outline" onClick={()=>{setError('');setManualOpen(true);}}>+ מפגש חדש</Button>
         <Button disabled={busy || loading || !clubId} variant="outline" onClick={() => { setError(''); void load(); }}>רענון מפגשים</Button>
         <Button disabled={busy || loading || !clubId || !validAttendanceRange(from, until) || clubs.find(c => c.id === clubId)?.status !== 'active'} onClick={() => write('materialize_club_sessions', { p_club_id: clubId, p_from: from, p_until: until }, '')}>יצירת מפגשים מהמערכת השבועית</Button>
       </div>
       <p className="text-sm text-muted-foreground">עד 62 ימים בכל טעינה. יצירה עד שנה לאחור ועד 90 ימים קדימה. שינוי במערכת השבועית אינו משנה מפגשים שנוצרו; יש לבטל בנפרד מפגש שהוחלף. טעינה ורענון אינם יוצרים מפגשים.</p>
       {loadedRange && rangeChanged && <p role="status" className="text-amber-800">הטווח השתנה. לחצו על רענון מפגשים להצגת הנתונים בטווח החדש.</p>}
     </section>
+    {manualOpen && <ManualClubSession clubs={clubs} instructors={instructors} selectedClubId={clubs.find(c=>c.id===clubId&&c.status==='active')?.id||clubs.find(c=>c.status==='active')?.id||''} busy={busy} onCreate={createManual} onClose={()=>setManualOpen(false)}/>}
     {loading && <p role="status">טוען נתונים…</p>}
     {!loading && !!clubId && !sessions.length && <p>אין מפגשים בטווח שנבחר</p>}
     <section aria-label="מפגשים" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -161,7 +180,7 @@ function AttendanceWorkspace() {
       <details><summary className="cursor-pointer font-semibold">יומן שינויים במפגש ובנוכחות</summary>
         {!audit.length && !sessionAudit.length && <p className="py-2">אין שינויים מתועדים במפגש זה.</p>}
         {audit.map(a => <p key={`a-${a.id}`} className="py-2 text-sm border-b">{timestamp(a.changed_at)} · {a.actor_name || 'משתמש לא זמין'} · {roster.find(r => r.membership_id === a.membership_id)?.participant_name || 'משתתף'} · {attendanceLabels[a.old_status] || 'טרם סומן'} ← {attendanceLabels[a.new_status]} · {a.new_notes || 'ללא הערה'}</p>)}
-        {sessionAudit.map(a => <p key={`s-${a.id}`} className="py-2 text-sm border-b">{timestamp(a.changed_at)} · {a.actor_name || 'משתמש לא זמין'} · עדכון מפגש: {sessionLabels[a.old_status]} ← {sessionLabels[a.new_status]} · {a.new_notes || 'ללא הערה'}</p>)}
+        {sessionAudit.map(a => <p key={`s-${a.id}`} className="py-2 text-sm border-b">{timestamp(a.changed_at)} · {a.actor_name || 'משתמש לא זמין'} · {a.old_status==='not_created'?'יצירת מפגש':`עדכון מפגש: ${sessionLabels[a.old_status]} ← ${sessionLabels[a.new_status]}`} · {a.new_notes || 'ללא הערה'}</p>)}
       </details>
     </section>}
     <section aria-label="היסטוריית נוכחות" className="rounded-xl border bg-card p-4 space-y-3">

@@ -20,7 +20,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "release/clubs-attendance-20261005": false
+      "release/clubs-attendance-20261005": false,
+      "release/clubs-manual-session-20261006": false
     }
   }
 }

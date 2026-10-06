@@ -117,7 +117,7 @@ export default function MemberRegistrationDialog({ open, onClose, club, onSaved 
             </div>
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
               <p className="font-bold">החודש הנוכחי: הסדרה ידנית בקופה</p>
-              <p>אין חיוב יחסי אוטומטי. הוראת הקבע ב־iCredit מתחילה בחודש הבא והחיוב הקבוע הוא ב־15 עבור אותו חודש.</p>
+              <p>רישום המשתתף שומר את פרטי החברות בלבד ואינו מפעיל חיוב או הוראת קבע.</p>
             </div>
           </section>
 

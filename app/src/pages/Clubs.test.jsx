@@ -141,23 +141,14 @@ describe("Clubs admin workspace", () => {
     expect(screen.getByText("חוב ₪245")).toBeInTheDocument();
   });
 
-  test("starts hosted enrollment and opens only the TEST iCredit URL", async () => {
-    invokeMock.mockResolvedValueOnce({
-      data: { ok: true, agreementId: "agreement-1", url: "https://testicredit.rivhit.co.il/payment/PaymentItems.aspx?Token=public" },
-      error: null,
-    });
+  test("obsolete iCredit labels and provider controls are absent", async () => {
     render(<Clubs />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "התחלת הוראת קבע עבור דן כהן" }));
-
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("club-recurring-enroll", {
-      body: { membershipId: "membership-pending" },
-    }));
-    expect(window.open).toHaveBeenCalledWith(
-      "https://testicredit.rivhit.co.il/payment/PaymentItems.aspx?Token=public",
-      "_blank",
-      "noopener,noreferrer",
-    );
+    await screen.findAllByText('חוג טיפוס נוער');
+    expect(document.body).not.toHaveTextContent(/iCredit/i);
+    expect(screen.queryByRole('button',{name:/התחלת הוראת קבע|השלמת ביטול/})).not.toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'רישום משתתף'}));
+    expect(document.body).not.toHaveTextContent(/iCredit/i);
   });
 
   test("shows the calculated effective date before scheduling cancellation", async () => {
@@ -189,11 +180,12 @@ describe("Clubs admin workspace", () => {
     expect(invokeMock).not.toHaveBeenCalledWith("club-recurring-cancel", expect.anything());
   });
 
-  test("shows provider-derived paid, failed, and follow-up states in attendance", async () => {
+  test("hides legacy provider attendance badges and preserves historical follow-ups", async () => {
     render(<Clubs />);
-    expect(await screen.findByText("✓ שולם")).toBeInTheDocument();
-    expect(screen.getByText("✕ לא שולם")).toBeInTheDocument();
-    expect(screen.getByText("— לא אומת")).toBeInTheDocument();
+    await screen.findAllByText('חוג טיפוס נוער');
+    expect(screen.queryByText("✓ שולם")).not.toBeInTheDocument();
+    expect(screen.queryByText("✕ לא שולם")).not.toBeInTheDocument();
+    expect(screen.getByRole('link',{name:'מפגשים ונוכחות'})).toHaveAttribute('href','/club-attendance');
     expect(screen.getByText(/ממתין לטיפול/)).toBeInTheDocument();
   });
 

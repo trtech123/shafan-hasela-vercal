@@ -20,6 +20,10 @@ export const attendanceLabels = { present: 'נוכח/ת', absent: 'נעדר/ת',
 export const sessionLabels = { scheduled: 'מתוכנן', completed: 'התקיים', cancelled: 'מבוטל' };
 export function attendanceError(error) {
   const message = String(error?.message || '');
+  if (message.includes('session_exists')) return 'כבר קיים מפגש בחוג, בתאריך ובשעת ההתחלה שבחרתם — גם אם בוטל. בדקו את רשימת המפגשים לפני יצירה נוספת.';
+  if (message.includes('invalid_session_time')) return 'יש לבחור שעת סיום אחרי שעת ההתחלה באותו יום.';
+  if (message.includes('instructor_not_found')) return 'המדריך שנבחר אינו זמין. רעננו ובחרו מדריך מהרשימה.';
+  if (message.includes('club_not_found') || message.includes('club_inactive')) return 'יש לבחור חוג פעיל וזמין.';
   if (message.includes('conflict')) return 'הנתונים עודכנו במקביל. הרשימה נטענה מחדש; בדקו אותה לפני שמירה נוספת.';
   if (message.includes('invalid_date_range')) return 'יש לבחור עד 62 ימים. יצירת מפגשים אפשרית עד שנה לאחור ועד 90 ימים קדימה.';
   if (message.includes('overlapping_schedule_rules')) return 'קיימות הגדרות שבועיות כפולות לאותה שעה. יש לתקן את המערכת השבועית.';
