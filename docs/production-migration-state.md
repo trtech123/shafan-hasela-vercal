@@ -53,3 +53,17 @@ This migration is installed and must not be rerun. The existing no-internal-ledg
 Source commit: `25d33655b265a06eb89a96ada983a861260b33f4`.
 Production deployment: `dpl_5WtSueoErqvGhFWztJ4B2Pr68nYV`, replacing `dpl_Di8vkxx243HJ276ctBHGiNS3Ujsy`.
 See `docs/releases/clubs-manual-session-20261006-rollout.json` and the matching source manifest for verification evidence, unchanged baseline failures, and exact release scope.
+
+## Completed-session attendance corrections - 2026-10-06
+
+Applied exactly once to `divzxsynczeifkpnpupl`:
+
+- `202610060002_completed_attendance_correction.sql`, verified `2026-10-06T15:01:42.449Z`.
+- SHA256: `a15b1493194ef74bbb4915d1fdfd6e369c494df18e4d728da8f2e71c46755c7b`.
+- Replaces only `mark_club_attendance(uuid,uuid,text,integer,text)`: completed sessions require an admin and a non-whitespace correction reason. Instructor completed-session writes are denied. Cancelled/future restrictions, session locking, optimistic version checks, and append-only audit insertion are preserved.
+
+No tables, existing attendance/audit records, or financial data were changed. Function privileges and every other inspected Clubs/instructor function were unchanged. This migration is installed; do not blindly replay it. The project still uses schema markers and release records rather than an internal migration ledger.
+
+Source commit: `a4385a29510efe3bac5aabff85d270fd24d1e204`.
+Deployment: `dpl_6XPouByDuARH9GzBkTe4cxGxr1vo`, replacing `dpl_5WtSueoErqvGhFWztJ4B2Pr68nYV`. Three intentional deployed source changes; 182 unrelated source files preserved byte-for-byte. Release-branch Git auto-deployment is disabled; the deployed artifact preserves the original production Vercel configuration.
+Evidence: `docs/releases/clubs-completed-correction-20261006-rollout.json` and matching manifest. Production smoke was read-only; the user retains manual correction QA.

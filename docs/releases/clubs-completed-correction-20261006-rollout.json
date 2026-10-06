@@ -1,0 +1,65 @@
+{
+  "checkedAt": "2026-10-06T15:04:13.377Z",
+  "deployment": {
+    "id": "dpl_6XPouByDuARH9GzBkTe4cxGxr1vo",
+    "url": "https://shafan-hasela-vercal-7tsu3wpxt-trtechs-projects.vercel.app",
+    "baseline": "dpl_5WtSueoErqvGhFWztJ4B2Pr68nYV",
+    "commit": "a4385a29510efe3bac5aabff85d270fd24d1e204",
+    "promoted": true,
+    "sourceFilesVerified": 185,
+    "unrelatedFilesPreserved": 182
+  },
+  "migration": {
+    "file": "202610060002_completed_attendance_correction.sql",
+    "sha256": "a15b1493194ef74bbb4915d1fdfd6e369c494df18e4d728da8f2e71c46755c7b",
+    "project": "divzxsynczeifkpnpupl",
+    "attempts": 1,
+    "status": "APPLIED + VERIFIED",
+    "startedAt": "2026-10-06T15:01:25.423Z",
+    "verifiedAt": "2026-10-06T15:01:42.449Z",
+    "existingPrivilegesPreserved": true,
+    "attendanceAndAuditDataUnchanged": true,
+    "financialDataUnchanged": true
+  },
+  "allOperationalAndFinancialDataUnchanged": true,
+  "productionAttendanceWrites": 0,
+  "externalPaymentAccountingProviderCalls": 0,
+  "smoke": {
+    "adminAttendancePage": true,
+    "existingScheduledSessionOpenedReadOnly": true,
+    "attendanceControlsEnabled": true,
+    "auditSectionPresent": true,
+    "noHorizontalOverflow": true,
+    "newApplicationErrors": false,
+    "completedProductionCorrectionAttempted": false
+  },
+  "tests": {
+    "focusedPassed": 44,
+    "databaseAssertions": 147,
+    "productionSchemaRehearsal": true,
+    "financialSentinelTables": 22,
+    "accountingPassed": 30,
+    "provider": {
+      "passed": 56,
+      "preExistingFailures": 4,
+      "baselineIdentical": true
+    },
+    "application": {
+      "baselinePassed": 629,
+      "candidatePassed": 631,
+      "preExistingFailures": 27,
+      "failedTestNamesIdentical": true
+    },
+    "typecheck": {
+      "baselineErrors": 203,
+      "candidateErrors": 203,
+      "diagnosticsIdentical": true
+    },
+    "artifactBuildExit": 0
+  },
+  "limits": [
+    "Production QA session was scheduled during read-only smoke; its status and attendance were not changed. Completed correction behavior verified using synthetic UI and database tests.",
+    "Existing pre-release test/typecheck failures remain unchanged."
+  ],
+  "recovery": "Transactional RPC replacement; no table or data migration. Preserve audit rows. Previous function body retained in prior migration; reverting would remove required safeguards and requires explicit release decision."
+}
