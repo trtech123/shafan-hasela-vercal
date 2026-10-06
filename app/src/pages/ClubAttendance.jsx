@@ -176,7 +176,8 @@ function AttendanceWorkspace() {
       <p className="text-sm text-muted-foreground">הרשימה נשמרת במפורש לפי תאריכי החברות. רענון רשימה מוסיף זכאים ואינו מוחק היסטוריה. חברות מושהית אינה נכללת; מצב התשלום אינו משפיע. ללא סימון פירושו שטרם נרשמה נוכחות.</p>
       {selected.session_date > israelDate() && <p>סימון נוכחות ייפתח ביום המפגש.</p>}
       {!roster.length && <p>אין משתתפים ברשימת המפגש. פתחו את הרשימה או בדקו את תאריכי החברות בחוג.</p>}
-      {roster.map(r => <AttendanceRow key={`${r.membership_id}-${r.version}`} row={r} disabled={readonly} save={(status, notes) => write('mark_club_attendance', { p_session_id: selected.id, p_membership_id: r.membership_id, p_status: status, p_expected_version: r.version, p_notes: notes }, 'הנוכחות נשמרה.')} />)}
+      {selected.status === 'completed' && <p>המפגש התקיים. כל שינוי בנוכחות מחייב סיבת תיקון ויישמר ביומן השינויים.</p>}
+      {roster.map(r => <AttendanceRow key={`${selected.id}-${selected.status}-${r.membership_id}-${r.version}`} row={r} completed={selected.status === 'completed'} disabled={readonly} save={(status, notes) => write('mark_club_attendance', { p_session_id: selected.id, p_membership_id: r.membership_id, p_status: status, p_expected_version: r.version, p_notes: notes }, 'הנוכחות נשמרה.')} />)}
       <details><summary className="cursor-pointer font-semibold">יומן שינויים במפגש ובנוכחות</summary>
         {!audit.length && !sessionAudit.length && <p className="py-2">אין שינויים מתועדים במפגש זה.</p>}
         {audit.map(a => <p key={`a-${a.id}`} className="py-2 text-sm border-b">{timestamp(a.changed_at)} · {a.actor_name || 'משתמש לא זמין'} · {roster.find(r => r.membership_id === a.membership_id)?.participant_name || 'משתתף'} · {attendanceLabels[a.old_status] || 'טרם סומן'} ← {attendanceLabels[a.new_status]} · {a.new_notes || 'ללא הערה'}</p>)}
@@ -199,13 +200,20 @@ function AttendanceWorkspace() {
   </div>;
 }
 
-function AttendanceRow({ row, disabled, save }) {
-  const [notes, setNotes] = useState(row.notes || '');
+function AttendanceRow({ row, completed, disabled, save }) {
+  const [notes, setNotes] = useState(completed ? '' : row.notes || '');
+  const [reasonError, setReasonError] = useState(false);
+  function mark(status) {
+    if (completed && !notes.trim()) { setReasonError(true); return; }
+    setReasonError(false); save(status, completed ? notes.trim() : notes);
+  }
   return <article className="rounded-xl border p-3 space-y-3">
     <h3 className="font-bold">{row.participant_name} <span className="font-normal text-sm">· {attendanceLabels[row.status] || 'טרם סומן'}</span></h3>
     <p className="text-xs text-muted-foreground">עדכון אחרון: {row.actor_name || '—'} · {timestamp(row.updated_at)}</p>
-    <Input aria-label={`הערה עבור ${row.participant_name}`} placeholder="הערה / סיבת תיקון (רשות)" maxLength={1000} value={notes} disabled={disabled} onChange={e => setNotes(e.target.value)} />
-    <div className="flex flex-wrap gap-2">{Object.entries(attendanceLabels).map(([status, label]) => <Button key={status} disabled={disabled} aria-pressed={row.status === status} variant={row.status === status ? 'default' : 'outline'} onClick={() => save(status, notes)}>{label}</Button>)}</div>
+    {completed && <p className="text-sm font-medium">סיבת תיקון (חובה)</p>}
+    <Input aria-label={`${completed ? 'סיבת תיקון' : 'הערה'} עבור ${row.participant_name}`} aria-required={completed} aria-invalid={reasonError} placeholder={completed ? 'סיבת תיקון' : 'הערה / סיבת תיקון (רשות)'} maxLength={1000} value={notes} disabled={disabled} onChange={e => {setNotes(e.target.value);setReasonError(false);}} />
+    {reasonError && <p role="alert" className="text-sm text-red-700">יש להזין סיבת תיקון לשינוי נוכחות במפגש שהתקיים.</p>}
+    <div className="flex flex-wrap gap-2">{Object.entries(attendanceLabels).map(([status, label]) => <Button key={status} disabled={disabled} aria-pressed={row.status === status} variant={row.status === status ? 'default' : 'outline'} onClick={() => mark(status)}>{label}</Button>)}</div>
   </article>;
 }
 

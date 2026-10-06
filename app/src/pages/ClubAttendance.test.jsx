@@ -20,6 +20,24 @@ beforeEach(() => {
   state.rpc.mockReset().mockImplementation(async name => ({ data: name === 'get_club_attendance_history' ? state.rows : 0, error: null }));
 });
 afterEach(cleanup);
+test('completed admin corrections require a fresh reason and submit versioned changes',async()=>{
+ state.sessions=[{id:'s',session_date:israelDate(),start_time:'16:00',end_time:'17:00',status:'completed',version:1}];
+ state.rows=[{session_id:'s',membership_id:'m',participant_id:'p',participant_name:'משתתף בדיקה',status:'absent',notes:'הערה קודמת',version:2}];
+ render(<ClubAttendance/>);fireEvent.click(await screen.findByRole('button',{name:/פתיחת מפגש/}));
+ const button=screen.getByRole('button',{name:'נוכח/ת'});expect(button).toBeEnabled();
+ const reason=screen.getByLabelText('סיבת תיקון עבור משתתף בדיקה');expect(reason).toHaveValue('');
+ fireEvent.click(button);expect(await screen.findByRole('alert')).toHaveTextContent('יש להזין סיבת תיקון');
+ expect(state.rpc.mock.calls.filter(([n])=>n==='mark_club_attendance')).toHaveLength(0);
+ fireEvent.change(reason,{target:{value:'   '}});fireEvent.click(button);
+ expect(state.rpc.mock.calls.filter(([n])=>n==='mark_club_attendance')).toHaveLength(0);
+ state.rpc.mockImplementation(async (name,args)=>{if(name==='mark_club_attendance'){state.rows=[{...state.rows[0],status:args.p_status,notes:args.p_notes,version:3}];}return {data:name==='get_club_attendance_history'?state.rows:0,error:null};});
+ state.from.mockImplementation(table=>query(table==='clubs'?state.clubs:table==='club_sessions'?state.sessions:table==='club_attendance_audit'?[{id:1,membership_id:'m',old_status:'absent',new_status:'present',new_notes:'נבדק מול המדריך',actor_name:'מנהל בדיקה',changed_at:'2026-10-06T10:00:00Z'}]:[]));
+ fireEvent.change(reason,{target:{value:'נבדק מול המדריך'}});fireEvent.click(button);
+ await waitFor(()=>expect(state.rpc).toHaveBeenCalledWith('mark_club_attendance',{p_session_id:'s',p_membership_id:'m',p_status:'present',p_expected_version:2,p_notes:'נבדק מול המדריך'}));
+ await waitFor(()=>expect(screen.getByRole('button',{name:'נוכח/ת'})).toHaveAttribute('aria-pressed','true'));
+ expect(screen.getByLabelText('סיבת תיקון עבור משתתף בדיקה')).toHaveValue('');
+ expect(await screen.findByText(/מנהל בדיקה.*נבדק מול המדריך/)).toHaveTextContent('נעדר/ת');
+});
 async function openManual(){render(<ClubAttendance/>);fireEvent.click(await screen.findByRole('button',{name:'+ מפגש חדש'}));}
 test('manual defaults to Israel today; creates only on explicit submit',async()=>{
  await openManual();expect(screen.getByLabelText('תאריך המפגש')).toHaveValue(israelDate());

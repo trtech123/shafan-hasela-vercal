@@ -80,7 +80,7 @@ function InstructorWorkspace(){
  }
  const rangeChanged=loadedRange!==`${from}/${until}`;
  const disabled=busy||loading||rangeChanged;
- const cannotMark=disabled||selected?.status==='cancelled'||selected?.session_date>israelDate();
+ const cannotMark=disabled||selected?.status==='cancelled'||selected?.status==='completed'||selected?.session_date>israelDate();
  return <div dir="rtl" className="space-y-4 text-card-foreground min-w-0">
   <header className="rounded-2xl bg-emerald-950 text-white p-5 space-y-2"><h1 className="text-2xl font-bold">נוכחות בחוגים</h1><p className="text-sm">המפגשים ששובצת אליהם · שעון ישראל</p></header>
   {error&&<p role="alert" className="bg-red-50 text-red-800 p-3 rounded-xl">{error}</p>}
@@ -106,6 +106,7 @@ function InstructorWorkspace(){
   {selected&&<section aria-label="רשימת משתתפים" className="rounded-xl border bg-card p-4 space-y-4">
    <h2 className="font-bold text-xl">{selected.club_name} · {dateLabel(selected.session_date)} · {time(selected.start_time)}</h2>
    {selected.status==='cancelled'&&<p>המפגש בוטל. הנוכחות מוצגת לקריאה בלבד.</p>}
+   {selected.status==='completed'&&<p>המפגש התקיים. תיקוני נוכחות זמינים למנהל בלבד.</p>}
    {selected.session_date>israelDate()&&<p>ניתן לסמן נוכחות מיום המפגש.</p>}
    <Button variant="outline" disabled={disabled||selected.status==='cancelled'} onClick={()=>write('prepare_club_roster',{p_session_id:selected.id})}>פתיחה / עדכון רשימת משתתפים</Button>
    {!roster.length&&<p>אין משתתפים ברשימה. לחצו על עדכון הרשימה; אם היא עדיין ריקה, פנו למנהל.</p>}

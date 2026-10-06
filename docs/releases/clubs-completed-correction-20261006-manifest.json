@@ -1,0 +1,760 @@
+{
+  "baseline": "dpl_5WtSueoErqvGhFWztJ4B2Pr68nYV",
+  "changed": [
+    "app/src/pages/ClubAttendance.jsx",
+    "app/src/pages/InstructorAttendance.jsx",
+    "app/src/lib/clubAttendance.js"
+  ],
+  "preserved": 182,
+  "sourceFiles": [
+    {
+      "path": ".vercelignore",
+      "sha1": "655c1aafc92b2c4bf06c7b6e39c360a5f478f20a"
+    },
+    {
+      "path": "app/README.md",
+      "sha1": "b6210131dc41ed1bc50aca7179ba19b6ff0860ae"
+    },
+    {
+      "path": "app/api/pelecard-live.js",
+      "sha1": "f45881256c64cdf0f6680d06d89ec5171ce99379"
+    },
+    {
+      "path": "app/api/pelecard-order.js",
+      "sha1": "caf1b074ace0e6c65ca734cd0e3e82c5a1f26fdb"
+    },
+    {
+      "path": "app/api/pelecard-transactions.js",
+      "sha1": "49ff9beb756ba67a373152e5715cc9fb03c082cf"
+    },
+    {
+      "path": "app/components.json",
+      "sha1": "cf3cf29ba01c265033cdee2ae5db2606c3dbb8aa"
+    },
+    {
+      "path": "app/eslint.config.js",
+      "sha1": "bab3efc270e1566a6f7acd0fccfdd86c9c879fa2"
+    },
+    {
+      "path": "app/index.html",
+      "sha1": "88448aabc24f21c3fb34abde22ef2de3ace43aef"
+    },
+    {
+      "path": "app/jsconfig.json",
+      "sha1": "01a898961b079f656652a2ae2b323940c84ee9fa"
+    },
+    {
+      "path": "app/package-lock.json",
+      "sha1": "8a9a25c187ef8033a3af77be4d0fb8148f1c1eb8"
+    },
+    {
+      "path": "app/package.json",
+      "sha1": "7cb4401acb500bf96aed9058c4b1c9ff9642b0d1"
+    },
+    {
+      "path": "app/postcss.config.js",
+      "sha1": "d81f6023fc07196029b1c879d8e04502d9b33f2f"
+    },
+    {
+      "path": "app/public/shafan-logo.jpg",
+      "sha1": "d6ad15df2dd0ec2f4465532937bef583077e266e"
+    },
+    {
+      "path": "app/server/pelecard-live/certs/supabase-prod-ca-2021.crt",
+      "sha1": "bef70379182123a384bc0de18c94e33547627f5b"
+    },
+    {
+      "path": "app/server/pelecard-live/database.js",
+      "sha1": "cbd0b2dd000dd040d84d8f1fc6efe57dc2a7d128"
+    },
+    {
+      "path": "app/server/pelecard-live/handler.js",
+      "sha1": "d3c25293066b022327bbf91381f4aa6d75662c38"
+    },
+    {
+      "path": "app/server/pelecard-live/order-transport.js",
+      "sha1": "6ba5d3f15ed9e33ae41a97c91ba4f288d213a10a"
+    },
+    {
+      "path": "app/server/pelecard-live/preflight.js",
+      "sha1": "619cab0401858af6851703b7857e191ae5d2e83d"
+    },
+    {
+      "path": "app/server/pelecard-live/transport.js",
+      "sha1": "e454b1dad4c35b0fd72aef9cb3826a41e48f1c8f"
+    },
+    {
+      "path": "app/server/pelecard-transactions/auth.js",
+      "sha1": "6f6554f0c43879a05564e4a98b2e762d1e01dd6b"
+    },
+    {
+      "path": "app/server/pelecard-transactions/handler.js",
+      "sha1": "af184f286d6b899cb9ba56ff533fb28e1af0d176"
+    },
+    {
+      "path": "app/server/pelecard-transactions/normalize.js",
+      "sha1": "4b0f82c7db2e919ddaa66b2cf8e4766b22bf4444"
+    },
+    {
+      "path": "app/server/pelecard-transactions/provider.js",
+      "sha1": "dbcb14c1c0d7a6e1c96585b2fbe52a32976fdc6d"
+    },
+    {
+      "path": "app/server/pelecard-transactions/validation.js",
+      "sha1": "d7606d6d424e84929c73fbd80c5ecd6a903e1705"
+    },
+    {
+      "path": "app/src/App.jsx",
+      "sha1": "b9977441896203ff1b6fc2e0aba6543521bf6235"
+    },
+    {
+      "path": "app/src/accounting/immediateAccounting.js",
+      "sha1": "387cc2927f3f29e9ae5bff41e114402aa0fe9b99"
+    },
+    {
+      "path": "app/src/api/supabaseClient.js",
+      "sha1": "59711e183818965f5e1ea5b18f5f31b8d839ca62"
+    },
+    {
+      "path": "app/src/components/Layout.jsx",
+      "sha1": "eb3982d88b3726ee83e7223c86cd7c0303f8f252"
+    },
+    {
+      "path": "app/src/components/ProtectedRoute.jsx",
+      "sha1": "3ebd19cc16fc8ea58ecfb08af049b9fe0fbf71ac"
+    },
+    {
+      "path": "app/src/components/SiteOpeningPrompt.jsx",
+      "sha1": "2b978c46da41ac202aca605e26b061a28a296a7b"
+    },
+    {
+      "path": "app/src/components/UserNotRegisteredError.jsx",
+      "sha1": "8e91552da64420df895722355ca6d41c2f962cdf"
+    },
+    {
+      "path": "app/src/components/accounting/ImmediateAccountingPanel.jsx",
+      "sha1": "99f1c83cd3d4c2fba77c22814ecd1646b835ca8a"
+    },
+    {
+      "path": "app/src/components/activities/ActivityFormDialog.jsx",
+      "sha1": "e504417c9478b55db7cfa0e799f7ffc35826d31a"
+    },
+    {
+      "path": "app/src/components/cashregister/ActivityGrid.jsx",
+      "sha1": "6970a79fb5a74e6273fea5780790555b7bfe01ba"
+    },
+    {
+      "path": "app/src/components/cashregister/Cart.jsx",
+      "sha1": "3e747bcea152ab5805c2eb630aa78d5cc480cd3a"
+    },
+    {
+      "path": "app/src/components/cashregister/LinkOrderSearch.jsx",
+      "sha1": "a2cf8cd482c5eaf3d1a0c4b63c149b5134feab92"
+    },
+    {
+      "path": "app/src/components/cashregister/PaymentScreen.jsx",
+      "sha1": "78523bf9df68a7e4e8334a3f8eab76524c765719"
+    },
+    {
+      "path": "app/src/components/cashregister/ReceiptScreen.jsx",
+      "sha1": "510cf27d86aad911ed503af577cf4f7a6120f96f"
+    },
+    {
+      "path": "app/src/components/clubs/ClubFormDialog.jsx",
+      "sha1": "638c674dcb678790ff5430c830e5876646bb5744"
+    },
+    {
+      "path": "app/src/components/clubs/MemberRegistrationDialog.jsx",
+      "sha1": "246cf8bd3215457168f800f724f8a99c7ff73691"
+    },
+    {
+      "path": "app/src/components/customers/BillingAddressFields.jsx",
+      "sha1": "fc08e309eae5785b268c2e896f1a31c3c8f7967f"
+    },
+    {
+      "path": "app/src/components/customers/CustomerFormDialog.jsx",
+      "sha1": "8791b7ade32c95416a2dfa7aa060a1cb68f7ae75"
+    },
+    {
+      "path": "app/src/components/customers/CustomerSelector.jsx",
+      "sha1": "efa5551078ebc23ecf93722936308600942d3d92"
+    },
+    {
+      "path": "app/src/components/customers/OrderCustomerLink.jsx",
+      "sha1": "79ed8898469323f8fcc03b0d1505c622058f5b34"
+    },
+    {
+      "path": "app/src/components/customers/useCustomerSearch.js",
+      "sha1": "bdc8426c820da96d10fc69a017c45822af61cf95"
+    },
+    {
+      "path": "app/src/components/dashboard/RecentOrders.jsx",
+      "sha1": "9f993ae314bbb854af038986d4c1d53aa2bd1bdd"
+    },
+    {
+      "path": "app/src/components/dashboard/StatsCard.jsx",
+      "sha1": "e5be5a5d19f58499857f531961bba4cd9e6eb694"
+    },
+    {
+      "path": "app/src/components/delivery/DeliveryButtons.jsx",
+      "sha1": "900cd02db0796020ab3312a139ba92b065e8e450"
+    },
+    {
+      "path": "app/src/components/delivery/ResendConfirmation.jsx",
+      "sha1": "c0f166a1854edee1131e4d91f8b6d19cda8105e3"
+    },
+    {
+      "path": "app/src/components/instructors/InstructorFormDialog.jsx",
+      "sha1": "84d4d9f5bd4d2810643197d44f69c3ef2dab4c30"
+    },
+    {
+      "path": "app/src/components/orders/InstructorDailyDialog.jsx",
+      "sha1": "0c4e4003d50be4a20924676996745c7de57b772e"
+    },
+    {
+      "path": "app/src/components/orders/InstructorEmailDialog.jsx",
+      "sha1": "6bfd68cccf0999f7b99757db83bada44122a060e"
+    },
+    {
+      "path": "app/src/components/orders/OrderConfirmationDocument.jsx",
+      "sha1": "92b8f68771073922cc5d291d07e8f9cbdea35b59"
+    },
+    {
+      "path": "app/src/components/orders/OrderConfirmationPDF.jsx",
+      "sha1": "c93c072fa47e85721d7f55513dc74054587a7313"
+    },
+    {
+      "path": "app/src/components/orders/OrderDeliveryPanel.jsx",
+      "sha1": "41ca56ef1bacd91d362112bd3a65d5d3a4498b81"
+    },
+    {
+      "path": "app/src/components/orders/OrderFormDialog.jsx",
+      "sha1": "968bbe130df3f4c629d03762d2b7d06e8ce4932a"
+    },
+    {
+      "path": "app/src/components/orders/OrderStatusBadge.jsx",
+      "sha1": "9d266d9bfbba2f5337acb1958d083bfed6b8827e"
+    },
+    {
+      "path": "app/src/components/orders/PaymentBadge.jsx",
+      "sha1": "d30e8846ba96e6e271b2cc96cfa8250a0558d152"
+    },
+    {
+      "path": "app/src/components/pricing/LinkToLeadQuoteDialog.jsx",
+      "sha1": "fb090054aa81d2c3723ec0c9cdafa3d41e3ff3bb"
+    },
+    {
+      "path": "app/src/components/pricing/PricingCategory.jsx",
+      "sha1": "5552db0eea001ae8817b53c3a838f177a34bc933"
+    },
+    {
+      "path": "app/src/components/pricing/PricingRow.jsx",
+      "sha1": "3a065a8a162e63c5d8567e1e675e21ef4c7e922f"
+    },
+    {
+      "path": "app/src/components/products/ProductFormDialog.jsx",
+      "sha1": "105cc79cae1ad24c3bd648c42d690d920cb7c375"
+    },
+    {
+      "path": "app/src/components/public/PublicPolicyLayout.jsx",
+      "sha1": "e0e0fab4f12bc1d9b7d80c88537cb3bad41f6960"
+    },
+    {
+      "path": "app/src/components/quotes/OrderQuotationSnapshot.jsx",
+      "sha1": "c13cc7f6e8b4fe80f06e1f0f4246218de0f8a0fe"
+    },
+    {
+      "path": "app/src/components/quotes/QuoteDeliveryPanel.jsx",
+      "sha1": "f6b7f7e73c5ae041261495b17426fde99a3861b2"
+    },
+    {
+      "path": "app/src/components/quotes/QuoteDocumentContent.jsx",
+      "sha1": "c880187966df87ace206759fdb17d628da676f90"
+    },
+    {
+      "path": "app/src/components/quotes/QuoteFormDialog.jsx",
+      "sha1": "f7c0d621f0c013d0897213e46ce578684a511861"
+    },
+    {
+      "path": "app/src/components/quotes/QuotePDFDocument.jsx",
+      "sha1": "0cad6d44f0670ca3ac2f641eb4e56bccd0aaca12"
+    },
+    {
+      "path": "app/src/components/quotes/quotePdf.js",
+      "sha1": "e6e71a3ae11c9d2adc9095b84db190a839b4e281"
+    },
+    {
+      "path": "app/src/components/schedule/BlockSlotDialog.jsx",
+      "sha1": "0e6e53cd168c64a72ff51bb34acc91e78f11398f"
+    },
+    {
+      "path": "app/src/components/tasks/TaskFormDialog.jsx",
+      "sha1": "97074f9a589384548a185f314ec31f6cf4aa2b14"
+    },
+    {
+      "path": "app/src/components/ui/accordion.jsx",
+      "sha1": "b739ae219f4cbca27c70cba1ff7a8f0a8d0b33ee"
+    },
+    {
+      "path": "app/src/components/ui/alert-dialog.jsx",
+      "sha1": "1b66a3c6756b54d181a37c62dbdc652f7f9b6959"
+    },
+    {
+      "path": "app/src/components/ui/alert.jsx",
+      "sha1": "7449826e9f8fe69b430c613c7d45b168735c4c86"
+    },
+    {
+      "path": "app/src/components/ui/aspect-ratio.jsx",
+      "sha1": "f21529a010100ec900e04fd692fdbde2be6d3e9c"
+    },
+    {
+      "path": "app/src/components/ui/avatar.jsx",
+      "sha1": "7daee9abc7ccc1dd6f864ede73bd3e7721c0806b"
+    },
+    {
+      "path": "app/src/components/ui/badge.jsx",
+      "sha1": "c9eefc142dd435631541c3137a5039a1bcd8828b"
+    },
+    {
+      "path": "app/src/components/ui/breadcrumb.jsx",
+      "sha1": "4a532ec589cc7e693ec678ae30ce4a79243bb206"
+    },
+    {
+      "path": "app/src/components/ui/button.jsx",
+      "sha1": "d9c1d3177d2883299ea955d46de63452652523c8"
+    },
+    {
+      "path": "app/src/components/ui/calendar.jsx",
+      "sha1": "9a46773c61efcae64fcddd1f0af4146bc7e44744"
+    },
+    {
+      "path": "app/src/components/ui/card.jsx",
+      "sha1": "347ebef7ca7ff9abf327ff60facc9b3cbc5f5667"
+    },
+    {
+      "path": "app/src/components/ui/carousel.jsx",
+      "sha1": "845265c0eaf636ba56ffeca153539ae8b0ec6b98"
+    },
+    {
+      "path": "app/src/components/ui/chart.jsx",
+      "sha1": "62df43dbe23ba2e5a9aa05d6e9e0e85ba64a80c3"
+    },
+    {
+      "path": "app/src/components/ui/checkbox.jsx",
+      "sha1": "b99f8ad1dc6cd4265046a183461a51169af5ae28"
+    },
+    {
+      "path": "app/src/components/ui/collapsible.jsx",
+      "sha1": "38bcc0fc1c12966547e372eb806729045bfc1b13"
+    },
+    {
+      "path": "app/src/components/ui/command.jsx",
+      "sha1": "1eced413af7b41dd7b8e4a2bf68b5e19363afc3d"
+    },
+    {
+      "path": "app/src/components/ui/context-menu.jsx",
+      "sha1": "6fe1165064fcc15bb798fd3230ecbb8b8e68dc1f"
+    },
+    {
+      "path": "app/src/components/ui/dialog.jsx",
+      "sha1": "044df3a5b0f42ee37ff05daf2da454cb93dd1764"
+    },
+    {
+      "path": "app/src/components/ui/drawer.jsx",
+      "sha1": "5774bdec8d1514f157610697a7b52f6ffaaa49c0"
+    },
+    {
+      "path": "app/src/components/ui/dropdown-menu.jsx",
+      "sha1": "e78a80131ae40d42e38418cf088b7ece669d1716"
+    },
+    {
+      "path": "app/src/components/ui/form.jsx",
+      "sha1": "d51ad16cf1f4b887334e9a39fd5d3373095f3627"
+    },
+    {
+      "path": "app/src/components/ui/hover-card.jsx",
+      "sha1": "831ccdadabb8780caeee9676fd9d26387467f360"
+    },
+    {
+      "path": "app/src/components/ui/input-otp.jsx",
+      "sha1": "3aeac9e3b6a0b854f0af96f9486166b71479be0d"
+    },
+    {
+      "path": "app/src/components/ui/input.jsx",
+      "sha1": "2b8c6e0bcf196c451617aa450962af043c6e1b8a"
+    },
+    {
+      "path": "app/src/components/ui/label.jsx",
+      "sha1": "3e147a9080141114b1072bf56a91d171023737ef"
+    },
+    {
+      "path": "app/src/components/ui/menubar.jsx",
+      "sha1": "e9ffdcfd2a023008c07a6c469be6262f7c87d1cb"
+    },
+    {
+      "path": "app/src/components/ui/navigation-menu.jsx",
+      "sha1": "d7e7b7d220f33ec8e0a2c06695acd98d2cc95a33"
+    },
+    {
+      "path": "app/src/components/ui/pagination.jsx",
+      "sha1": "4888397b463bcbf01cd15c84247b2d1416d6e570"
+    },
+    {
+      "path": "app/src/components/ui/popover.jsx",
+      "sha1": "7346d435deb5bb65a913963cc59df16f970e77a9"
+    },
+    {
+      "path": "app/src/components/ui/progress.jsx",
+      "sha1": "dff53acd03e927e3224a4ae9cf8f234f9ca935f5"
+    },
+    {
+      "path": "app/src/components/ui/radio-group.jsx",
+      "sha1": "99b3b09d2878a507956d113cfed66bb596a3e28b"
+    },
+    {
+      "path": "app/src/components/ui/resizable.jsx",
+      "sha1": "360e35f26b459742b0fdd02efb638c99c59e496a"
+    },
+    {
+      "path": "app/src/components/ui/scroll-area.jsx",
+      "sha1": "d34bf4924de9a723574e91caa01490651ccdf31e"
+    },
+    {
+      "path": "app/src/components/ui/select.jsx",
+      "sha1": "3714a1e123fd2e39285c84d70363acdc64b8a8ec"
+    },
+    {
+      "path": "app/src/components/ui/separator.jsx",
+      "sha1": "751da9d12f5ec5982553cb346dc121af736c9c66"
+    },
+    {
+      "path": "app/src/components/ui/sheet.jsx",
+      "sha1": "90b496a0a187e8162ea0d76b848eba00032a0f7a"
+    },
+    {
+      "path": "app/src/components/ui/sidebar.jsx",
+      "sha1": "ad5961dbf25055b6ab9cc97863b4f3d4bf77b88b"
+    },
+    {
+      "path": "app/src/components/ui/skeleton.jsx",
+      "sha1": "7f3a20c9413d97a89b646a90f6afa35fa609d8e7"
+    },
+    {
+      "path": "app/src/components/ui/slider.jsx",
+      "sha1": "d589edf230ab507d19e766a9b0f6f37bc0dded81"
+    },
+    {
+      "path": "app/src/components/ui/sonner.jsx",
+      "sha1": "57eb5d8837ada19aaebb95f120930c90a3acafcd"
+    },
+    {
+      "path": "app/src/components/ui/switch.jsx",
+      "sha1": "f4b6741f0bfd30380f62654f3c38af2f4b9a1a84"
+    },
+    {
+      "path": "app/src/components/ui/table.jsx",
+      "sha1": "392b1b3b03391613d12b11a42dc8b61fad1d75b3"
+    },
+    {
+      "path": "app/src/components/ui/tabs.jsx",
+      "sha1": "ab4e2cd3517741f2a01209f0e51fcc439d1e5544"
+    },
+    {
+      "path": "app/src/components/ui/textarea.jsx",
+      "sha1": "afaf74f0309e1eee890e1e190f95e428e405b0f7"
+    },
+    {
+      "path": "app/src/components/ui/toast.jsx",
+      "sha1": "f2a809e5771e8a45274dc971ede9fd2fc489cb59"
+    },
+    {
+      "path": "app/src/components/ui/toaster.jsx",
+      "sha1": "953af04d7c06ea984f897a8f001635db6321e196"
+    },
+    {
+      "path": "app/src/components/ui/toggle-group.jsx",
+      "sha1": "2be2a60e2453955c20a51ca376f7d8eae329a3dc"
+    },
+    {
+      "path": "app/src/components/ui/toggle.jsx",
+      "sha1": "1698ab4ae904ea599c734f61edc2ccc7cf4e97b7"
+    },
+    {
+      "path": "app/src/components/ui/tooltip.jsx",
+      "sha1": "c95f75267e2d1386b1605fe81a184aa08a087579"
+    },
+    {
+      "path": "app/src/components/ui/use-toast.jsx",
+      "sha1": "b07181d38d27b6bf870487bbb37f85eaf53df46a"
+    },
+    {
+      "path": "app/src/components/vouchers/RegisterSettings.jsx",
+      "sha1": "54b7726dd98ffa3e94610e3d5a2cbf071f4dff9a"
+    },
+    {
+      "path": "app/src/components/vouchers/SignaturePad.jsx",
+      "sha1": "be90e5d29bc24b186711f9af30017ac9a4d6b569"
+    },
+    {
+      "path": "app/src/components/vouchers/VoucherEmail.jsx",
+      "sha1": "45bd192677774725ae29e9a51d89580aa075b607"
+    },
+    {
+      "path": "app/src/components/vouchers/VoucherForm.jsx",
+      "sha1": "feabb8ee69d41fbe1ea5f963042cd73f26a2f44a"
+    },
+    {
+      "path": "app/src/components/vouchers/VoucherReport.jsx",
+      "sha1": "aa4403faf59dbbfa46a3c9bd1f4f41a89247c948"
+    },
+    {
+      "path": "app/src/components/vouchers/downloadVoucherReport.jsx",
+      "sha1": "b3a02c30f563206fe29bace40a9c08c3beae646b"
+    },
+    {
+      "path": "app/src/hooks/use-mobile.jsx",
+      "sha1": "207e337be90d0e6a452f4514e3d4f354fa08b522"
+    },
+    {
+      "path": "app/src/index.css",
+      "sha1": "58a9388667c1295ca068b1917af9684df5be148a"
+    },
+    {
+      "path": "app/src/lib/AuthContext.jsx",
+      "sha1": "ee6a8f097a41db61f75a5e8ed3de15553a9cf357"
+    },
+    {
+      "path": "app/src/lib/PageNotFound.jsx",
+      "sha1": "160cf96e207a86246e36f87e625aa646f362e082"
+    },
+    {
+      "path": "app/src/lib/app-params.js",
+      "sha1": "901d7a98c69a650b20124e3c639e4d6f4cd5c38d"
+    },
+    {
+      "path": "app/src/lib/blocking.js",
+      "sha1": "93548b2be812217a5da206f9dc6bd50580ad93a8"
+    },
+    {
+      "path": "app/src/lib/clubDomain.js",
+      "sha1": "b3c04813a1bce692937fc598869f43dbc8d345fb"
+    },
+    {
+      "path": "app/src/lib/customers.js",
+      "sha1": "cbc460a0df609eb529e97cc10c7bd69b0df17c10"
+    },
+    {
+      "path": "app/src/lib/deliveryStatus.js",
+      "sha1": "b15a9748b63ef74c070377da50d322bc744142fa"
+    },
+    {
+      "path": "app/src/lib/holidays.js",
+      "sha1": "f1efb3a04561af15512fc2846d9fdc5dfda31b08"
+    },
+    {
+      "path": "app/src/lib/manualDelivery.js",
+      "sha1": "b99ea28a039113c1ef0c46b67c5af0a1c3e5d873"
+    },
+    {
+      "path": "app/src/lib/orderConfirmation.js",
+      "sha1": "7d7016d8fe6fe7537d14035b9d1c51e7707835f2"
+    },
+    {
+      "path": "app/src/lib/orderDocText.js",
+      "sha1": "28d150a897eb05358f67974fdc8c90c51c0eef4d"
+    },
+    {
+      "path": "app/src/lib/payment-continuation.js",
+      "sha1": "d17673d4bb90b56d68cf73bc962b6352d2d52bd7"
+    },
+    {
+      "path": "app/src/lib/query-client.js",
+      "sha1": "fb141c86c532905c16b03c8ae7a2b440debddcfe"
+    },
+    {
+      "path": "app/src/lib/quotations.js",
+      "sha1": "e989960d131d8e12c89dc1ae72d69a67d0fdc2e3"
+    },
+    {
+      "path": "app/src/lib/utils.js",
+      "sha1": "29eb58bf113e37186c88242722cb60170ef3e083"
+    },
+    {
+      "path": "app/src/lib/voucher-report.js",
+      "sha1": "1c973f90bd5e9c3e2e5923435b6c2ba4616b261d"
+    },
+    {
+      "path": "app/src/lib/voucher-save.js",
+      "sha1": "79e5e8dcfbcbad5aae343cb96e8c39d094b1e859"
+    },
+    {
+      "path": "app/src/lib/vouchers.js",
+      "sha1": "463f8ae4204c56e4ee2c2a4a3d51a42db5d5c028"
+    },
+    {
+      "path": "app/src/main.jsx",
+      "sha1": "b80102b33f501dfbec440d28ae2c43a705a77ce7"
+    },
+    {
+      "path": "app/src/pages/AccountingOperations.jsx",
+      "sha1": "84060f2828fc787bd61e737d332e22ef1f26dad4"
+    },
+    {
+      "path": "app/src/pages/Activities.jsx",
+      "sha1": "196b76dbced52ec3e9b4e6a7aa259bfb6282c383"
+    },
+    {
+      "path": "app/src/pages/CashRegister.jsx",
+      "sha1": "9ec0f9ed2c837d78ee610ba226f0c016d9ca526a"
+    },
+    {
+      "path": "app/src/pages/ChatbotHandoffs.jsx",
+      "sha1": "be9c6699db9d643b1afacd7762c4f5fd2b5c1aea"
+    },
+    {
+      "path": "app/src/pages/Clubs.jsx",
+      "sha1": "dbefbff727316eb345328c7def8779e9e74bad08"
+    },
+    {
+      "path": "app/src/pages/Customers.jsx",
+      "sha1": "6afb56598d8416aba64aae1c95fc488e4be3e620"
+    },
+    {
+      "path": "app/src/pages/DailySalesReport.jsx",
+      "sha1": "d4a8a5daa7598aefdf27fdb8b7c37ec55029d918"
+    },
+    {
+      "path": "app/src/pages/Dashboard.jsx",
+      "sha1": "e8db1db273728028122f8c126717a95d8a38501d"
+    },
+    {
+      "path": "app/src/pages/DataDeletion.jsx",
+      "sha1": "f4e8a8f089b0248337bd5c6414c3129616d5a66e"
+    },
+    {
+      "path": "app/src/pages/Instructors.jsx",
+      "sha1": "38fd85ca7cee8e1217ec2f841c685b8907ea0814"
+    },
+    {
+      "path": "app/src/pages/Leads.jsx",
+      "sha1": "257984096a075d2e48083add1ca06862303256d8"
+    },
+    {
+      "path": "app/src/pages/Login.jsx",
+      "sha1": "9e76834e15f4923bfcac2dd824e10157fc854601"
+    },
+    {
+      "path": "app/src/pages/Maintenance.jsx",
+      "sha1": "e1aee9269f9ee42ff493aa4bf36c2d2b1f446f49"
+    },
+    {
+      "path": "app/src/pages/OrderPayment.jsx",
+      "sha1": "084f09a78eb8e264d90d7978f35b5c22741fc31b"
+    },
+    {
+      "path": "app/src/pages/Orders.jsx",
+      "sha1": "5abfdd88fbd050396d4d716feb0c59eb6b1d82ad"
+    },
+    {
+      "path": "app/src/pages/PaymentReturn.jsx",
+      "sha1": "8836b64c3e8102a98e11b085d0e3ca726c4d5f39"
+    },
+    {
+      "path": "app/src/pages/PelecardTransactions.jsx",
+      "sha1": "a924f666da6048249c1e5468337d122d789b06bb"
+    },
+    {
+      "path": "app/src/pages/Pricing.jsx",
+      "sha1": "5d23801d479417ec4f76c35b26327daf2661ee23"
+    },
+    {
+      "path": "app/src/pages/PrivacyPolicy.jsx",
+      "sha1": "f4764ffbbb46a9e1fa625c5464f5b023e4e1e981"
+    },
+    {
+      "path": "app/src/pages/Products.jsx",
+      "sha1": "656c4ca20209587513ae0104d9dfe3c370604202"
+    },
+    {
+      "path": "app/src/pages/Quotes.jsx",
+      "sha1": "c3f45cb88168cc512dd0a4548a9d0aadae54243a"
+    },
+    {
+      "path": "app/src/pages/Schedule.jsx",
+      "sha1": "b30e3afd06e9525ee6b2b88caf523e31ecf96b1f"
+    },
+    {
+      "path": "app/src/pages/Tasks.jsx",
+      "sha1": "e4d8b0f3b79fa8a7a3390b695ddac13751f926be"
+    },
+    {
+      "path": "app/src/pages/Templates.jsx",
+      "sha1": "e4e5961afc89e7596e22b4143977cd1840f41158"
+    },
+    {
+      "path": "app/src/pages/Users.jsx",
+      "sha1": "5e42123af86b7691c0b8393bd8210cf144d8e4b9"
+    },
+    {
+      "path": "app/src/pages/Vouchers.jsx",
+      "sha1": "e876dd1ad8562948efcba90336cc51b199268f72"
+    },
+    {
+      "path": "app/src/payments/orderPayments.js",
+      "sha1": "acb61ca4e4d8f938658db83e083accf29be45612"
+    },
+    {
+      "path": "app/src/payments/pelecardPayments.js",
+      "sha1": "e1d8c84f068482575e203b2ca1f242d7d948859a"
+    },
+    {
+      "path": "app/src/payments/pelecardTransactions.js",
+      "sha1": "6869fe9805f246b2cf768386cde3d48d99847733"
+    },
+    {
+      "path": "app/src/utils/index.ts",
+      "sha1": "58837d4a9154edcbcbdbc62eab9e8763e1ea5513"
+    },
+    {
+      "path": "app/tailwind.config.js",
+      "sha1": "51adeb1f187726f1a4a0efbf1c0e37ac4f8e68de"
+    },
+    {
+      "path": "app/vercel.json",
+      "sha1": "e269010061bcde697ffa5ea4deb60a9ddf1c9f81"
+    },
+    {
+      "path": "app/vite.config.js",
+      "sha1": "9229617d842a9740d6fc132d526b22c0e433fb3b"
+    },
+    {
+      "path": "app/src/components/clubs/InstructorUserLinks.jsx",
+      "sha1": "5a978c66922367a1338eb90c76b22763e9687b2e"
+    },
+    {
+      "path": "app/src/lib/clubAttendance.js",
+      "sha1": "3c8123e5de761979b39bb1ae5327552c0032a8fa"
+    },
+    {
+      "path": "app/src/pages/ClubAttendance.jsx",
+      "sha1": "86cecdc1eba4a4e26bd9c4dce53610c3040b1186"
+    },
+    {
+      "path": "app/src/pages/InstructorAttendance.jsx",
+      "sha1": "6195d94e0ad983d16977da7dceaafe3de51ebdce"
+    },
+    {
+      "path": "app/src/components/clubs/ManualClubSession.jsx",
+      "sha1": "7f664bdf80b26d9d05e80e9bed86f34c732b1ea2"
+    }
+  ],
+  "backup": {
+    "id": 1877816756,
+    "inserted_at": "2026-10-05T17:26:58.949Z",
+    "is_physical_backup": true,
+    "status": "COMPLETED"
+  },
+  "pitrEnabled": false,
+  "project": "divzxsynczeifkpnpupl",
+  "checkedAt": "2026-10-06T14:57:40.577Z"
+}

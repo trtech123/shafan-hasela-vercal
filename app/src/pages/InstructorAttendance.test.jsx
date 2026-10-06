@@ -38,8 +38,8 @@ test('own attendance marking and correction submit exact version; concurrent cli
  expect(state.rpc).toHaveBeenCalledWith('mark_club_attendance',{p_session_id:'s',p_membership_id:'m',p_status:'present',p_expected_version:0,p_notes:'בדיקה'});
  release({data:null,error:{message:'attendance_conflict'}});expect(await screen.findByRole('alert')).toHaveTextContent('עודכנו במקביל');
 });
-test.each(['cancelled','future'])('%s session cannot be marked',async kind=>{
- if(kind==='cancelled')state.sessions[0].status='cancelled';else state.sessions[0].session_date=shiftDate(israelDate(),1);
+test.each(['cancelled','completed','future'])('%s session cannot be marked',async kind=>{
+ if(kind!=='future')state.sessions[0].status=kind;else state.sessions[0].session_date=shiftDate(israelDate(),1);
  render(<InstructorAttendance/>);fireEvent.click(await screen.findByRole('button',{name:'פתיחת נוכחות'}));
  expect(await screen.findByRole('button',{name:'נוכח'})).toBeDisabled();
 });

@@ -20,6 +20,8 @@ export const attendanceLabels = { present: 'נוכח/ת', absent: 'נעדר/ת',
 export const sessionLabels = { scheduled: 'מתוכנן', completed: 'התקיים', cancelled: 'מבוטל' };
 export function attendanceError(error) {
   const message = String(error?.message || '');
+  if (message.includes('correction_reason_required')) return 'יש להזין סיבת תיקון לשינוי נוכחות במפגש שהתקיים.';
+  if (message.includes('session_completed')) return 'המפגש התקיים. תיקוני נוכחות זמינים למנהל בלבד.';
   if (message.includes('session_exists')) return 'כבר קיים מפגש בחוג, בתאריך ובשעת ההתחלה שבחרתם — גם אם בוטל. בדקו את רשימת המפגשים לפני יצירה נוספת.';
   if (message.includes('invalid_session_time')) return 'יש לבחור שעת סיום אחרי שעת ההתחלה באותו יום.';
   if (message.includes('instructor_not_found')) return 'המדריך שנבחר אינו זמין. רעננו ובחרו מדריך מהרשימה.';
