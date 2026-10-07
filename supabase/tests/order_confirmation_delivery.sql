@@ -1,0 +1,71 @@
+-- Local synthetic test only; all fixture mutations roll back. No provider requests.
+BEGIN;
+SET search_path=public,extensions;
+SELECT extensions.plan(25);
+INSERT INTO auth.users(id,email) VALUES('98000000-0000-4000-8000-000000000001','order-delivery-fixture@example.invalid');
+SELECT set_config('request.jwt.claims','{"role":"service_role","sub":"98000000-0000-4000-8000-000000000001"}',true);
+UPDATE public.profiles SET role='operations' WHERE id='98000000-0000-4000-8000-000000000001';
+SELECT set_config('test.order_quote',public.save_quotation('98000000-0000-4000-8000-000000000002',NULL,0,'{"client_name":"Synthetic order","client_email":"synthetic@example.invalid","client_phone":"0501234567","event_date":"2026-12-01","num_participants":1,"discount":0,"selected_activities":[{"item_type":"product","activity_name":"Frozen item","price_per_person":10,"quantity":1}]}',NULL,NULL,false)::text,true);
+SELECT set_config('test.delivery_order',public.convert_quotation_to_order((current_setting('test.order_quote')::jsonb->>'id')::uuid,1)::text,true);
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"98000000-0000-4000-8000-000000000001"}',true);
+SET LOCAL ROLE authenticated;
+SELECT set_config('test.order_doc',public.order_confirmation_document((current_setting('test.delivery_order')::jsonb->>'id')::uuid)::text,true);
+SELECT extensions.is(current_setting('test.order_doc')::jsonb->>'can_send','true','operations may send');
+SELECT extensions.is(current_setting('test.order_doc')::jsonb->'data'->'quotation_snapshot'->'selected_activities'->0->>'activity_name','Frozen item','saved item retained');
+SELECT extensions.is((SELECT count(*) FROM public.order_delivery_attempts WHERE order_id=(current_setting('test.delivery_order')::jsonb->>'id')::uuid),0::bigint,'preview writes no ledger');
+SELECT extensions.throws_ok($$SELECT public.claim_order_delivery(pg_catalog.gen_random_uuid(),(current_setting('test.delivery_order')::jsonb->>'id')::uuid,current_setting('test.order_doc')::jsonb->>'version','email','98000000-0000-4000-8000-000000000001',repeat('a',64),'synthetic@example.invalid')$$,'42501',NULL,'authenticated cannot claim directly');
+RESET ROLE;
+SELECT set_config('request.jwt.claims','{"role":"service_role","sub":"98000000-0000-4000-8000-000000000001"}',true);
+SET LOCAL ROLE service_role;
+SELECT set_config('test.order_claim',public.claim_order_delivery('98000000-0000-4000-8000-000000000003',(current_setting('test.delivery_order')::jsonb->>'id')::uuid,current_setting('test.order_doc')::jsonb->>'version','email','98000000-0000-4000-8000-000000000001',repeat('a',64),'synthetic@example.invalid')::text,true);
+SELECT extensions.is(current_setting('test.order_claim')::jsonb->>'claimed','true','first claim dispatches');
+SELECT extensions.is(current_setting('test.order_claim')::jsonb->'attempt'->'document_snapshot',current_setting('test.order_doc')::jsonb->'data','exact preview document frozen');
+SELECT extensions.is(public.claim_order_delivery('98000000-0000-4000-8000-000000000003',(current_setting('test.delivery_order')::jsonb->>'id')::uuid,current_setting('test.order_doc')::jsonb->>'version','email','98000000-0000-4000-8000-000000000001',repeat('a',64),'synthetic@example.invalid')->>'claimed','false','exact request replays');
+SELECT extensions.throws_ok($$SELECT public.claim_order_delivery('98000000-0000-4000-8000-000000000003',(current_setting('test.delivery_order')::jsonb->>'id')::uuid,current_setting('test.order_doc')::jsonb->>'version','email','98000000-0000-4000-8000-000000000001',repeat('a',64),'other@example.invalid')$$,'PT409','delivery_request_conflict','recipient mutation conflicts');
+SELECT extensions.throws_ok($$SELECT public.claim_order_delivery(pg_catalog.gen_random_uuid(),(current_setting('test.delivery_order')::jsonb->>'id')::uuid,current_setting('test.order_doc')::jsonb->>'version','email','98000000-0000-4000-8000-000000000001',repeat('a',64),'synthetic@example.invalid')$$,'PT409','order_delivery_already_claimed','new request cannot duplicate');
+SELECT extensions.is(public.finish_order_delivery('98000000-0000-4000-8000-000000000003','98000000-0000-4000-8000-000000000001','uncertain','provider_timeout',NULL)->>'state','uncertain','timeout recorded');
+SELECT extensions.throws_ok($$SELECT public.finish_order_delivery('98000000-0000-4000-8000-000000000003','98000000-0000-4000-8000-000000000001','accepted',NULL,'synthetic-provider-id')$$,'PT409','delivery_result_conflict','terminal result immutable');
+SELECT extensions.throws_ok($$UPDATE public.order_delivery_attempts SET destination='other@example.invalid' WHERE id='98000000-0000-4000-8000-000000000003'$$,'42501',NULL,'service cannot directly mutate ledger');
+RESET ROLE;
+
+-- Exercise actual database roles, not only JWT claim variables.
+INSERT INTO auth.users(id,email) VALUES
+ ('98000000-0000-4000-8000-000000000004','delivery-cashier@example.invalid'),
+ ('98000000-0000-4000-8000-000000000005','delivery-instructor@example.invalid'),
+ ('98000000-0000-4000-8000-000000000006','delivery-unassigned@example.invalid');
+UPDATE public.profiles SET role='cashier' WHERE id='98000000-0000-4000-8000-000000000004';
+INSERT INTO public.instructors(id,full_name,phone,email) VALUES('98000000-0000-4000-8000-000000000007','Synthetic instructor','0501234567','delivery-instructor@example.invalid');
+UPDATE public.orders SET instructor_id='98000000-0000-4000-8000-000000000007',notes='Synthetic changed document' WHERE id=(current_setting('test.delivery_order')::jsonb->>'id')::uuid;
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"98000000-0000-4000-8000-000000000004"}',true);
+SET LOCAL ROLE authenticated;
+SELECT set_config('test.order_changed',public.order_confirmation_document((current_setting('test.delivery_order')::jsonb->>'id')::uuid)::text,true);
+SELECT extensions.is(current_setting('test.order_changed')::jsonb->>'can_send','true','cashier has delivery capability');
+SELECT extensions.ok(current_setting('test.order_changed')::jsonb->>'version'<>current_setting('test.order_doc')::jsonb->>'version','saved note changes document version');
+SELECT extensions.is(current_setting('test.order_changed')::jsonb->'data'->'customer_snapshot','null'::jsonb,'legacy customer snapshot remains absent');
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"98000000-0000-4000-8000-000000000005"}',true);
+SELECT extensions.is(public.order_confirmation_document((current_setting('test.delivery_order')::jsonb->>'id')::uuid)->>'can_send','false','assigned instructor preview is read only');
+SELECT extensions.is((SELECT count(*) FROM public.order_delivery_attempts WHERE order_id=(current_setting('test.delivery_order')::jsonb->>'id')::uuid),1::bigint,'assigned instructor sees order history');
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"98000000-0000-4000-8000-000000000006"}',true);
+SELECT extensions.throws_ok($$SELECT public.order_confirmation_document((current_setting('test.delivery_order')::jsonb->>'id')::uuid)$$,'PT404','order_not_found','unassigned instructor cannot preview');
+SELECT extensions.is((SELECT count(*) FROM public.order_delivery_attempts WHERE order_id=(current_setting('test.delivery_order')::jsonb->>'id')::uuid),0::bigint,'unassigned instructor cannot read history');
+RESET ROLE;
+SET LOCAL ROLE anon;
+SELECT extensions.throws_ok($$SELECT public.order_confirmation_document((current_setting('test.delivery_order')::jsonb->>'id')::uuid)$$,'42501',NULL,'anonymous preview denied');
+RESET ROLE;
+SELECT set_config('request.jwt.claims','{"role":"service_role","sub":"98000000-0000-4000-8000-000000000004"}',true);
+SET LOCAL ROLE service_role;
+SELECT extensions.throws_ok($$SELECT public.claim_order_delivery(pg_catalog.gen_random_uuid(),(current_setting('test.delivery_order')::jsonb->>'id')::uuid,current_setting('test.order_changed')::jsonb->>'version','email','98000000-0000-4000-8000-000000000004',repeat('a',64),'synthetic@example.invalid')$$,'PT409','order_delivery_already_claimed','uncertain claim blocks changed revision');
+SELECT extensions.is(public.claim_order_delivery(pg_catalog.gen_random_uuid(),(current_setting('test.delivery_order')::jsonb->>'id')::uuid,current_setting('test.order_changed')::jsonb->>'version','whatsapp','98000000-0000-4000-8000-000000000004',repeat('a',64),'972501234567')->>'claimed','true','cashier can claim independent channel');
+SELECT extensions.throws_ok($$SELECT public.claim_order_delivery(pg_catalog.gen_random_uuid(),(current_setting('test.delivery_order')::jsonb->>'id')::uuid,current_setting('test.order_changed')::jsonb->>'version','whatsapp','98000000-0000-4000-8000-000000000005',repeat('a',64),'972501234567')$$,'42501','order_delivery_forbidden','instructor actor cannot claim');
+RESET ROLE;
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"98000000-0000-4000-8000-000000000001"}',true);
+SET LOCAL ROLE authenticated;
+SELECT public.save_customer('{"display_name":"Frozen original","contact_name":"Frozen customer","phone":"0501234567","vat_applicable":false}','98000000-0000-4000-8000-000000000008',NULL);
+SELECT public.link_order_customer((current_setting('test.delivery_order')::jsonb->>'id')::uuid,'98000000-0000-4000-8000-000000000008',0);
+SELECT set_config('test.frozen_doc',public.order_confirmation_document((current_setting('test.delivery_order')::jsonb->>'id')::uuid)::text,true);
+SELECT public.save_customer('{"display_name":"Changed master","contact_name":"Changed master","phone":"0507654321","vat_applicable":true}','98000000-0000-4000-8000-000000000008',1);
+SELECT extensions.is(public.order_confirmation_document((current_setting('test.delivery_order')::jsonb->>'id')::uuid),current_setting('test.frozen_doc')::jsonb,'master edit cannot change frozen document or version');
+SELECT extensions.is(current_setting('test.frozen_doc')::jsonb->'data'->'customer_snapshot'->>'vat_applicable','false','immutable customer VAT retained');
+RESET ROLE;
+SELECT * FROM extensions.finish();
+ROLLBACK;

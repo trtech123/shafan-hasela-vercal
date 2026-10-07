@@ -1,0 +1,982 @@
+{
+  "project": "divzxsynczeifkpnpupl",
+  "capturedAt": "2026-10-07T11:54:13.462Z",
+  "functions": {
+    "send-order-doc": {
+      "version": 56,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/send-order-doc/index.ts": {
+          "blob": "docs/production-source/edge/blobs/59802286d36f63a5e6676ffa19a411136c6680b5e73236fd6d7f7c8804ff1d8b.ts",
+          "sha256": "59802286d36f63a5e6676ffa19a411136c6680b5e73236fd6d7f7c8804ff1d8b"
+        },
+        "supabase/functions/_shared/order-delivery/contract.js": {
+          "blob": "docs/production-source/edge/blobs/17451d3ccae0aac95e939bc441faa952dbf8bc5086bcf99f1b319893803ab2b9.js",
+          "sha256": "17451d3ccae0aac95e939bc441faa952dbf8bc5086bcf99f1b319893803ab2b9"
+        },
+        "supabase/functions/_shared/order-delivery/handler.js": {
+          "blob": "docs/production-source/edge/blobs/34939c9e8f5d8a99cb173cd09fe2d215f7466e7f4e432225f78f8a6eeedd02bb.js",
+          "sha256": "34939c9e8f5d8a99cb173cd09fe2d215f7466e7f4e432225f78f8a6eeedd02bb"
+        },
+        "supabase/functions/_shared/order-delivery/runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/909564cb489b3b9a8ccaa38e4d7eff6a39ca38220a823216b9713762915ffd87.ts",
+          "sha256": "909564cb489b3b9a8ccaa38e4d7eff6a39ca38220a823216b9713762915ffd87"
+        },
+        "supabase/functions/_shared/order-delivery/smtp.js": {
+          "blob": "docs/production-source/edge/blobs/1fc7e960e7082ab3d29b8e9daa7aefb59000c410e3d2668a2437fc43d2a9db9a.js",
+          "sha256": "1fc7e960e7082ab3d29b8e9daa7aefb59000c410e3d2668a2437fc43d2a9db9a"
+        },
+        "supabase/functions/_shared/order-delivery/template.js": {
+          "blob": "docs/production-source/edge/blobs/c821f554732048141c2b1751fe908ba0881099866a86740be3ceb1d7c7f97276.js",
+          "sha256": "c821f554732048141c2b1751fe908ba0881099866a86740be3ceb1d7c7f97276"
+        },
+        "supabase/functions/_shared/quotation-delivery/contract.js": {
+          "blob": "docs/production-source/edge/blobs/a272326b5c29f74cc71b344f08409b97e573c770f3adbf7bde41346c984d316a.js",
+          "sha256": "a272326b5c29f74cc71b344f08409b97e573c770f3adbf7bde41346c984d316a"
+        }
+      }
+    },
+    "create-user": {
+      "version": 46,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/create-user/index.ts": {
+          "blob": "docs/production-source/edge/blobs/aadb04e2525b6649d95c01dafb83eaa0e6cc323db6b20b4b4f2f9b7996d1eef1.ts",
+          "sha256": "aadb04e2525b6649d95c01dafb83eaa0e6cc323db6b20b4b4f2f9b7996d1eef1"
+        }
+      }
+    },
+    "delete-user": {
+      "version": 46,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/delete-user/index.ts": {
+          "blob": "docs/production-source/edge/blobs/d70b49f073d1e32d3e2ccbc8886468d1b184a5db412897538a90060e374043a4.ts",
+          "sha256": "d70b49f073d1e32d3e2ccbc8886468d1b184a5db412897538a90060e374043a4"
+        }
+      }
+    },
+    "send-whatsapp": {
+      "version": 52,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/send-whatsapp/authorization.js": {
+          "blob": "docs/production-source/edge/blobs/1862ffe10933ebce0038fb4cec01896d74031e0aaf0dcb1b28029dcadcfa73f3.js",
+          "sha256": "1862ffe10933ebce0038fb4cec01896d74031e0aaf0dcb1b28029dcadcfa73f3"
+        },
+        "supabase/functions/send-whatsapp/handler.js": {
+          "blob": "docs/production-source/edge/blobs/69e17df0a98e45e8f35edfd5d26a80db874b785e124d0f85a1949cca9a1b79f9.js",
+          "sha256": "69e17df0a98e45e8f35edfd5d26a80db874b785e124d0f85a1949cca9a1b79f9"
+        },
+        "supabase/functions/send-whatsapp/index.ts": {
+          "blob": "docs/production-source/edge/blobs/1998f460a1ebfe4227670949fe9960ed0e13fac070ea3ef34f870b6661c18a8b.ts",
+          "sha256": "1998f460a1ebfe4227670949fe9960ed0e13fac070ea3ef34f870b6661c18a8b"
+        },
+        "supabase/functions/send-whatsapp/network.js": {
+          "blob": "docs/production-source/edge/blobs/292f0f1c067020fd594298dda1bda20cd94e79edbf9bd0c8a31828377b259096.js",
+          "sha256": "292f0f1c067020fd594298dda1bda20cd94e79edbf9bd0c8a31828377b259096"
+        },
+        "supabase/functions/send-whatsapp/payload.js": {
+          "blob": "docs/production-source/edge/blobs/14822e724475aa9856fece7a57abf85b3c424dfb4a96b4d2e1807fbae4478480.js",
+          "sha256": "14822e724475aa9856fece7a57abf85b3c424dfb4a96b4d2e1807fbae4478480"
+        },
+        "supabase/functions/send-whatsapp/template-mode.js": {
+          "blob": "docs/production-source/edge/blobs/4df3b5b56d42884b93d5dbbeba5ee8ca149362fd344d14fa135f1570fae47dac.js",
+          "sha256": "4df3b5b56d42884b93d5dbbeba5ee8ca149362fd344d14fa135f1570fae47dac"
+        }
+      }
+    },
+    "pelecard-initiate": {
+      "version": 37,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/pelecard-initiate/index.ts": {
+          "blob": "docs/production-source/edge/blobs/8530ae40e40709de74a3efe57d44018fd72ecc36bc5954722aa5bffa9fc7c6aa.ts",
+          "sha256": "8530ae40e40709de74a3efe57d44018fd72ecc36bc5954722aa5bffa9fc7c6aa"
+        },
+        "supabase/functions/_shared/payment-auth.ts": {
+          "blob": "docs/production-source/edge/blobs/279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2.ts",
+          "sha256": "279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2"
+        },
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/_shared/payment-initiation.ts": {
+          "blob": "docs/production-source/edge/blobs/1ab04f0f7e722451320891d756f8cc69f1ec330b69b2de9d909ad4d7a50fe959.ts",
+          "sha256": "1ab04f0f7e722451320891d756f8cc69f1ec330b69b2de9d909ad4d7a50fe959"
+        },
+        "supabase/functions/_shared/payment-store.ts": {
+          "blob": "docs/production-source/edge/blobs/67d3da0d356f5972b5a9766b39205b5c01ce0cb9764ad539afc41e3ed60caca7.ts",
+          "sha256": "67d3da0d356f5972b5a9766b39205b5c01ce0cb9764ad539afc41e3ed60caca7"
+        },
+        "supabase/functions/_shared/payment-types.ts": {
+          "blob": "docs/production-source/edge/blobs/4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373.ts",
+          "sha256": "4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373"
+        },
+        "supabase/functions/_shared/pelecard-client.ts": {
+          "blob": "docs/production-source/edge/blobs/3662b08af200d0c839b9e044a6e385d87ea5a7a99d5dac49627afa9e3bc86b4c.ts",
+          "sha256": "3662b08af200d0c839b9e044a6e385d87ea5a7a99d5dac49627afa9e3bc86b4c"
+        },
+        "supabase/functions/_shared/pelecard-test-config.ts": {
+          "blob": "docs/production-source/edge/blobs/15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb.ts",
+          "sha256": "15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb"
+        },
+        "supabase/functions/_shared/pelecard-transport.ts": {
+          "blob": "docs/production-source/edge/blobs/eec4d6ea2bfd5155a2916b77991d08f038aefbc7a07cc74e7106135f20cbf548.ts",
+          "sha256": "eec4d6ea2bfd5155a2916b77991d08f038aefbc7a07cc74e7106135f20cbf548"
+        }
+      }
+    },
+    "pelecard-verify": {
+      "version": 37,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/payment-auth.ts": {
+          "blob": "docs/production-source/edge/blobs/279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2.ts",
+          "sha256": "279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2"
+        },
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/_shared/payment-store.ts": {
+          "blob": "docs/production-source/edge/blobs/67d3da0d356f5972b5a9766b39205b5c01ce0cb9764ad539afc41e3ed60caca7.ts",
+          "sha256": "67d3da0d356f5972b5a9766b39205b5c01ce0cb9764ad539afc41e3ed60caca7"
+        },
+        "supabase/functions/_shared/payment-types.ts": {
+          "blob": "docs/production-source/edge/blobs/4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373.ts",
+          "sha256": "4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373"
+        },
+        "supabase/functions/_shared/pelecard-client.ts": {
+          "blob": "docs/production-source/edge/blobs/3662b08af200d0c839b9e044a6e385d87ea5a7a99d5dac49627afa9e3bc86b4c.ts",
+          "sha256": "3662b08af200d0c839b9e044a6e385d87ea5a7a99d5dac49627afa9e3bc86b4c"
+        },
+        "supabase/functions/_shared/pelecard-test-config.ts": {
+          "blob": "docs/production-source/edge/blobs/15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb.ts",
+          "sha256": "15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb"
+        },
+        "supabase/functions/_shared/pelecard-transport.ts": {
+          "blob": "docs/production-source/edge/blobs/eec4d6ea2bfd5155a2916b77991d08f038aefbc7a07cc74e7106135f20cbf548.ts",
+          "sha256": "eec4d6ea2bfd5155a2916b77991d08f038aefbc7a07cc74e7106135f20cbf548"
+        },
+        "supabase/functions/pelecard-verify/index.ts": {
+          "blob": "docs/production-source/edge/blobs/a6f927b69874349af8f49897e8153812639f7025537aa34f1b95cb87efae427d.ts",
+          "sha256": "a6f927b69874349af8f49897e8153812639f7025537aa34f1b95cb87efae427d"
+        },
+        "supabase/functions/_shared/payment-accounting/payment-mapper.ts": {
+          "blob": "docs/production-source/edge/blobs/70e27cb8b27313ff8a9be37b7183073f943da5831ab196a984f530ae2bd31604.ts",
+          "sha256": "70e27cb8b27313ff8a9be37b7183073f943da5831ab196a984f530ae2bd31604"
+        },
+        "supabase/functions/_shared/payment-accounting/processor.ts": {
+          "blob": "docs/production-source/edge/blobs/73b49a4a1f6b22b73cc1e6731ad046fe99acd82d8cc9d67d16d0de0d3b68bc19.ts",
+          "sha256": "73b49a4a1f6b22b73cc1e6731ad046fe99acd82d8cc9d67d16d0de0d3b68bc19"
+        },
+        "supabase/functions/_shared/payment-accounting/repository.ts": {
+          "blob": "docs/production-source/edge/blobs/e37dae697ecd5b3c6dddbe0a63399689bae80ff29d3923c2b60853af916b4f07.ts",
+          "sha256": "e37dae697ecd5b3c6dddbe0a63399689bae80ff29d3923c2b60853af916b4f07"
+        },
+        "supabase/functions/_shared/payment-accounting/runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/c576c7e33e4922e641e45646995d12690b58067c1203b22524ae9d596587e6d1.ts",
+          "sha256": "c576c7e33e4922e641e45646995d12690b58067c1203b22524ae9d596587e6d1"
+        },
+        "supabase/functions/_shared/payment-edge-runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/d302d9b688d1af668615a1f47daa09470f4bd2aeadb7f7e84ef9b5a091f6d7e1.ts",
+          "sha256": "d302d9b688d1af668615a1f47daa09470f4bd2aeadb7f7e84ef9b5a091f6d7e1"
+        },
+        "supabase/functions/_shared/payment-handlers.ts": {
+          "blob": "docs/production-source/edge/blobs/5a5bfe0810636a749276beffab831c5855c3a3ec19f0906dfaf97fe2a36f9bc9.ts",
+          "sha256": "5a5bfe0810636a749276beffab831c5855c3a3ec19f0906dfaf97fe2a36f9bc9"
+        },
+        "supabase/functions/_shared/payment-reconciliation.ts": {
+          "blob": "docs/production-source/edge/blobs/1261a5650232543e9071b2a3f52741797e2bdf221e992859419bccd59ed6b817.ts",
+          "sha256": "1261a5650232543e9071b2a3f52741797e2bdf221e992859419bccd59ed6b817"
+        },
+        "supabase/functions/_shared/rivhit/client.ts": {
+          "blob": "docs/production-source/edge/blobs/0baf2921b4f96acb6b52b544b948ff61b53ebb01efe8afdf2418fae1f1e1092d.ts",
+          "sha256": "0baf2921b4f96acb6b52b544b948ff61b53ebb01efe8afdf2418fae1f1e1092d"
+        },
+        "supabase/functions/_shared/rivhit/config.ts": {
+          "blob": "docs/production-source/edge/blobs/ef1c9d651e827df59fbec00e0b08d6226114e807d6d0944890533b4c27529ac0.ts",
+          "sha256": "ef1c9d651e827df59fbec00e0b08d6226114e807d6d0944890533b4c27529ac0"
+        },
+        "supabase/functions/_shared/rivhit/order-mapper.ts": {
+          "blob": "docs/production-source/edge/blobs/fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281.ts",
+          "sha256": "fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281"
+        },
+        "supabase/functions/_shared/rivhit/supabase-repository.ts": {
+          "blob": "docs/production-source/edge/blobs/c78a76cbe47007c7210e8c50f29dedeab7a56a759f9981944a9cf1e408e37bed.ts",
+          "sha256": "c78a76cbe47007c7210e8c50f29dedeab7a56a759f9981944a9cf1e408e37bed"
+        },
+        "supabase/functions/_shared/rivhit/workflow.ts": {
+          "blob": "docs/production-source/edge/blobs/f3f93dc4e15bca315c42bdea3b248ca5e3270bde7e0ce70981e7c84c3ccb2472.ts",
+          "sha256": "f3f93dc4e15bca315c42bdea3b248ca5e3270bde7e0ce70981e7c84c3ccb2472"
+        }
+      }
+    },
+    "pelecard-status": {
+      "version": 35,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/pelecard-status/index.ts": {
+          "blob": "docs/production-source/edge/blobs/0dd020ca63a1342c1d414dafaff5bfb5dceb4f24e820fb27e55ae7c2dd0c1e0a.ts",
+          "sha256": "0dd020ca63a1342c1d414dafaff5bfb5dceb4f24e820fb27e55ae7c2dd0c1e0a"
+        }
+      }
+    },
+    "rivhit-accounting": {
+      "version": 37,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/rivhit/client.ts": {
+          "blob": "docs/production-source/edge/blobs/400bf08f4bd10eb1bd188ee48c9ac48b2fa39eabb509d4f8f495a5b9e0085770.ts",
+          "sha256": "400bf08f4bd10eb1bd188ee48c9ac48b2fa39eabb509d4f8f495a5b9e0085770"
+        },
+        "supabase/functions/_shared/rivhit/config.ts": {
+          "blob": "docs/production-source/edge/blobs/ef1c9d651e827df59fbec00e0b08d6226114e807d6d0944890533b4c27529ac0.ts",
+          "sha256": "ef1c9d651e827df59fbec00e0b08d6226114e807d6d0944890533b4c27529ac0"
+        },
+        "supabase/functions/_shared/rivhit/order-mapper.ts": {
+          "blob": "docs/production-source/edge/blobs/fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281.ts",
+          "sha256": "fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281"
+        },
+        "supabase/functions/_shared/rivhit/supabase-repository.ts": {
+          "blob": "docs/production-source/edge/blobs/ae714a97bd26fb7a1ebda737add43b150732de3a5790855194f6f376ecf00ab2.ts",
+          "sha256": "ae714a97bd26fb7a1ebda737add43b150732de3a5790855194f6f376ecf00ab2"
+        },
+        "supabase/functions/_shared/rivhit/workflow.ts": {
+          "blob": "docs/production-source/edge/blobs/54014c205f72f569ca2d162307e0b619a50da801ae133d0bc64014894ca4dd0a.ts",
+          "sha256": "54014c205f72f569ca2d162307e0b619a50da801ae133d0bc64014894ca4dd0a"
+        },
+        "supabase/functions/rivhit-accounting/index.ts": {
+          "blob": "docs/production-source/edge/blobs/0aaf91c3114d042746157f1b1e0829452a8e13174eab4c31a971af07e35038d4.ts",
+          "sha256": "0aaf91c3114d042746157f1b1e0829452a8e13174eab4c31a971af07e35038d4"
+        }
+      }
+    },
+    "payment-accounting-worker": {
+      "version": 37,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/payment-auth.ts": {
+          "blob": "docs/production-source/edge/blobs/279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2.ts",
+          "sha256": "279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2"
+        },
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/_shared/payment-store.ts": {
+          "blob": "docs/production-source/edge/blobs/42281527694885152e8add31ff1e8836ca0d42d80e70a59d5c4765dd754bf134.ts",
+          "sha256": "42281527694885152e8add31ff1e8836ca0d42d80e70a59d5c4765dd754bf134"
+        },
+        "supabase/functions/_shared/payment-types.ts": {
+          "blob": "docs/production-source/edge/blobs/ada628b5ecc03ccc5f7d9f5c8dfce11d6ba4eacad238c635f270625a17f47f97.ts",
+          "sha256": "ada628b5ecc03ccc5f7d9f5c8dfce11d6ba4eacad238c635f270625a17f47f97"
+        },
+        "supabase/functions/_shared/payment-accounting/payment-mapper.ts": {
+          "blob": "docs/production-source/edge/blobs/14f93105a4cbbf2e7f6b90ae3b79fec344091aa4e5bfa754c927b5ace2b2c97c.ts",
+          "sha256": "14f93105a4cbbf2e7f6b90ae3b79fec344091aa4e5bfa754c927b5ace2b2c97c"
+        },
+        "supabase/functions/_shared/payment-accounting/processor.ts": {
+          "blob": "docs/production-source/edge/blobs/73b49a4a1f6b22b73cc1e6731ad046fe99acd82d8cc9d67d16d0de0d3b68bc19.ts",
+          "sha256": "73b49a4a1f6b22b73cc1e6731ad046fe99acd82d8cc9d67d16d0de0d3b68bc19"
+        },
+        "supabase/functions/_shared/payment-accounting/repository.ts": {
+          "blob": "docs/production-source/edge/blobs/e37dae697ecd5b3c6dddbe0a63399689bae80ff29d3923c2b60853af916b4f07.ts",
+          "sha256": "e37dae697ecd5b3c6dddbe0a63399689bae80ff29d3923c2b60853af916b4f07"
+        },
+        "supabase/functions/_shared/payment-accounting/runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/c576c7e33e4922e641e45646995d12690b58067c1203b22524ae9d596587e6d1.ts",
+          "sha256": "c576c7e33e4922e641e45646995d12690b58067c1203b22524ae9d596587e6d1"
+        },
+        "supabase/functions/_shared/payment-edge-runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/097236865ff57cd087dfe7109b87be5b0a314f9868468b20f168bcff44d5a614.ts",
+          "sha256": "097236865ff57cd087dfe7109b87be5b0a314f9868468b20f168bcff44d5a614"
+        },
+        "supabase/functions/_shared/rivhit/client.ts": {
+          "blob": "docs/production-source/edge/blobs/400bf08f4bd10eb1bd188ee48c9ac48b2fa39eabb509d4f8f495a5b9e0085770.ts",
+          "sha256": "400bf08f4bd10eb1bd188ee48c9ac48b2fa39eabb509d4f8f495a5b9e0085770"
+        },
+        "supabase/functions/_shared/rivhit/config.ts": {
+          "blob": "docs/production-source/edge/blobs/ef1c9d651e827df59fbec00e0b08d6226114e807d6d0944890533b4c27529ac0.ts",
+          "sha256": "ef1c9d651e827df59fbec00e0b08d6226114e807d6d0944890533b4c27529ac0"
+        },
+        "supabase/functions/_shared/rivhit/order-mapper.ts": {
+          "blob": "docs/production-source/edge/blobs/fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281.ts",
+          "sha256": "fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281"
+        },
+        "supabase/functions/_shared/rivhit/supabase-repository.ts": {
+          "blob": "docs/production-source/edge/blobs/ae714a97bd26fb7a1ebda737add43b150732de3a5790855194f6f376ecf00ab2.ts",
+          "sha256": "ae714a97bd26fb7a1ebda737add43b150732de3a5790855194f6f376ecf00ab2"
+        },
+        "supabase/functions/_shared/rivhit/workflow.ts": {
+          "blob": "docs/production-source/edge/blobs/54014c205f72f569ca2d162307e0b619a50da801ae133d0bc64014894ca4dd0a.ts",
+          "sha256": "54014c205f72f569ca2d162307e0b619a50da801ae133d0bc64014894ca4dd0a"
+        },
+        "supabase/functions/payment-accounting-worker/index.ts": {
+          "blob": "docs/production-source/edge/blobs/79014888a71b5bed3d1389cdacc5b7a527a4a37e4f603062f41de04f2fc26f97.ts",
+          "sha256": "79014888a71b5bed3d1389cdacc5b7a527a4a37e4f603062f41de04f2fc26f97"
+        },
+        "supabase/functions/_shared/payment-accounting/worker-handler.ts": {
+          "blob": "docs/production-source/edge/blobs/92202ee876255c38d0bc8997951dc2a7eaac2a308e64b34a33cfb78203e113a6.ts",
+          "sha256": "92202ee876255c38d0bc8997951dc2a7eaac2a308e64b34a33cfb78203e113a6"
+        }
+      }
+    },
+    "club-recurring-enroll": {
+      "version": 34,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/club-recurring-enroll/index.ts": {
+          "blob": "docs/production-source/edge/blobs/a4a2fc9e35807650ecd581c233fd984043faa750151bee4e7a96b02f3ce32735.ts",
+          "sha256": "a4a2fc9e35807650ecd581c233fd984043faa750151bee4e7a96b02f3ce32735"
+        },
+        "supabase/functions/_shared/admin.ts": {
+          "blob": "docs/production-source/edge/blobs/80cdefdccfcc8c04610f5e0c216c76a97c516f260147c4804984237d05d9b90a.ts",
+          "sha256": "80cdefdccfcc8c04610f5e0c216c76a97c516f260147c4804984237d05d9b90a"
+        },
+        "supabase/functions/_shared/icredit.ts": {
+          "blob": "docs/production-source/edge/blobs/c5d7bbdb788e1bcdd47dc30c659b7f1c21b2b7529db61a2d45e91d530e1635e4.ts",
+          "sha256": "c5d7bbdb788e1bcdd47dc30c659b7f1c21b2b7529db61a2d45e91d530e1635e4"
+        }
+      }
+    },
+    "club-recurring-cancel": {
+      "version": 34,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/admin.ts": {
+          "blob": "docs/production-source/edge/blobs/80cdefdccfcc8c04610f5e0c216c76a97c516f260147c4804984237d05d9b90a.ts",
+          "sha256": "80cdefdccfcc8c04610f5e0c216c76a97c516f260147c4804984237d05d9b90a"
+        },
+        "supabase/functions/_shared/icredit.ts": {
+          "blob": "docs/production-source/edge/blobs/c5d7bbdb788e1bcdd47dc30c659b7f1c21b2b7529db61a2d45e91d530e1635e4.ts",
+          "sha256": "c5d7bbdb788e1bcdd47dc30c659b7f1c21b2b7529db61a2d45e91d530e1635e4"
+        },
+        "supabase/functions/club-recurring-cancel/index.ts": {
+          "blob": "docs/production-source/edge/blobs/32266fd2a7e0b045403deb34934f1b6fb2b9a2f18ec3aa9e35e31b3a4279fe1a.ts",
+          "sha256": "32266fd2a7e0b045403deb34934f1b6fb2b9a2f18ec3aa9e35e31b3a4279fe1a"
+        }
+      }
+    },
+    "chatbot-handoff-admin": {
+      "version": 34,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/chatbot-handoff-admin/authorization.js": {
+          "blob": "docs/production-source/edge/blobs/457f635c07049cfeac2bc702a5ec64c2782b3c06a1d680720102ede9567c8cc1.js",
+          "sha256": "457f635c07049cfeac2bc702a5ec64c2782b3c06a1d680720102ede9567c8cc1"
+        },
+        "supabase/functions/chatbot-handoff-admin/handler.js": {
+          "blob": "docs/production-source/edge/blobs/54de07a10b9090147ba024a53067d6efb9cb6a6bc606546376e72d4d260eed5f.js",
+          "sha256": "54de07a10b9090147ba024a53067d6efb9cb6a6bc606546376e72d4d260eed5f"
+        },
+        "supabase/functions/chatbot-handoff-admin/index.ts": {
+          "blob": "docs/production-source/edge/blobs/2606b020994762fa59199bb0970ecb9eeef1698448727c1aab290e33ebbc9004.ts",
+          "sha256": "2606b020994762fa59199bb0970ecb9eeef1698448727c1aab290e33ebbc9004"
+        },
+        "supabase/functions/chatbot-handoff-admin/operations.js": {
+          "blob": "docs/production-source/edge/blobs/e4cacf8712a34d2d2cb9ab35cacf0a07fb09030bf6a942d52f877a58462b7c9b.js",
+          "sha256": "e4cacf8712a34d2d2cb9ab35cacf0a07fb09030bf6a942d52f877a58462b7c9b"
+        },
+        "supabase/functions/whatsapp-webhook/sender.js": {
+          "blob": "docs/production-source/edge/blobs/8bff803fadfd7c542a43916b523f7e84f7197a11f681299c154199ec7b18c3c2.js",
+          "sha256": "8bff803fadfd7c542a43916b523f7e84f7197a11f681299c154199ec7b18c3c2"
+        }
+      }
+    },
+    "pelecard-callback": {
+      "version": 37,
+      "verifyJwt": false,
+      "files": {
+        "supabase/functions/_shared/payment-auth.ts": {
+          "blob": "docs/production-source/edge/blobs/279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2.ts",
+          "sha256": "279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2"
+        },
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/_shared/payment-store.ts": {
+          "blob": "docs/production-source/edge/blobs/67d3da0d356f5972b5a9766b39205b5c01ce0cb9764ad539afc41e3ed60caca7.ts",
+          "sha256": "67d3da0d356f5972b5a9766b39205b5c01ce0cb9764ad539afc41e3ed60caca7"
+        },
+        "supabase/functions/_shared/payment-types.ts": {
+          "blob": "docs/production-source/edge/blobs/4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373.ts",
+          "sha256": "4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373"
+        },
+        "supabase/functions/_shared/pelecard-client.ts": {
+          "blob": "docs/production-source/edge/blobs/3662b08af200d0c839b9e044a6e385d87ea5a7a99d5dac49627afa9e3bc86b4c.ts",
+          "sha256": "3662b08af200d0c839b9e044a6e385d87ea5a7a99d5dac49627afa9e3bc86b4c"
+        },
+        "supabase/functions/_shared/pelecard-test-config.ts": {
+          "blob": "docs/production-source/edge/blobs/15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb.ts",
+          "sha256": "15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb"
+        },
+        "supabase/functions/_shared/pelecard-transport.ts": {
+          "blob": "docs/production-source/edge/blobs/eec4d6ea2bfd5155a2916b77991d08f038aefbc7a07cc74e7106135f20cbf548.ts",
+          "sha256": "eec4d6ea2bfd5155a2916b77991d08f038aefbc7a07cc74e7106135f20cbf548"
+        },
+        "supabase/functions/_shared/payment-accounting/payment-mapper.ts": {
+          "blob": "docs/production-source/edge/blobs/70e27cb8b27313ff8a9be37b7183073f943da5831ab196a984f530ae2bd31604.ts",
+          "sha256": "70e27cb8b27313ff8a9be37b7183073f943da5831ab196a984f530ae2bd31604"
+        },
+        "supabase/functions/_shared/payment-accounting/processor.ts": {
+          "blob": "docs/production-source/edge/blobs/73b49a4a1f6b22b73cc1e6731ad046fe99acd82d8cc9d67d16d0de0d3b68bc19.ts",
+          "sha256": "73b49a4a1f6b22b73cc1e6731ad046fe99acd82d8cc9d67d16d0de0d3b68bc19"
+        },
+        "supabase/functions/_shared/payment-accounting/repository.ts": {
+          "blob": "docs/production-source/edge/blobs/e37dae697ecd5b3c6dddbe0a63399689bae80ff29d3923c2b60853af916b4f07.ts",
+          "sha256": "e37dae697ecd5b3c6dddbe0a63399689bae80ff29d3923c2b60853af916b4f07"
+        },
+        "supabase/functions/_shared/payment-accounting/runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/c576c7e33e4922e641e45646995d12690b58067c1203b22524ae9d596587e6d1.ts",
+          "sha256": "c576c7e33e4922e641e45646995d12690b58067c1203b22524ae9d596587e6d1"
+        },
+        "supabase/functions/_shared/payment-edge-runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/d302d9b688d1af668615a1f47daa09470f4bd2aeadb7f7e84ef9b5a091f6d7e1.ts",
+          "sha256": "d302d9b688d1af668615a1f47daa09470f4bd2aeadb7f7e84ef9b5a091f6d7e1"
+        },
+        "supabase/functions/_shared/payment-handlers.ts": {
+          "blob": "docs/production-source/edge/blobs/5a5bfe0810636a749276beffab831c5855c3a3ec19f0906dfaf97fe2a36f9bc9.ts",
+          "sha256": "5a5bfe0810636a749276beffab831c5855c3a3ec19f0906dfaf97fe2a36f9bc9"
+        },
+        "supabase/functions/_shared/payment-reconciliation.ts": {
+          "blob": "docs/production-source/edge/blobs/1261a5650232543e9071b2a3f52741797e2bdf221e992859419bccd59ed6b817.ts",
+          "sha256": "1261a5650232543e9071b2a3f52741797e2bdf221e992859419bccd59ed6b817"
+        },
+        "supabase/functions/_shared/rivhit/client.ts": {
+          "blob": "docs/production-source/edge/blobs/0baf2921b4f96acb6b52b544b948ff61b53ebb01efe8afdf2418fae1f1e1092d.ts",
+          "sha256": "0baf2921b4f96acb6b52b544b948ff61b53ebb01efe8afdf2418fae1f1e1092d"
+        },
+        "supabase/functions/_shared/rivhit/config.ts": {
+          "blob": "docs/production-source/edge/blobs/ef1c9d651e827df59fbec00e0b08d6226114e807d6d0944890533b4c27529ac0.ts",
+          "sha256": "ef1c9d651e827df59fbec00e0b08d6226114e807d6d0944890533b4c27529ac0"
+        },
+        "supabase/functions/_shared/rivhit/order-mapper.ts": {
+          "blob": "docs/production-source/edge/blobs/fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281.ts",
+          "sha256": "fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281"
+        },
+        "supabase/functions/_shared/rivhit/supabase-repository.ts": {
+          "blob": "docs/production-source/edge/blobs/c78a76cbe47007c7210e8c50f29dedeab7a56a759f9981944a9cf1e408e37bed.ts",
+          "sha256": "c78a76cbe47007c7210e8c50f29dedeab7a56a759f9981944a9cf1e408e37bed"
+        },
+        "supabase/functions/_shared/rivhit/workflow.ts": {
+          "blob": "docs/production-source/edge/blobs/f3f93dc4e15bca315c42bdea3b248ca5e3270bde7e0ce70981e7c84c3ccb2472.ts",
+          "sha256": "f3f93dc4e15bca315c42bdea3b248ca5e3270bde7e0ce70981e7c84c3ccb2472"
+        },
+        "supabase/functions/pelecard-callback/index.ts": {
+          "blob": "docs/production-source/edge/blobs/e5a56664f2960bbec305a4773692d6682125a689fb079f986e98720570ae8743.ts",
+          "sha256": "e5a56664f2960bbec305a4773692d6682125a689fb079f986e98720570ae8743"
+        }
+      }
+    },
+    "club-recurring-ipn": {
+      "version": 34,
+      "verifyJwt": false,
+      "files": {
+        "supabase/functions/_shared/icredit.ts": {
+          "blob": "docs/production-source/edge/blobs/c5d7bbdb788e1bcdd47dc30c659b7f1c21b2b7529db61a2d45e91d530e1635e4.ts",
+          "sha256": "c5d7bbdb788e1bcdd47dc30c659b7f1c21b2b7529db61a2d45e91d530e1635e4"
+        },
+        "supabase/functions/club-recurring-ipn/index.ts": {
+          "blob": "docs/production-source/edge/blobs/6058e6a9dce33806eea1a2f70661a45b366d80c256926dc1b17a9431b5ed9e02.ts",
+          "sha256": "6058e6a9dce33806eea1a2f70661a45b366d80c256926dc1b17a9431b5ed9e02"
+        }
+      }
+    },
+    "whatsapp-webhook": {
+      "version": 34,
+      "verifyJwt": false,
+      "files": {
+        "supabase/functions/whatsapp-webhook/sender.js": {
+          "blob": "docs/production-source/edge/blobs/8bff803fadfd7c542a43916b523f7e84f7197a11f681299c154199ec7b18c3c2.js",
+          "sha256": "8bff803fadfd7c542a43916b523f7e84f7197a11f681299c154199ec7b18c3c2"
+        },
+        "supabase/functions/whatsapp-webhook/handler.js": {
+          "blob": "docs/production-source/edge/blobs/bcc7e6c9403be1dfc30b2804ab4955c3c1968561be509aefcf48e86e979e919b.js",
+          "sha256": "bcc7e6c9403be1dfc30b2804ab4955c3c1968561be509aefcf48e86e979e919b"
+        },
+        "supabase/functions/whatsapp-webhook/index.ts": {
+          "blob": "docs/production-source/edge/blobs/49585a73f3cfb232fd3d55f3e201209da90e0a39af599ed7b2339f9901887258.ts",
+          "sha256": "49585a73f3cfb232fd3d55f3e201209da90e0a39af599ed7b2339f9901887258"
+        },
+        "supabase/functions/whatsapp-webhook/normalize.js": {
+          "blob": "docs/production-source/edge/blobs/45cd02aa2e47774a8f7fc2af91bc846a91d736b68fbdcfaad770969b376bc720.js",
+          "sha256": "45cd02aa2e47774a8f7fc2af91bc846a91d736b68fbdcfaad770969b376bc720"
+        },
+        "supabase/functions/_shared/chatbot/content/v1/he/activities.json": {
+          "blob": "docs/production-source/edge/blobs/3e7b61ad99d37a49618fedaa47fffd82e6b5ff015e2790b4342dc1156108fd1e.json",
+          "sha256": "3e7b61ad99d37a49618fedaa47fffd82e6b5ff015e2790b4342dc1156108fd1e"
+        },
+        "supabase/functions/_shared/chatbot/content/v1/he/faq.json": {
+          "blob": "docs/production-source/edge/blobs/0749634af18697304750eeec22fb3dcf7ab83f9c6b39b529f399a468d43fbcbb.json",
+          "sha256": "0749634af18697304750eeec22fb3dcf7ab83f9c6b39b529f399a468d43fbcbb"
+        },
+        "supabase/functions/_shared/chatbot/content/v1/he/handoff.json": {
+          "blob": "docs/production-source/edge/blobs/ccc297dee20a8814a062ecfc1acac22951c716668172a8d2fe6cfe4aa64e7492.json",
+          "sha256": "ccc297dee20a8814a062ecfc1acac22951c716668172a8d2fe6cfe4aa64e7492"
+        },
+        "supabase/functions/_shared/chatbot/content/v1/he/menus.json": {
+          "blob": "docs/production-source/edge/blobs/fc3a300e7b4e9ad15fb5d5dbd68de2635b230b0314435cf8715e4815bd839951.json",
+          "sha256": "fc3a300e7b4e9ad15fb5d5dbd68de2635b230b0314435cf8715e4815bd839951"
+        },
+        "supabase/functions/_shared/chatbot/content/v1/he/policies.json": {
+          "blob": "docs/production-source/edge/blobs/b15e5a2aa33002aeeccbe7a324f478715d270dee03e223198d5091993f6a0636.json",
+          "sha256": "b15e5a2aa33002aeeccbe7a324f478715d270dee03e223198d5091993f6a0636"
+        },
+        "supabase/functions/_shared/chatbot/content/v1/he/profile.json": {
+          "blob": "docs/production-source/edge/blobs/246a50edb5bf337eef95f1772529e54e1e2b481c134a61dd9ae0ed278a3413e5.json",
+          "sha256": "246a50edb5bf337eef95f1772529e54e1e2b481c134a61dd9ae0ed278a3413e5"
+        },
+        "supabase/functions/_shared/chatbot/content/v1/he/safety.json": {
+          "blob": "docs/production-source/edge/blobs/c99eb3db3e8634f84a8a830d71a5567b3afab3366a559eae719350f4c2509454.json",
+          "sha256": "c99eb3db3e8634f84a8a830d71a5567b3afab3366a559eae719350f4c2509454"
+        },
+        "supabase/functions/_shared/chatbot/content/v1/he/sites.json": {
+          "blob": "docs/production-source/edge/blobs/d0959f5acd0ba3742820d643184b86cbf7ea9d2ad3a80dce7c067509ceb8b899.json",
+          "sha256": "d0959f5acd0ba3742820d643184b86cbf7ea9d2ad3a80dce7c067509ceb8b899"
+        },
+        "supabase/functions/_shared/chatbot/content-schema.js": {
+          "blob": "docs/production-source/edge/blobs/27c4263abfb215482b25e772a9b088667e342ebe8f571233055a7ad8aafacfaf.js",
+          "sha256": "27c4263abfb215482b25e772a9b088667e342ebe8f571233055a7ad8aafacfaf"
+        },
+        "supabase/functions/_shared/chatbot/content.js": {
+          "blob": "docs/production-source/edge/blobs/072a93b7ae555f578e1e6ad670174fbe486b1c32025c68023b6f698e75bb23a1.js",
+          "sha256": "072a93b7ae555f578e1e6ad670174fbe486b1c32025c68023b6f698e75bb23a1"
+        },
+        "supabase/functions/_shared/chatbot/process-event.js": {
+          "blob": "docs/production-source/edge/blobs/7dc69c8074a4e6beb494816e1af34b209ea0a67115a635e4a6e6405ceb4cc7af.js",
+          "sha256": "7dc69c8074a4e6beb494816e1af34b209ea0a67115a635e4a6e6405ceb4cc7af"
+        },
+        "supabase/functions/_shared/chatbot/repository.js": {
+          "blob": "docs/production-source/edge/blobs/92faa30dc1c0d3c956d40a4364f3c4b1855b161ef7f18a40be601d1f3be496c6.js",
+          "sha256": "92faa30dc1c0d3c956d40a4364f3c4b1855b161ef7f18a40be601d1f3be496c6"
+        },
+        "supabase/functions/_shared/chatbot/state-machine.js": {
+          "blob": "docs/production-source/edge/blobs/d8c761fa2da261e68768148eb128f331c61df69d7be621fcf8dfc7cfe6227064.js",
+          "sha256": "d8c761fa2da261e68768148eb128f331c61df69d7be621fcf8dfc7cfe6227064"
+        }
+      }
+    },
+    "pelecard-test": {
+      "version": 24,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/payment-auth.ts": {
+          "blob": "docs/production-source/edge/blobs/279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2.ts",
+          "sha256": "279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2"
+        },
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/_shared/payment-types.ts": {
+          "blob": "docs/production-source/edge/blobs/4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373.ts",
+          "sha256": "4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373"
+        },
+        "supabase/functions/_shared/pelecard-test-config.ts": {
+          "blob": "docs/production-source/edge/blobs/15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb.ts",
+          "sha256": "15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb"
+        },
+        "supabase/functions/pelecard-test/index.ts": {
+          "blob": "docs/production-source/edge/blobs/3093bd0d0de34757ba6a799fbacfd8b3c9f2b50c5feeb986610b053bacffa8a6.ts",
+          "sha256": "3093bd0d0de34757ba6a799fbacfd8b3c9f2b50c5feeb986610b053bacffa8a6"
+        },
+        "supabase/functions/_shared/pelecard-test-diagnostics.ts": {
+          "blob": "docs/production-source/edge/blobs/d884bc08aa138b2a41db14d354ade54717abafc0f27d1ae9d439539be72ea5a1.ts",
+          "sha256": "d884bc08aa138b2a41db14d354ade54717abafc0f27d1ae9d439539be72ea5a1"
+        },
+        "supabase/functions/_shared/pelecard-test-handler.ts": {
+          "blob": "docs/production-source/edge/blobs/653c9b2f84178fe8668fa57e6342c91cdc21c0478ed3b4a1048fcca9ea58c9a1.ts",
+          "sha256": "653c9b2f84178fe8668fa57e6342c91cdc21c0478ed3b4a1048fcca9ea58c9a1"
+        },
+        "supabase/functions/_shared/pelecard-test-init-adapter.ts": {
+          "blob": "docs/production-source/edge/blobs/41f79281994f8b7e7c5424e8e86598046b9a889baad45db69c1f6437d0fe86c4.ts",
+          "sha256": "41f79281994f8b7e7c5424e8e86598046b9a889baad45db69c1f6437d0fe86c4"
+        },
+        "supabase/functions/_shared/pelecard-test-provider.ts": {
+          "blob": "docs/production-source/edge/blobs/ed010b4eb5b5b8a0ec8ab7e2464e8bbe4c7fa07053ee253f045880a4ebb260e0.ts",
+          "sha256": "ed010b4eb5b5b8a0ec8ab7e2464e8bbe4c7fa07053ee253f045880a4ebb260e0"
+        },
+        "supabase/functions/_shared/pelecard-test-runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/ef88cc09752596e63505f9a8a9811936cd4126978a361ba6f3389d513e77f7b8.ts",
+          "sha256": "ef88cc09752596e63505f9a8a9811936cd4126978a361ba6f3389d513e77f7b8"
+        },
+        "supabase/functions/_shared/pelecard-test-store.ts": {
+          "blob": "docs/production-source/edge/blobs/8c6e79d6b09ca05650cdd2d7f916ee40d2260a98b8e735abfb7c917e50a5ee74.ts",
+          "sha256": "8c6e79d6b09ca05650cdd2d7f916ee40d2260a98b8e735abfb7c917e50a5ee74"
+        }
+      }
+    },
+    "pelecard-test-feedback": {
+      "version": 24,
+      "verifyJwt": false,
+      "files": {
+        "supabase/functions/_shared/payment-auth.ts": {
+          "blob": "docs/production-source/edge/blobs/279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2.ts",
+          "sha256": "279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2"
+        },
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/_shared/payment-types.ts": {
+          "blob": "docs/production-source/edge/blobs/4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373.ts",
+          "sha256": "4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373"
+        },
+        "supabase/functions/_shared/pelecard-test-config.ts": {
+          "blob": "docs/production-source/edge/blobs/15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb.ts",
+          "sha256": "15011caf8b508277cd651afddcf28ea029263e0b11be4278363fb85037c184cb"
+        },
+        "supabase/functions/_shared/pelecard-test-diagnostics.ts": {
+          "blob": "docs/production-source/edge/blobs/d884bc08aa138b2a41db14d354ade54717abafc0f27d1ae9d439539be72ea5a1.ts",
+          "sha256": "d884bc08aa138b2a41db14d354ade54717abafc0f27d1ae9d439539be72ea5a1"
+        },
+        "supabase/functions/_shared/pelecard-test-handler.ts": {
+          "blob": "docs/production-source/edge/blobs/653c9b2f84178fe8668fa57e6342c91cdc21c0478ed3b4a1048fcca9ea58c9a1.ts",
+          "sha256": "653c9b2f84178fe8668fa57e6342c91cdc21c0478ed3b4a1048fcca9ea58c9a1"
+        },
+        "supabase/functions/_shared/pelecard-test-init-adapter.ts": {
+          "blob": "docs/production-source/edge/blobs/41f79281994f8b7e7c5424e8e86598046b9a889baad45db69c1f6437d0fe86c4.ts",
+          "sha256": "41f79281994f8b7e7c5424e8e86598046b9a889baad45db69c1f6437d0fe86c4"
+        },
+        "supabase/functions/_shared/pelecard-test-provider.ts": {
+          "blob": "docs/production-source/edge/blobs/ed010b4eb5b5b8a0ec8ab7e2464e8bbe4c7fa07053ee253f045880a4ebb260e0.ts",
+          "sha256": "ed010b4eb5b5b8a0ec8ab7e2464e8bbe4c7fa07053ee253f045880a4ebb260e0"
+        },
+        "supabase/functions/_shared/pelecard-test-runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/ef88cc09752596e63505f9a8a9811936cd4126978a361ba6f3389d513e77f7b8.ts",
+          "sha256": "ef88cc09752596e63505f9a8a9811936cd4126978a361ba6f3389d513e77f7b8"
+        },
+        "supabase/functions/_shared/pelecard-test-store.ts": {
+          "blob": "docs/production-source/edge/blobs/8c6e79d6b09ca05650cdd2d7f916ee40d2260a98b8e735abfb7c917e50a5ee74.ts",
+          "sha256": "8c6e79d6b09ca05650cdd2d7f916ee40d2260a98b8e735abfb7c917e50a5ee74"
+        },
+        "supabase/functions/pelecard-test-feedback/index.ts": {
+          "blob": "docs/production-source/edge/blobs/13a7ce4bb067cbee8914525e83a0ddab041b68f8609d2427fdb297f2ebe9016d.ts",
+          "sha256": "13a7ce4bb067cbee8914525e83a0ddab041b68f8609d2427fdb297f2ebe9016d"
+        }
+      }
+    },
+    "pelecard-controlled-live": {
+      "version": 15,
+      "verifyJwt": false,
+      "files": {
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/pelecard-controlled-live/index.ts": {
+          "blob": "docs/production-source/edge/blobs/d85eb114567b177c7fb08e7d7d00e58dedb2ecffc60b8926783300882ef9f761.ts",
+          "sha256": "d85eb114567b177c7fb08e7d7d00e58dedb2ecffc60b8926783300882ef9f761"
+        }
+      }
+    },
+    "pelecard-controlled-live-feedback": {
+      "version": 17,
+      "verifyJwt": false,
+      "files": {
+        "supabase/functions/_shared/payment-auth.ts": {
+          "blob": "docs/production-source/edge/blobs/279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2.ts",
+          "sha256": "279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2"
+        },
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/_shared/payment-types.ts": {
+          "blob": "docs/production-source/edge/blobs/4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373.ts",
+          "sha256": "4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373"
+        },
+        "supabase/functions/_shared/pelecard-commercial-runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/63fedcda046e0b2a3b18b42cdbbbec04fe52f9e713eeb11f37eb5406ba8886e3.ts",
+          "sha256": "63fedcda046e0b2a3b18b42cdbbbec04fe52f9e713eeb11f37eb5406ba8886e3"
+        },
+        "supabase/functions/_shared/pelecard-commercial.ts": {
+          "blob": "docs/production-source/edge/blobs/645e77da2cc9f885cfdf1a86a21f50037f3237d0244a67bf099f7a3f8e918b73.ts",
+          "sha256": "645e77da2cc9f885cfdf1a86a21f50037f3237d0244a67bf099f7a3f8e918b73"
+        },
+        "supabase/functions/_shared/pelecard-hosted-lifetime.ts": {
+          "blob": "docs/production-source/edge/blobs/195034284f9c148603d896a9adba2c615a6776b29a0a172a03506a77c8e412ae.ts",
+          "sha256": "195034284f9c148603d896a9adba2c615a6776b29a0a172a03506a77c8e412ae"
+        },
+        "supabase/functions/_shared/pelecard-live-adapter.ts": {
+          "blob": "docs/production-source/edge/blobs/047a1e1ad1a74728b8dd1af2149b463dfcc9e9cb5f7d83dc7baaafb58f565e99.ts",
+          "sha256": "047a1e1ad1a74728b8dd1af2149b463dfcc9e9cb5f7d83dc7baaafb58f565e99"
+        },
+        "supabase/functions/_shared/pelecard-live-callback.ts": {
+          "blob": "docs/production-source/edge/blobs/c812f90abcf6bda9c15fb7dc2032fe819d534f426a0f190479ae21dab5b5686c.ts",
+          "sha256": "c812f90abcf6bda9c15fb7dc2032fe819d534f426a0f190479ae21dab5b5686c"
+        },
+        "supabase/functions/_shared/pelecard-live-verification.ts": {
+          "blob": "docs/production-source/edge/blobs/ff687da0f65ccf066499fc6bc03167476534c7c0c158ab1c764a6985a57ca7a3.ts",
+          "sha256": "ff687da0f65ccf066499fc6bc03167476534c7c0c158ab1c764a6985a57ca7a3"
+        },
+        "supabase/functions/pelecard-controlled-live-feedback/index.ts": {
+          "blob": "docs/production-source/edge/blobs/0ec8536cbe9280af96192d89f198b0e21554c5957dcea6a5e7c78091389dca58.ts",
+          "sha256": "0ec8536cbe9280af96192d89f198b0e21554c5957dcea6a5e7c78091389dca58"
+        }
+      }
+    },
+    "pelecard-order-payment": {
+      "version": 6,
+      "verifyJwt": false,
+      "files": {
+        "supabase/functions/_shared/payment-auth.ts": {
+          "blob": "docs/production-source/edge/blobs/279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2.ts",
+          "sha256": "279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2"
+        },
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/_shared/payment-types.ts": {
+          "blob": "docs/production-source/edge/blobs/4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373.ts",
+          "sha256": "4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373"
+        },
+        "supabase/functions/pelecard-order-payment/index.ts": {
+          "blob": "docs/production-source/edge/blobs/89791d09bfe8862b48b64f039f71fe2ec76ee8c202bd0e379495beec67c42fc0.ts",
+          "sha256": "89791d09bfe8862b48b64f039f71fe2ec76ee8c202bd0e379495beec67c42fc0"
+        },
+        "supabase/functions/_shared/pelecard-commercial-runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/63fedcda046e0b2a3b18b42cdbbbec04fe52f9e713eeb11f37eb5406ba8886e3.ts",
+          "sha256": "63fedcda046e0b2a3b18b42cdbbbec04fe52f9e713eeb11f37eb5406ba8886e3"
+        },
+        "supabase/functions/_shared/pelecard-commercial.ts": {
+          "blob": "docs/production-source/edge/blobs/645e77da2cc9f885cfdf1a86a21f50037f3237d0244a67bf099f7a3f8e918b73.ts",
+          "sha256": "645e77da2cc9f885cfdf1a86a21f50037f3237d0244a67bf099f7a3f8e918b73"
+        },
+        "supabase/functions/_shared/pelecard-hosted-lifetime.ts": {
+          "blob": "docs/production-source/edge/blobs/195034284f9c148603d896a9adba2c615a6776b29a0a172a03506a77c8e412ae.ts",
+          "sha256": "195034284f9c148603d896a9adba2c615a6776b29a0a172a03506a77c8e412ae"
+        },
+        "supabase/functions/_shared/pelecard-live-adapter.ts": {
+          "blob": "docs/production-source/edge/blobs/047a1e1ad1a74728b8dd1af2149b463dfcc9e9cb5f7d83dc7baaafb58f565e99.ts",
+          "sha256": "047a1e1ad1a74728b8dd1af2149b463dfcc9e9cb5f7d83dc7baaafb58f565e99"
+        },
+        "supabase/functions/_shared/pelecard-live-callback.ts": {
+          "blob": "docs/production-source/edge/blobs/c2179459c045ac1790db4e98e0ababefc4de67f22f341173d52cb9d6acdf46c7.ts",
+          "sha256": "c2179459c045ac1790db4e98e0ababefc4de67f22f341173d52cb9d6acdf46c7"
+        },
+        "supabase/functions/_shared/pelecard-live-verification.ts": {
+          "blob": "docs/production-source/edge/blobs/ff687da0f65ccf066499fc6bc03167476534c7c0c158ab1c764a6985a57ca7a3.ts",
+          "sha256": "ff687da0f65ccf066499fc6bc03167476534c7c0c158ab1c764a6985a57ca7a3"
+        }
+      }
+    },
+    "pelecard-order-feedback": {
+      "version": 5,
+      "verifyJwt": false,
+      "files": {
+        "supabase/functions/_shared/payment-auth.ts": {
+          "blob": "docs/production-source/edge/blobs/279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2.ts",
+          "sha256": "279fe82d1fb9885af91054ce79df8cd6d8ad8d7ced9a586c4a075662ef6079d2"
+        },
+        "supabase/functions/_shared/payment-http.ts": {
+          "blob": "docs/production-source/edge/blobs/5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee.ts",
+          "sha256": "5d3cc37be676232eeb5e61fc313985f1d929560a87719a3abfb7755e90d62dee"
+        },
+        "supabase/functions/_shared/payment-types.ts": {
+          "blob": "docs/production-source/edge/blobs/4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373.ts",
+          "sha256": "4c8471d888628fb8d636ba2f4ae2427cabc4aa24e8f0e913772c183569939373"
+        },
+        "supabase/functions/_shared/pelecard-commercial-runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/63fedcda046e0b2a3b18b42cdbbbec04fe52f9e713eeb11f37eb5406ba8886e3.ts",
+          "sha256": "63fedcda046e0b2a3b18b42cdbbbec04fe52f9e713eeb11f37eb5406ba8886e3"
+        },
+        "supabase/functions/_shared/pelecard-commercial.ts": {
+          "blob": "docs/production-source/edge/blobs/645e77da2cc9f885cfdf1a86a21f50037f3237d0244a67bf099f7a3f8e918b73.ts",
+          "sha256": "645e77da2cc9f885cfdf1a86a21f50037f3237d0244a67bf099f7a3f8e918b73"
+        },
+        "supabase/functions/_shared/pelecard-hosted-lifetime.ts": {
+          "blob": "docs/production-source/edge/blobs/195034284f9c148603d896a9adba2c615a6776b29a0a172a03506a77c8e412ae.ts",
+          "sha256": "195034284f9c148603d896a9adba2c615a6776b29a0a172a03506a77c8e412ae"
+        },
+        "supabase/functions/_shared/pelecard-live-adapter.ts": {
+          "blob": "docs/production-source/edge/blobs/047a1e1ad1a74728b8dd1af2149b463dfcc9e9cb5f7d83dc7baaafb58f565e99.ts",
+          "sha256": "047a1e1ad1a74728b8dd1af2149b463dfcc9e9cb5f7d83dc7baaafb58f565e99"
+        },
+        "supabase/functions/_shared/pelecard-live-callback.ts": {
+          "blob": "docs/production-source/edge/blobs/c812f90abcf6bda9c15fb7dc2032fe819d534f426a0f190479ae21dab5b5686c.ts",
+          "sha256": "c812f90abcf6bda9c15fb7dc2032fe819d534f426a0f190479ae21dab5b5686c"
+        },
+        "supabase/functions/_shared/pelecard-live-verification.ts": {
+          "blob": "docs/production-source/edge/blobs/ff687da0f65ccf066499fc6bc03167476534c7c0c158ab1c764a6985a57ca7a3.ts",
+          "sha256": "ff687da0f65ccf066499fc6bc03167476534c7c0c158ab1c764a6985a57ca7a3"
+        },
+        "supabase/functions/pelecard-order-feedback/index.ts": {
+          "blob": "docs/production-source/edge/blobs/18788c0cc7c95289a11335f98de857a2e5942d6f217c179492532aff98662760.ts",
+          "sha256": "18788c0cc7c95289a11335f98de857a2e5942d6f217c179492532aff98662760"
+        }
+      }
+    },
+    "rivhit-immediate-accounting": {
+      "version": 2,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/rivhit/client.ts": {
+          "blob": "docs/production-source/edge/blobs/408d6f2d6b93f2d430c88c28dcb494b007f90144b235f8ca616f4bad6981cc85.ts",
+          "sha256": "408d6f2d6b93f2d430c88c28dcb494b007f90144b235f8ca616f4bad6981cc85"
+        },
+        "supabase/functions/_shared/rivhit/order-mapper.ts": {
+          "blob": "docs/production-source/edge/blobs/fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281.ts",
+          "sha256": "fd64b17648955a9f119d97cbb7bcbed86fe7386ab796c1e5e5f80804cba13281"
+        },
+        "supabase/functions/_shared/admin.ts": {
+          "blob": "docs/production-source/edge/blobs/80cdefdccfcc8c04610f5e0c216c76a97c516f260147c4804984237d05d9b90a.ts",
+          "sha256": "80cdefdccfcc8c04610f5e0c216c76a97c516f260147c4804984237d05d9b90a"
+        },
+        "supabase/functions/rivhit-immediate-accounting/index.ts": {
+          "blob": "docs/production-source/edge/blobs/25d21160c6385e88a16c2534d8919f3c2625a8ec7e14ab37c06f0f04bc6f17cb.ts",
+          "sha256": "25d21160c6385e88a16c2534d8919f3c2625a8ec7e14ab37c06f0f04bc6f17cb"
+        },
+        "supabase/functions/_shared/rivhit/immediate-artifact.ts": {
+          "blob": "docs/production-source/edge/blobs/4a267e3ce4f54586a25e072598568e47b94ec251669b1126a02ffeb728f7adfe.ts",
+          "sha256": "4a267e3ce4f54586a25e072598568e47b94ec251669b1126a02ffeb728f7adfe"
+        },
+        "supabase/functions/_shared/rivhit/immediate-handler.ts": {
+          "blob": "docs/production-source/edge/blobs/19eda986eb7bb61e3605cfe4e4953075c1c072ce51f76e10967b3f0d016ae798.ts",
+          "sha256": "19eda986eb7bb61e3605cfe4e4953075c1c072ce51f76e10967b3f0d016ae798"
+        },
+        "supabase/functions/_shared/rivhit/immediate-payment.ts": {
+          "blob": "docs/production-source/edge/blobs/021ea4a5378a32763eeadfceef2c00d412cd7ae56b4c750e5f33f6b1ef085dd4.ts",
+          "sha256": "021ea4a5378a32763eeadfceef2c00d412cd7ae56b4c750e5f33f6b1ef085dd4"
+        },
+        "supabase/functions/_shared/rivhit/immediate-repository.ts": {
+          "blob": "docs/production-source/edge/blobs/c65d3714f01a376bb2a0bc3b705225d3a7052026c92c37709bdf9e946821ce30.ts",
+          "sha256": "c65d3714f01a376bb2a0bc3b705225d3a7052026c92c37709bdf9e946821ce30"
+        },
+        "supabase/functions/_shared/rivhit/immediate-vat.ts": {
+          "blob": "docs/production-source/edge/blobs/c51b1a6d0357a5a202db66c01f2b9eba9dbf9ff5b0e20f2407d03b2852ed5284.ts",
+          "sha256": "c51b1a6d0357a5a202db66c01f2b9eba9dbf9ff5b0e20f2407d03b2852ed5284"
+        },
+        "supabase/functions/_shared/rivhit/reconciliation.ts": {
+          "blob": "docs/production-source/edge/blobs/232e5ffab38b60fe77d404ec1799d2b6e51e1736e65174e807d7a9e08f93728c.ts",
+          "sha256": "232e5ffab38b60fe77d404ec1799d2b6e51e1736e65174e807d7a9e08f93728c"
+        }
+      }
+    },
+    "voucher-accounting-email": {
+      "version": 1,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/admin.ts": {
+          "blob": "docs/production-source/edge/blobs/80cdefdccfcc8c04610f5e0c216c76a97c516f260147c4804984237d05d9b90a.ts",
+          "sha256": "80cdefdccfcc8c04610f5e0c216c76a97c516f260147c4804984237d05d9b90a"
+        },
+        "supabase/functions/voucher-accounting-email/index.ts": {
+          "blob": "docs/production-source/edge/blobs/d7bdb1c22f1b027ef1b01d111c47a64392d411d69ab5bcbe1aab860e3ac7f726.ts",
+          "sha256": "d7bdb1c22f1b027ef1b01d111c47a64392d411d69ab5bcbe1aab860e3ac7f726"
+        },
+        "supabase/functions/_shared/voucher-email.ts": {
+          "blob": "docs/production-source/edge/blobs/478154929fd3ce2cc9e76862d3a3c02149068d5ba4d2a5ebdc5d5bb8949f1e1e.ts",
+          "sha256": "478154929fd3ce2cc9e76862d3a3c02149068d5ba4d2a5ebdc5d5bb8949f1e1e"
+        }
+      }
+    },
+    "send-quote-email": {
+      "version": 2,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/quotation-delivery/contract.js": {
+          "blob": "docs/production-source/edge/blobs/a272326b5c29f74cc71b344f08409b97e573c770f3adbf7bde41346c984d316a.js",
+          "sha256": "a272326b5c29f74cc71b344f08409b97e573c770f3adbf7bde41346c984d316a"
+        },
+        "supabase/functions/send-quote-email/index.ts": {
+          "blob": "docs/production-source/edge/blobs/0e1f08bdfb15c4e1bdae0c8592dca17e43543212440881cf1fd79492bcd0315e.ts",
+          "sha256": "0e1f08bdfb15c4e1bdae0c8592dca17e43543212440881cf1fd79492bcd0315e"
+        },
+        "supabase/functions/_shared/quotation-delivery/authorization.js": {
+          "blob": "docs/production-source/edge/blobs/405d2219f8365b3b12ee1e516d235861c0fcd81e6709df2fe1a867bf8ab2b3cd.js",
+          "sha256": "405d2219f8365b3b12ee1e516d235861c0fcd81e6709df2fe1a867bf8ab2b3cd"
+        },
+        "supabase/functions/_shared/quotation-delivery/handler.js": {
+          "blob": "docs/production-source/edge/blobs/ff18624ddda807b1e173609ec3e5683f65ef46b110f29892fb21ac71037ef9d9.js",
+          "sha256": "ff18624ddda807b1e173609ec3e5683f65ef46b110f29892fb21ac71037ef9d9"
+        },
+        "supabase/functions/_shared/quotation-delivery/runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/bd602c84ef01e2ab370ff953663bb47966d1c0aafa99012555e2142ea0b36370.ts",
+          "sha256": "bd602c84ef01e2ab370ff953663bb47966d1c0aafa99012555e2142ea0b36370"
+        },
+        "supabase/functions/_shared/quotation-delivery/smtp.js": {
+          "blob": "docs/production-source/edge/blobs/38447a1fc8097589dcb1d87d67876e7f03c4a89c3b4a9b72fa2356fe877901cf.js",
+          "sha256": "38447a1fc8097589dcb1d87d67876e7f03c4a89c3b4a9b72fa2356fe877901cf"
+        },
+        "supabase/functions/_shared/quotation-delivery/template.js": {
+          "blob": "docs/production-source/edge/blobs/fdb06a838808e3e930a7f188e89982b3864cece33ed8793f959567d94bd8573b.js",
+          "sha256": "fdb06a838808e3e930a7f188e89982b3864cece33ed8793f959567d94bd8573b"
+        }
+      }
+    },
+    "send-quote-whatsapp": {
+      "version": 2,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/quotation-delivery/contract.js": {
+          "blob": "docs/production-source/edge/blobs/a272326b5c29f74cc71b344f08409b97e573c770f3adbf7bde41346c984d316a.js",
+          "sha256": "a272326b5c29f74cc71b344f08409b97e573c770f3adbf7bde41346c984d316a"
+        },
+        "supabase/functions/_shared/quotation-delivery/authorization.js": {
+          "blob": "docs/production-source/edge/blobs/405d2219f8365b3b12ee1e516d235861c0fcd81e6709df2fe1a867bf8ab2b3cd.js",
+          "sha256": "405d2219f8365b3b12ee1e516d235861c0fcd81e6709df2fe1a867bf8ab2b3cd"
+        },
+        "supabase/functions/_shared/quotation-delivery/handler.js": {
+          "blob": "docs/production-source/edge/blobs/ff18624ddda807b1e173609ec3e5683f65ef46b110f29892fb21ac71037ef9d9.js",
+          "sha256": "ff18624ddda807b1e173609ec3e5683f65ef46b110f29892fb21ac71037ef9d9"
+        },
+        "supabase/functions/_shared/quotation-delivery/runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/bd602c84ef01e2ab370ff953663bb47966d1c0aafa99012555e2142ea0b36370.ts",
+          "sha256": "bd602c84ef01e2ab370ff953663bb47966d1c0aafa99012555e2142ea0b36370"
+        },
+        "supabase/functions/_shared/quotation-delivery/smtp.js": {
+          "blob": "docs/production-source/edge/blobs/38447a1fc8097589dcb1d87d67876e7f03c4a89c3b4a9b72fa2356fe877901cf.js",
+          "sha256": "38447a1fc8097589dcb1d87d67876e7f03c4a89c3b4a9b72fa2356fe877901cf"
+        },
+        "supabase/functions/_shared/quotation-delivery/template.js": {
+          "blob": "docs/production-source/edge/blobs/fdb06a838808e3e930a7f188e89982b3864cece33ed8793f959567d94bd8573b.js",
+          "sha256": "fdb06a838808e3e930a7f188e89982b3864cece33ed8793f959567d94bd8573b"
+        },
+        "supabase/functions/send-quote-whatsapp/index.ts": {
+          "blob": "docs/production-source/edge/blobs/5775dc7c6b78488626cfaadb07f32226916be29649b1d5a1e001223384b34c30.ts",
+          "sha256": "5775dc7c6b78488626cfaadb07f32226916be29649b1d5a1e001223384b34c30"
+        }
+      }
+    },
+    "send-order-whatsapp": {
+      "version": 2,
+      "verifyJwt": true,
+      "files": {
+        "supabase/functions/_shared/order-delivery/contract.js": {
+          "blob": "docs/production-source/edge/blobs/17451d3ccae0aac95e939bc441faa952dbf8bc5086bcf99f1b319893803ab2b9.js",
+          "sha256": "17451d3ccae0aac95e939bc441faa952dbf8bc5086bcf99f1b319893803ab2b9"
+        },
+        "supabase/functions/_shared/order-delivery/handler.js": {
+          "blob": "docs/production-source/edge/blobs/34939c9e8f5d8a99cb173cd09fe2d215f7466e7f4e432225f78f8a6eeedd02bb.js",
+          "sha256": "34939c9e8f5d8a99cb173cd09fe2d215f7466e7f4e432225f78f8a6eeedd02bb"
+        },
+        "supabase/functions/_shared/order-delivery/runtime.ts": {
+          "blob": "docs/production-source/edge/blobs/909564cb489b3b9a8ccaa38e4d7eff6a39ca38220a823216b9713762915ffd87.ts",
+          "sha256": "909564cb489b3b9a8ccaa38e4d7eff6a39ca38220a823216b9713762915ffd87"
+        },
+        "supabase/functions/_shared/order-delivery/smtp.js": {
+          "blob": "docs/production-source/edge/blobs/1fc7e960e7082ab3d29b8e9daa7aefb59000c410e3d2668a2437fc43d2a9db9a.js",
+          "sha256": "1fc7e960e7082ab3d29b8e9daa7aefb59000c410e3d2668a2437fc43d2a9db9a"
+        },
+        "supabase/functions/_shared/order-delivery/template.js": {
+          "blob": "docs/production-source/edge/blobs/c821f554732048141c2b1751fe908ba0881099866a86740be3ceb1d7c7f97276.js",
+          "sha256": "c821f554732048141c2b1751fe908ba0881099866a86740be3ceb1d7c7f97276"
+        },
+        "supabase/functions/_shared/quotation-delivery/contract.js": {
+          "blob": "docs/production-source/edge/blobs/a272326b5c29f74cc71b344f08409b97e573c770f3adbf7bde41346c984d316a.js",
+          "sha256": "a272326b5c29f74cc71b344f08409b97e573c770f3adbf7bde41346c984d316a"
+        },
+        "supabase/functions/send-order-whatsapp/index.ts": {
+          "blob": "docs/production-source/edge/blobs/9ab03bfbd0a1ff68dadd62e45044e3c7c9b4609e270faa5b67cfae99b371d51d.ts",
+          "sha256": "9ab03bfbd0a1ff68dadd62e45044e3c7c9b4609e270faa5b67cfae99b371d51d"
+        }
+      }
+    }
+  }
+}

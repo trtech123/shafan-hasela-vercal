@@ -3,12 +3,13 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 import type {
   PaymentAuthenticator,
   PaymentIdentity,
-} from "../_shared/payment-auth.ts";
+} from "./_deployed_shared/payment-auth.ts";
 import {
   createPelecardInitiateHandler,
-} from "../_shared/payment-initiation.ts";
-import { createSupabasePaymentStore } from "../_shared/payment-store.ts";
-import { createPelecardClient } from "../_shared/pelecard-client.ts";
+} from "./_deployed_shared/payment-initiation.ts";
+import { createSupabasePaymentStore } from "./_deployed_shared/payment-store.ts";
+import { lazyPelecardTransport } from "./_deployed_shared/pelecard-transport.ts";
+import { assertCommercialPaymentsDisabled } from "./_deployed_shared/pelecard-test-config.ts";
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name);
@@ -17,6 +18,7 @@ function requireEnv(name: string): string {
 }
 
 function runtimeHandler() {
+  assertCommercialPaymentsDisabled();
   const supabaseUrl = requireEnv("SUPABASE_URL");
   const anonKey = requireEnv("SUPABASE_ANON_KEY");
   const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -51,11 +53,11 @@ function runtimeHandler() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Intentionally fail closed: Pelecard's initiation request/response mapping
-  // must be injected only after its written terminal-specific contract is known.
-  const provider = createPelecardClient({
-    allowedRedirectOrigins: allowedProviderRedirectOrigins,
-    capabilities: {},
+  const provider = lazyPelecardTransport({
+    PELECARD_USER: Deno.env.get("PELECARD_USER"),
+    PELECARD_PASSWORD: Deno.env.get("PELECARD_PASSWORD"),
+    PELECARD_TERMINAL: Deno.env.get("PELECARD_TERMINAL"),
+    PELECARD_BASE_URL: Deno.env.get("PELECARD_BASE_URL"),
   });
 
   return createPelecardInitiateHandler({
@@ -70,6 +72,7 @@ function runtimeHandler() {
       callbackUrl: requireEnv("PAYMENTS_CALLBACK_URL"),
       currencyCode: "ILS",
       maxBodyBytes: 32_768,
+      requireOrder: true,
     },
   });
 }

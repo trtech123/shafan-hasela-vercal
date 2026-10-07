@@ -1,0 +1,245 @@
+{
+  "historicalMigrations": {
+    "sourceCommit": "c4e724bbd6d751e4ed2c48808a20345137bea78d",
+    "files": [
+      "supabase/migrations/030_pelecard_order_payment_safety.sql",
+      "supabase/migrations/031_pelecard_test_isolation.sql",
+      "supabase/migrations/032_pelecard_test_init_dispatch.sql",
+      "supabase/migrations/033_pelecard_controlled_live.sql",
+      "supabase/migrations/034_pelecard_controlled_live_hardening.sql",
+      "supabase/migrations/035_pelecard_controlled_live_safeupdate.sql",
+      "supabase/migrations/036_pelecard_order_payment_ui.sql",
+      "supabase/migrations/037_pelecard_live_lifecycle.sql",
+      "supabase/migrations/038_pelecard_live_expiry.sql",
+      "supabase/migrations/039_immediate_accounting_preparation.sql",
+      "supabase/migrations/040_immediate_accounting_intent_gate.sql",
+      "supabase/migrations/041_customers_and_hakafa_vouchers.sql",
+      "supabase/migrations/042_customer_vat_accounting_guards.sql",
+      "supabase/migrations/044_order_form_customer_save.sql",
+      "supabase/migrations/045_voucher_nonretryable_conflicts.sql",
+      "supabase/migrations/046_quotation_lifecycle.sql",
+      "supabase/migrations/047_quotation_delivery.sql",
+      "supabase/migrations/048_order_confirmation_delivery.sql",
+      "supabase/migrations/049_delivery_provider_id_constraint.sql",
+      "supabase/migrations/050_manual_delivery_resend.sql"
+    ]
+  },
+  "edgeMainDifferences": [
+    {
+      "path": "supabase/functions/create-user/index.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/send-order-doc/index.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/_shared/order-delivery/contract.js",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/order-delivery/handler.js",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/order-delivery/runtime.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/order-delivery/smtp.js",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/order-delivery/template.js",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/quotation-delivery/contract.js",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/pelecard-initiate/index.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/_shared/payment-initiation.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-client.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-test-config.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-transport.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/pelecard-verify/index.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/_shared/payment-handlers.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/_shared/payment-reconciliation.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/pelecard-status/index.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/pelecard-callback/index.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/whatsapp-webhook/index.ts",
+      "status": "different-from-all-deployed-versions"
+    },
+    {
+      "path": "supabase/functions/pelecard-test/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-test-diagnostics.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-test-handler.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-test-init-adapter.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-test-provider.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-test-runtime.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-test-store.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/pelecard-test-feedback/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/pelecard-controlled-live/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/pelecard-order-payment/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-commercial-runtime.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-commercial.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-hosted-lifetime.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-live-adapter.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-live-callback.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/pelecard-live-verification.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/pelecard-controlled-live-feedback/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/pelecard-order-feedback/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/voucher-accounting-email/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/voucher-email.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/rivhit-immediate-accounting/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/rivhit/immediate-artifact.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/rivhit/immediate-handler.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/rivhit/immediate-payment.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/rivhit/immediate-repository.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/rivhit/immediate-vat.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/rivhit/reconciliation.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/send-quote-email/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/quotation-delivery/authorization.js",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/quotation-delivery/handler.js",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/quotation-delivery/runtime.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/quotation-delivery/smtp.js",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/_shared/quotation-delivery/template.js",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/send-quote-whatsapp/index.ts",
+      "status": "missing"
+    },
+    {
+      "path": "supabase/functions/send-order-whatsapp/index.ts",
+      "status": "missing"
+    }
+  ]
+}

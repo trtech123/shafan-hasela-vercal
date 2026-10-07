@@ -2,11 +2,11 @@
 // No payment provider invokes this function in this phase.
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { RivhitClient, RivhitError } from "../_shared/rivhit/client.ts";
-import { getDocumentMapping, parseDocumentTypeMap } from "../_shared/rivhit/config.ts";
-import { mapOrderToAccountingSource } from "../_shared/rivhit/order-mapper.ts";
-import { SupabaseAccountingRepository } from "../_shared/rivhit/supabase-repository.ts";
-import { runRivhitAccounting } from "../_shared/rivhit/workflow.ts";
+import { RivhitClient, RivhitError } from "./_deployed_shared/rivhit/client.ts";
+import { getDocumentMapping, parseDocumentTypeMap } from "./_deployed_shared/rivhit/config.ts";
+import { mapOrderToAccountingSource } from "./_deployed_shared/rivhit/order-mapper.ts";
+import { SupabaseAccountingRepository } from "./_deployed_shared/rivhit/supabase-repository.ts";
+import { runRivhitAccounting } from "./_deployed_shared/rivhit/workflow.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

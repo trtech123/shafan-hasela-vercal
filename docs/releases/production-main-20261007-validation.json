@@ -1,0 +1,50 @@
+{
+  "production": "dpl_6XPouByDuARH9GzBkTe4cxGxr1vo",
+  "mainBefore": "2a0c7f5d7e777e044c8d5281c0bd60a3c21a840b",
+  "branch": "reconciliation/production-main-20261007",
+  "applicationFileHashesMatched": 185,
+  "deployedEdgeGraphsPreserved": 26,
+  "edgeRuntimeFilesVerified": 205,
+  "relativeImportRelocations": 108,
+  "sharedModuleVersionConflictsResolved": 8,
+  "mainOnlyEdgePaths": [
+    "supabase/functions/_shared/chatbot/actions/resend-order-confirmation.js",
+    "supabase/functions/_shared/payment-accounting/types.ts",
+    "supabase/functions/_shared/payment-refund.ts",
+    "supabase/functions/_shared/rivhit/types.ts",
+    "supabase/functions/pelecard-refund/index.ts",
+    "supabase/functions/rivhit-accounting/README.md"
+  ],
+  "build": "PASS",
+  "edgeLocalBundles": 26,
+  "dbAssertions": 147,
+  "localMigrationRehearsal": 52,
+  "accountingTests": 30,
+  "applicationTests": {
+    "passed": 631,
+    "preExistingFailures": 27,
+    "note": "Legacy Edge assertion updated to verify the actual deployed blocking guard; unchanged production runtime. Full remaining failure names match the prior production-compatible baseline."
+  },
+  "providerTests": {
+    "passed": 56,
+    "preExistingFailures": 4
+  },
+  "typecheck": {
+    "baselineErrors": 203,
+    "candidateErrors": 203,
+    "diagnosticsIdentical": true
+  },
+  "originMainUpdated": false,
+  "pushed": false,
+  "productionChanged": false,
+  "pushBlockedBy": [
+    "Vercel automatic deployments enabled on main"
+  ],
+  "intentionalDifferences": [
+    "Repository-only tests, documentation, historical migrations and source evidence are not deployed Vercel files.",
+    "Git normalizes text line endings; working artifact matches exact production bytes.",
+    "Per-function private dependency directories preserve divergent deployed Edge module versions; only relative import specifiers change.",
+    "Type-only dependencies erased from deployed ESZIP bundles use repository declarations; three missing interface-only modules recovered without runtime code.",
+    "Undeployed pelecard-refund entrypoint archived outside deployable functions; historical test retained."
+  ]
+}

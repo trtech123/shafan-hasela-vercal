@@ -1,0 +1,5 @@
+import fs from 'node:fs';import path from 'node:path';import esbuild from '../../app/node_modules/esbuild/lib/main.js';
+const root=path.resolve(import.meta.dirname,'../..'),manifest=JSON.parse(fs.readFileSync(root+'/docs/production-source/edge/manifest.json'));
+for(const name of Object.keys(manifest.functions)){await esbuild.build({absWorkingDir:root,entryPoints:['supabase/functions/'+name+'/index.ts'],bundle:true,write:false,format:'esm',platform:'neutral',target:'esnext',external:['https://*','http://*','npm:*','jsr:*','node:*'],logLevel:'silent'});}
+console.log('PASS: all 26 isolated deployed function graphs bundle locally; external SDK imports unresolved by design, no network or provider calls.');
+for(const name of ['pelecard-callback','pelecard-verify']){const p='supabase/functions/'+name+'/index.ts',f=manifest.functions[name].files[p],original=fs.readFileSync(root+'/'+f.blob,'utf8'),current=fs.readFileSync(root+'/'+p,'utf8');console.log(JSON.stringify({name,legacyCapabilityUnconfiguredExpectationOnRawProduction:original.includes('capability_unconfigured'),sameOnReconciled:current.includes('capability_unconfigured')}));}

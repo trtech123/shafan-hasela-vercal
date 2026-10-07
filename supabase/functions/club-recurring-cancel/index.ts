@@ -1,5 +1,5 @@
-import { cancelRecurringSale, IcreditCancellationRejectedError } from "../_shared/icredit.ts";
-import { corsHeaders, HttpError, json, requireAdmin } from "../_shared/admin.ts";
+import { cancelRecurringSale, IcreditCancellationRejectedError } from "./_deployed_shared/icredit.ts";
+import { corsHeaders, HttpError, json, requireAdmin } from "./_deployed_shared/admin.ts";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

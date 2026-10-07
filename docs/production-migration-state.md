@@ -1,6 +1,6 @@
 # Production migration state
 
-Last verified: 2026-09-10
+Historical baseline verified: 2026-09-10. Reconciliation inventory checked: 2026-10-07.
 
 Production Supabase project `shafan-hasela` (`divzxsynczeifkpnpupl`) has migrations 021 through 028 applied in order:
 
@@ -67,3 +67,9 @@ No tables, existing attendance/audit records, or financial data were changed. Fu
 Source commit: `a4385a29510efe3bac5aabff85d270fd24d1e204`.
 Deployment: `dpl_6XPouByDuARH9GzBkTe4cxGxr1vo`, replacing `dpl_5WtSueoErqvGhFWztJ4B2Pr68nYV`. Three intentional deployed source changes; 182 unrelated source files preserved byte-for-byte. Release-branch Git auto-deployment is disabled; the deployed artifact preserves the original production Vercel configuration.
 Evidence: `docs/releases/clubs-completed-correction-20261006-rollout.json` and matching manifest. Production smoke was read-only; the user retains manual correction QA.
+
+## Canonical source inventory - 2026-10-07 (no migration application)
+
+Restored missing historical source files 030-042 and 044-050 from committed verified production release history. All their declared public function/relation markers exist in the current production schema. Files 029 and 043 are not asserted as installed and were not invented/imported. The project still has no internal migration ledger; do not replay historical migrations to populate one.
+
+The complete 52-file migration set, including the four Attendance migrations above, passed disposable local rehearsal. This is validation only: no SQL migration, test user, financial record or attendance mutation was applied to production. See `docs/releases/production-main-20261007.md` and its provenance/validation records.

@@ -17,12 +17,5 @@
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
-  ],
-  "git": {
-    "deploymentEnabled": {
-      "release/clubs-attendance-20261005": false,
-      "release/clubs-manual-session-20261006": false,
-      "release/clubs-completed-correction-20261006": false
-    }
-  }
+  ]
 }

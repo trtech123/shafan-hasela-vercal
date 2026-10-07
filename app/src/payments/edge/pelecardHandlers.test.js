@@ -773,10 +773,14 @@ describe("Pelecard Edge entry points", () => {
     (name) => expect(existsSync(functionPath(name))).toBe(true),
   );
 
-  test("keeps live notification and lookup contracts fail-closed", () => {
+  test("keeps legacy notification and lookup entrypoints disabled before runtime construction", async () => {
     for (const name of ["pelecard-callback", "pelecard-verify"]) {
       const source = readFileSync(functionPath(name), "utf8");
-      expect(source).toContain("capability_unconfigured");
+      expect(source).toMatch(/servePaymentHandler\(\(\) => \{\s*assertCommercialPaymentsDisabled\(\);\s*const runtime/);
+      const { assertCommercialPaymentsDisabled } = await import(
+        `../../../../supabase/functions/${name}/_deployed_shared/pelecard-test-config.ts`
+      );
+      expect(() => assertCommercialPaymentsDisabled()).toThrow('capability_disabled');
       expect(source).not.toMatch(/gateway\d*\.pelecard\.biz/i);
       expect(source).not.toMatch(/console\.(log|error|warn)/);
       expect(source).not.toMatch(/card.?number|cvv|expiry|\bpan\b/i);

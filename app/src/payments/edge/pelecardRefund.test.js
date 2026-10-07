@@ -8,7 +8,7 @@ const PAYMENT_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "10000000-0000-4000-8000-000000000002";
 const ADJUSTMENT_ID = "10000000-0000-4000-8000-000000000003";
 const endpointPath = fileURLToPath(new URL(
-  "../../../../supabase/functions/pelecard-refund/index.ts",
+  "../../../../supabase/undeployed/pelecard-refund/index.ts",
   import.meta.url,
 ));
 
@@ -75,7 +75,7 @@ function dependencies(overrides = {}) {
 }
 
 describe("Pelecard refund/void capability gate", () => {
-  test("ships a dedicated Edge Function that is disabled unless explicitly enabled", () => {
+  test("preserves the undeployed refund source outside deployable functions", () => {
     expect(existsSync(endpointPath)).toBe(true);
     const source = readFileSync(endpointPath, "utf8");
     expect(source).toContain("PELECARD_REFUND_ENABLED");

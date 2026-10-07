@@ -1,0 +1,51 @@
+-- Synthetic localhost only. Imported controlled identity models a previously dispatched session.
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+SELECT extensions.plan(28);
+INSERT INTO auth.users(id,email) VALUES('80000000-0000-4000-8000-000000000001','expiry-admin@example.test');
+SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);
+UPDATE public.profiles SET role='admin' WHERE id='80000000-0000-4000-8000-000000000001';
+INSERT INTO public.orders(id,order_number,client_name,client_phone,activity_date,num_participants,total_price)
+VALUES('a57ebbc6-47a9-4e74-9208-3340f8508df7','ORD-1039','Local expiry','0500000000',CURRENT_DATE,1,35);
+UPDATE public.pelecard_controlled_live_control SET enabled=true;
+SELECT set_config('test.expired_payment',public.reserve_pelecard_controlled_live('80000000-0000-4000-8000-000000000001')->>'id',true);
+UPDATE public.pelecard_controlled_live_control SET dispatch_started_at=clock_timestamp()-interval '16 minutes';
+SELECT public.persist_pelecard_controlled_live_adapter_session(current_setting('test.expired_payment')::uuid,'80000000-0000-4000-8000-000000000002','local-confirmation','https://gateway20.pelecard.biz/PaymentGW?transactionId=80000000-0000-4000-8000-000000000002');
+INSERT INTO public.pelecard_live_attempts(payment_id,order_id,dispatch_started_at,hosted_expires_at,transaction_id,confirmation_key)
+SELECT payment_id,order_id,dispatch_started_at,dispatch_started_at+interval '15 minutes',transaction_id,confirmation_key FROM public.pelecard_controlled_live_control;
+UPDATE public.pelecard_controlled_live_control SET enabled=false;
+SELECT extensions.is((SELECT hosted_state FROM public.get_pelecard_live_attempt(current_setting('test.expired_payment')::uuid)),'expired','deadline expiry requires no provider observation');
+SELECT extensions.is((public.get_pelecard_order_payment_ui('a57ebbc6-47a9-4e74-9208-3340f8508df7','80000000-0000-4000-8000-000000000001')->>'hosted_state'),'expired','UI uses server deadline');
+SELECT extensions.ok(NOT (public.get_pelecard_order_payment_ui('a57ebbc6-47a9-4e74-9208-3340f8508df7','80000000-0000-4000-8000-000000000001')->>'can_replace')::boolean,'deadline alone cannot close');
+SELECT extensions.ok(NOT has_function_privilege('authenticated','public.close_pelecard_live_expired_unpaid(uuid,uuid,text,text,date,text)','EXECUTE'),'browser cannot close');
+SELECT extensions.ok(NOT has_function_privilege('pelecard_controlled_live_adapter','public.close_pelecard_live_expired_unpaid(uuid,uuid,text,text,date,text)','EXECUTE'),'adapter cannot close');
+SELECT extensions.throws_ok($$SELECT public.close_pelecard_live_expired_unpaid('a57ebbc6-47a9-4e74-9208-3340f8508df7',current_setting('test.expired_payment')::uuid,'80000000-0000-4000-8000-000000000099','provider_phone_confirmation',CURRENT_DATE,'Synthetic provider confirmation')$$,'23514','live_attempt_mismatch','provider identity required');
+SELECT extensions.throws_ok($$SELECT public.close_pelecard_live_expired_unpaid('a57ebbc6-47a9-4e74-9208-3340f8508df7',current_setting('test.expired_payment')::uuid,'80000000-0000-4000-8000-000000000002','browser_return',CURRENT_DATE,'Synthetic provider confirmation')$$,'23514','live_confirmation_required','browser claim not provider evidence');
+SELECT public.observe_pelecard_live_attempt(current_setting('test.expired_payment')::uuid,'expired','510',NULL,true);
+SELECT extensions.is((SELECT status FROM public.payment_transactions WHERE id=current_setting('test.expired_payment')::uuid),'pending_provider','510 retains uncertain payment');
+SELECT extensions.lives_ok($$SELECT public.close_pelecard_live_expired_unpaid('a57ebbc6-47a9-4e74-9208-3340f8508df7',current_setting('test.expired_payment')::uuid,'80000000-0000-4000-8000-000000000002','provider_phone_confirmation',CURRENT_DATE,'Synthetic provider confirmed this exact transaction unpaid')$$,'trusted closure');
+SELECT extensions.is((SELECT status FROM public.payment_transactions WHERE id=current_setting('test.expired_payment')::uuid),'expired','ledger terminal expiry');
+SELECT extensions.ok((public.get_pelecard_order_payment_ui('a57ebbc6-47a9-4e74-9208-3340f8508df7','80000000-0000-4000-8000-000000000001')->>'can_replace')::boolean,'trusted close enables replacement');
+SELECT extensions.ok((public.get_pelecard_order_payment_ui('a57ebbc6-47a9-4e74-9208-3340f8508df7','80000000-0000-4000-8000-000000000001')->>'init_enabled')::boolean,'closed controlled history enables permanent init');
+SELECT extensions.throws_ok($$SELECT public.reserve_pelecard_live_order('a57ebbc6-47a9-4e74-9208-3340f8508df7','80000000-0000-4000-8000-000000000001',3500)$$,'23514','stale_payment_attempt','replacement requires exact predecessor');
+SELECT extensions.throws_ok($$SELECT public.finalize_pelecard_live(current_setting('test.expired_payment')::uuid,'80000000-0000-4000-8000-000000000002','late-approval','000',35,'ILS')$$,'23514','live_closed_terminal','late live callback cannot revive');
+SELECT extensions.throws_ok($$SELECT public.finalize_pelecard_controlled_live(current_setting('test.expired_payment')::uuid,'80000000-0000-4000-8000-000000000002','late-approval','000',35,'ILS')$$,'23514','payment cannot be finalized','late controlled callback cannot revive');
+SELECT extensions.throws_ok($$UPDATE public.pelecard_live_unpaid_confirmations SET confirmation_reference='changed' WHERE payment_id=current_setting('test.expired_payment')::uuid$$,'23514','live_audit_append_only','evidence immutable');
+SELECT extensions.throws_ok($$UPDATE public.pelecard_live_attempts SET closed_unpaid_at=NULL WHERE payment_id=current_setting('test.expired_payment')::uuid$$,'23514','live_closed_terminal','closure irreversible');
+SELECT set_config('test.replacement',public.reserve_pelecard_live_order('a57ebbc6-47a9-4e74-9208-3340f8508df7','80000000-0000-4000-8000-000000000001',3500,current_setting('test.expired_payment')::uuid)->>'id',true);
+SELECT extensions.ok(current_setting('test.replacement')<>current_setting('test.expired_payment'),'new UUID');
+SELECT extensions.is((SELECT count(*) FROM public.pelecard_live_attempts WHERE order_id='a57ebbc6-47a9-4e74-9208-3340f8508df7'),2::bigint,'all history retained');
+SELECT extensions.is((SELECT payment_id::text FROM public.pelecard_controlled_live_control),current_setting('test.expired_payment'),'singleton identity preserved');
+SELECT extensions.throws_ok($$SELECT public.reserve_pelecard_live_order('a57ebbc6-47a9-4e74-9208-3340f8508df7','80000000-0000-4000-8000-000000000001',3500,current_setting('test.expired_payment')::uuid)$$,'23514','stale_payment_attempt','stale repeat cannot dispatch another attempt');
+SELECT extensions.ok(public.is_pelecard_controlled_live_accounting_held(current_setting('test.replacement')) AND public.is_pelecard_controlled_live_accounting_held(current_setting('test.expired_payment')),'both attempts permanently held');
+SELECT extensions.is((SELECT amount_minor FROM public.claim_pelecard_live_init(current_setting('test.replacement')::uuid)),3500,'replacement can claim once');
+SELECT extensions.is((SELECT hosted_expires_at-dispatch_started_at FROM public.pelecard_live_attempts WHERE payment_id=current_setting('test.replacement')::uuid),interval '15 minutes','new immutable 15 minute deadline');
+SELECT public.persist_pelecard_live_adapter_session(current_setting('test.replacement')::uuid,'80000000-0000-4000-8000-000000000003','local-replacement','https://gateway20.pelecard.biz/PaymentGW?transactionId=80000000-0000-4000-8000-000000000003');
+SELECT extensions.throws_ok($$SELECT public.close_pelecard_live_expired_unpaid('a57ebbc6-47a9-4e74-9208-3340f8508df7',current_setting('test.replacement')::uuid,'80000000-0000-4000-8000-000000000003','provider_phone_confirmation',CURRENT_DATE,'Synthetic provider confirmation')$$,'23514','live_unpaid_closure_forbidden','unexpired cannot close');
+SELECT public.observe_pelecard_live_attempt(current_setting('test.replacement')::uuid,'usable','000','000',true);
+SELECT extensions.lives_ok($$SELECT public.finalize_pelecard_live(current_setting('test.replacement')::uuid,'80000000-0000-4000-8000-000000000003','replacement-approval','000',35,'ILS')$$,'replacement sale chooses matching history');
+SELECT extensions.is((SELECT count(*) FROM public.sales WHERE order_id='a57ebbc6-47a9-4e74-9208-3340f8508df7'),1::bigint,'replacement single sale');
+SELECT extensions.is((SELECT count(*) FROM public.accounting_events WHERE source_id IN(current_setting('test.replacement'),current_setting('test.expired_payment'))),0::bigint,'all histories held through replacement success');
+SELECT * FROM extensions.finish();
+ROLLBACK;
+

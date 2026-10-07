@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "content_version": "client-doc-1.0-2026-07-he",
+  "source": {
+    "document": "מלל לבוט.docx",
+    "canonical_section": "תסריט בוט — שפן הסלע / מסמך הטמעה למפתח הבוט",
+    "version": "1.0",
+    "date": "2026-07"
+  },
+  "bot": {
+    "name": "שפן",
+    "company": "שפן הסלע — ספורט אתגרי ופעילויות טבע בגליל מאז 1999",
+    "default_language": "he",
+    "tone": "חברותי, נמרץ ואתגרי — כמו מדריך שטח, לא פקיד",
+    "voice": "first_person_plural",
+    "voice_examples": ["אנחנו", "הצוות שלנו"]
+  },
+  "platforms": [
+    "whatsapp",
+    "facebook_messenger",
+    "instagram_dm",
+    "email"
+  ],
+  "guardrails": {
+    "specific_prices": "handoff_only",
+    "missing_information": "handoff_only",
+    "unknown_question": "handoff_only",
+    "generative_factual_answers": false,
+    "operational_data_access": false,
+    "clubs_payments_accounting_access": false
+  },
+  "global_commands": {
+    "main_menu": ["תפריט"],
+    "back": ["חזרה"],
+    "human": ["נציג", "נציג אנושי", "בן אדם"]
+  }
+}

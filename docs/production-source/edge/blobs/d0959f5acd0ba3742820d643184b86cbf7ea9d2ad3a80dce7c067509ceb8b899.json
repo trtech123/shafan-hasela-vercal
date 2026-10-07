@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "content_version": "client-doc-1.0-2026-07-he",
+  "sites": [
+    {
+      "id": "acre_extreme_park",
+      "name": "פארק אקסטרים עכו",
+      "overview": "🏔️ פארק אקסטרים עכו — 14 דונם של אתגר!",
+      "address": "שלום הגליל 3, עכו",
+      "directions_response": "📍 שלום הגליל 3, עכו ⏰ ראשון–שישי: 10:00–16:00 🌞 אוגוסט: א׳–ה׳ 10:00–17:00 | ו׳ 10:00–13:00 ⚠️ מעת לעת יש סגירות לתחזוקה — מומלץ לאשר מראש!",
+      "hours": {
+        "regular": "ראשון–שישי: 10:00–16:00",
+        "august": "א׳–ה׳ 10:00–17:00 | ו׳ 10:00–13:00"
+      },
+      "handoff_only": false
+    },
+    {
+      "id": "berko_360_tiberias",
+      "name": "ברקו 360 — טבריה",
+      "overview": "אנחנו בברקו 360 — מתחם הפנאי הגדול על שפת הכנרת 🌊 🧗 פארק חבלים — 33 מסלולים מאתגרים 🏔️ מתחם קירות טיפוס מעוצבים ⚡ אומגה מעגלית חשמלית עם נוף לכנרת 🚤",
+      "address": null,
+      "directions_response": "⏰ מומלץ לאשר שעות טלפונית לפני ביקור 📞 050-3504478",
+      "hours": null,
+      "handoff_only": false,
+      "unsupported_details": ["address", "specific_hours"]
+    },
+    {
+      "id": "field_activities",
+      "name": "פעילויות שטח",
+      "overview": "🚙 טיולי ג׳יפים — רמת הגולן, גליל עליון, ספארי לילה 🧗 טיפוס בטבע (סלעים אמיתיים) ⛵ שייט 🪂 וייה פרטה (Via Ferrata) 🍖 ארוחות שטח רוב הפעילויות מתאימות לקבוצות וימי גיבוש. רוצה שנציג יבנה לך חבילה מותאמת?",
+      "address": null,
+      "hours": null,
+      "handoff_only": false,
+      "custom_package_answer": "handoff.quote_or_custom"
+    },
+    {
+      "id": "nof_hagalil_zipline",
+      "name": "נוף הגליל - אומגה",
+      "overview": null,
+      "address": null,
+      "hours": null,
+      "handoff_only": true,
+      "handoff_reason": "missing_approved_content"
+    },
+    {
+      "id": "via_ferrata",
+      "name": "וייה פרטה (Via Ferrata)",
+      "overview": null,
+      "address": null,
+      "hours": null,
+      "handoff_only": true,
+      "handoff_reason": "missing_approved_content"
+    }
+  ]
+}

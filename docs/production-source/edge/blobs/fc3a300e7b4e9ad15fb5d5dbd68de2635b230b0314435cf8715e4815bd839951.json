@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "content_version": "client-doc-1.0-2026-07-he",
+  "menus": [
+    {
+      "id": "main",
+      "prompt": "במה אוכל לעזור לך היום?",
+      "options": [
+        { "id": "activities", "number": 1, "label": "פעילויות ומתקנים", "next_state": "menu.activities_sites" },
+        { "id": "corporate", "number": 2, "label": "ימי גיבוש לחברות / קבוצות", "next_state": "flow.corporate" },
+        { "id": "pricing", "number": 3, "label": "מחירים והזמנה", "next_state": "flow.pricing" },
+        { "id": "directions", "number": 4, "label": "הגעה לאתר", "next_state": "menu.directions" },
+        { "id": "safety", "number": 5, "label": "בטיחות ומגבלות", "next_state": "menu.safety" },
+        { "id": "clubs", "number": 6, "label": "חוגי טיפוס ונבחרות", "next_state": "flow.clubs_handoff" },
+        { "id": "faq", "number": 7, "label": "שאלות נפוצות", "next_state": "menu.faq" }
+      ]
+    },
+    {
+      "id": "activities_sites",
+      "prompt": "איזה מהאתרים שלנו מעניין אותך?",
+      "options": [
+        { "id": "acre", "number": 1, "label": "פארק אקסטרים עכו", "next_state": "menu.acre" },
+        { "id": "berko", "number": 2, "label": "ברקו כנרת-טבריה", "next_state": "answer.site.berko_overview" },
+        { "id": "field", "number": 3, "label": "פעילויות שטח (ג׳יפים, שייט, ויה פרטה)", "next_state": "answer.site.field_overview" },
+        { "id": "nof_hagalil", "number": 4, "label": "נוף הגליל - אומגה", "next_state": "handoff.missing_content" }
+      ]
+    },
+    {
+      "id": "acre",
+      "prompt": "🏔️ פארק אקסטרים עכו — 14 דונם של אתגר! מה תרצה לדעת?",
+      "options": [
+        { "id": "climbing", "number": 1, "label": "מתקני גובה וטיפוס", "next_state": "answer.activity.acre_climbing" },
+        { "id": "sky_trek", "number": 2, "label": "גשרים תלויים (Sky Trek)", "next_state": "answer.activity.acre_sky_trek" },
+        { "id": "bungee_drop", "number": 3, "label": "באנג׳י דרופ", "next_state": "answer.activity.acre_bungee_drop" },
+        { "id": "zipline", "number": 4, "label": "אומגה", "next_state": "answer.activity.acre_zipline" },
+        { "id": "kids", "number": 5, "label": "פעילות לילדים (אקסטרים קידס)", "next_state": "answer.activity.acre_kids" },
+        { "id": "events", "number": 6, "label": "אירועים וקבוצות", "next_state": "flow.corporate" }
+      ]
+    },
+    {
+      "id": "corporate_group_size",
+      "prompt": "לאיזה גודל קבוצה?",
+      "options": [
+        { "id": "small", "number": 1, "label": "קבוצה קטנה (עד 30)", "next_state": "capture.corporate_lead" },
+        { "id": "medium", "number": 2, "label": "קבוצה בינונית (30–80)", "next_state": "capture.corporate_lead" },
+        { "id": "large", "number": 3, "label": "קבוצה גדולה (80+)", "next_state": "capture.corporate_lead" }
+      ]
+    },
+    {
+      "id": "directions",
+      "prompt": "לאיזה אתר תרצה הוראות הגעה?",
+      "options": [
+        { "id": "acre", "number": 1, "label": "עכו", "next_state": "answer.site.acre_directions" },
+        { "id": "berko", "number": 2, "label": "טבריה (ברקו 360)", "next_state": "answer.site.berko_directions" },
+        { "id": "other", "number": 3, "label": "אתר או פעילות אחרת", "next_state": "handoff.missing_content" }
+      ]
+    },
+    {
+      "id": "safety",
+      "prompt": "על איזה נושא בטיחות תרצה לדעת?",
+      "options": [
+        { "id": "weight", "number": 1, "label": "מגבלת משקל", "next_state": "answer.safety.weight" },
+        { "id": "health", "number": 2, "label": "הריון / בעיות גב-צוואר", "next_state": "answer.safety.health" },
+        { "id": "age", "number": 3, "label": "גיל מינימלי", "next_state": "answer.safety.age" },
+        { "id": "equipment", "number": 4, "label": "ציוד בטיחות", "next_state": "answer.safety.equipment" },
+        { "id": "conduct", "number": 5, "label": "כללי התנהגות", "next_state": "answer.safety.conduct" }
+      ]
+    },
+    {
+      "id": "faq",
+      "prompt": "איזו שאלה מעניינת אותך?",
+      "options": [
+        { "id": "parking", "number": 1, "label": "האם יש חניה?", "next_state": "answer.faq.parking" },
+        { "id": "rain", "number": 2, "label": "מה קורה כשיש גשם?", "next_state": "answer.faq.rain" },
+        { "id": "clothing", "number": 3, "label": "מה ללבוש?", "next_state": "answer.faq.clothing" },
+        { "id": "parent", "number": 4, "label": "האם הורה מלווה משלם?", "next_state": "answer.faq.parent" },
+        { "id": "cancellation", "number": 5, "label": "מה מדיניות הביטול?", "next_state": "answer.faq.cancellation" },
+        { "id": "ticket", "number": 6, "label": "מה כולל הכרטיס?", "next_state": "answer.faq.ticket" },
+        { "id": "food", "number": 7, "label": "האם ניתן לאכול במקום?", "next_state": "answer.faq.food" }
+      ]
+    }
+  ]
+}

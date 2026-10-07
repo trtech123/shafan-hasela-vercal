@@ -1,5 +1,5 @@
-import { buildEnrollmentRequest, ICREDIT_TEST_BASE_URL, readEnrollmentResponse } from "../_shared/icredit.ts";
-import { corsHeaders, HttpError, json, requireAdmin } from "../_shared/admin.ts";
+import { buildEnrollmentRequest, ICREDIT_TEST_BASE_URL, readEnrollmentResponse } from "./_deployed_shared/icredit.ts";
+import { corsHeaders, HttpError, json, requireAdmin } from "./_deployed_shared/admin.ts";
 
 type MembershipRow = {
   id: string;

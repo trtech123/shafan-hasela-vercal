@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { cancelRecurringSale, normalizeIpn, prepareVerifiedIpn } from "../_shared/icredit.ts";
+import { cancelRecurringSale, normalizeIpn, prepareVerifiedIpn } from "./_deployed_shared/icredit.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

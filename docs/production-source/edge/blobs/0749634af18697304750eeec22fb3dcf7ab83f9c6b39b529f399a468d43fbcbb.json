@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "content_version": "client-doc-1.0-2026-07-he",
+  "entries": [
+    { "id": "parking", "question": "האם יש חניה?", "response": "כן! בעכו — חניה בסמוך. בטבריה — חניה במתחם." },
+    { "id": "rain", "question": "מה קורה כשיש גשם?", "response": "בעכו יש מתחם פנימי מקורה + אולם ממוזג. מזג אוויר לא עילה לביטול!" },
+    { "id": "clothing", "question": "מה ללבוש?", "response": "👟 חובה נעליים סגורות! בגדים נוחים. לא להביא תכשיטים/חפצים יקרים." },
+    { "id": "parent", "question": "האם הורה מלווה משלם?", "response": "תלוי בפעילות — לאשר עם נציג 📞", "handoff_after_response": true },
+    { "id": "cancellation", "question": "מה מדיניות הביטול?", "response": "עד 72 שעות — ללא חיוב. אחרי → חיוב 100%" },
+    { "id": "ticket", "question": "מה כולל הכרטיס?", "response": "ציוד בטיחות כלול." },
+    { "id": "food", "question": "האם ניתן לאכול במקום?", "response": "אוכל — בקפה אקסטרים שבמקום." }
+  ]
+}

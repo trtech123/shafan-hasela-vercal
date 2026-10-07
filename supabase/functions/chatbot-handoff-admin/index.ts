@@ -1,7 +1,7 @@
 // Authenticated staff-only handoff controls. JWT verification remains enabled.
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { createWhatsAppSender } from "../whatsapp-webhook/sender.js";
+import { createWhatsAppSender } from "./_deployed_functions/whatsapp-webhook/sender.js";
 import { authorizeHandoffStaff } from "./authorization.js";
 import { createHandoffAdminHandler } from "./handler.js";
 import { createHandoffOperations } from "./operations.js";

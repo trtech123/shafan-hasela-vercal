@@ -1,19 +1,79 @@
 project_id = "shafan-hasela"
 
-[functions.pelecard-callback]
-verify_jwt = false
+[functions.send-order-doc]
+verify_jwt = true
+
+[functions.create-user]
+verify_jwt = true
+
+[functions.delete-user]
+verify_jwt = true
+
+[functions.send-whatsapp]
+verify_jwt = true
+
+[functions.pelecard-initiate]
+verify_jwt = true
 
 [functions.pelecard-verify]
+verify_jwt = true
+
+[functions.pelecard-status]
+verify_jwt = true
+
+[functions.rivhit-accounting]
 verify_jwt = true
 
 [functions.payment-accounting-worker]
 verify_jwt = true
 
-[functions.whatsapp-webhook]
-verify_jwt = false
+[functions.club-recurring-enroll]
+verify_jwt = true
 
-[functions.send-whatsapp]
+[functions.club-recurring-cancel]
 verify_jwt = true
 
 [functions.chatbot-handoff-admin]
+verify_jwt = true
+
+[functions.pelecard-callback]
+verify_jwt = false
+
+[functions.club-recurring-ipn]
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.pelecard-test]
+verify_jwt = true
+
+[functions.pelecard-test-feedback]
+verify_jwt = false
+
+[functions.pelecard-controlled-live]
+verify_jwt = false
+
+[functions.pelecard-controlled-live-feedback]
+verify_jwt = false
+
+[functions.pelecard-order-payment]
+verify_jwt = false
+
+[functions.pelecard-order-feedback]
+verify_jwt = false
+
+[functions.rivhit-immediate-accounting]
+verify_jwt = true
+
+[functions.voucher-accounting-email]
+verify_jwt = true
+
+[functions.send-quote-email]
+verify_jwt = true
+
+[functions.send-quote-whatsapp]
+verify_jwt = true
+
+[functions.send-order-whatsapp]
 verify_jwt = true

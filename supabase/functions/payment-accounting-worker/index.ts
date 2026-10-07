@@ -1,8 +1,8 @@
-import { createPaymentAccountingWorkerHandler } from "../_shared/payment-accounting/worker-handler.ts";
+import { createPaymentAccountingWorkerHandler } from "./_deployed_shared/payment-accounting/worker-handler.ts";
 import {
   createPaymentAccountingEdgeRuntime,
   servePaymentHandler,
-} from "../_shared/payment-edge-runtime.ts";
+} from "./_deployed_shared/payment-edge-runtime.ts";
 
 servePaymentHandler(() => {
   const runtime = createPaymentAccountingEdgeRuntime();
