@@ -47,25 +47,15 @@ it('allows staff to revoke an interrupted signing claim',async()=>{
  await waitFor(()=>expect(signatureRequest).toHaveBeenCalledWith({action:'revoke',revisionId:'signing'},{staff:true}));
 });
 
-it('blocks preparation with actionable billing readiness details',async()=>{
- signatureRequest.mockResolvedValue({readiness:['billing_identification','customer_snapshot'],revisions:[],deliveries:[]});
- render(<OrderSignaturePanel orderId="order"/>);
- await screen.findByText(/מספר הזיהוי של הלקוח לחיוב/);
- expect(screen.getByRole('button',{name:'הכנת אישור לחתימה'}).disabled).toBe(true);
- expect(screen.getByRole('button',{name:'השלמת פרטי לקוח ועדכון ההזמנה'})).toBeTruthy();
-});
-
-it('keeps actionable guidance and disables preparation when readiness recovery fails',async()=>{
- let histories=0;
- signatureRequest.mockImplementation(async body=>{
-  if(body.action==='create')throw Error('billing_customer_incomplete');
-  if(++histories>1)throw Error('offline');
-  return {readiness:[],revisions:[],deliveries:[]};
- });
+it('prepares without customer setup even when older history returns missing billing fields',async()=>{
+ signatureRequest.mockImplementation(async body=>body.action==='create'?{signingUrl:'https://example.invalid/order-sign#test'}:{readiness:['active_customer','customer_snapshot','billing_identification','vat_applicable'],customerReview:{customerId:null,version:0},revisions:[],deliveries:[]});
  render(<OrderSignaturePanel orderId="order"/>);
  await screen.findByText('טרם הוכנה גרסת אישור לחתימה.');
- fireEvent.click(screen.getByRole('button',{name:'הכנת אישור לחתימה'}));
- await screen.findByText('יש להשלים את פרטי הלקוח לפני הכנת האישור. לא ניתן לרענן כרגע; נסו לרענן חתימות ושליחות שוב.');
- expect(screen.getByRole('button',{name:'הכנת אישור לחתימה'}).disabled).toBe(true);
- expect(screen.getByRole('button',{name:'רענון חתימות ושליחות'}).disabled).toBe(false);
+ const prepare=screen.getByRole('button',{name:'הכנת אישור לחתימה'});
+ expect(prepare.disabled).toBe(false);
+ expect(screen.queryByRole('button',{name:'השלמת פרטי לקוח ועדכון ההזמנה'})).toBeNull();
+ fireEvent.click(prepare);
+ await screen.findByRole('button',{name:'העתקת קישור חתימה'});
+ expect(signatureRequest).toHaveBeenCalledWith({action:'create',orderId:'order'},{staff:true});
+ expect(signatureRequest.mock.calls.map(([body])=>body.action)).toEqual(['history','create','history']);
 });

@@ -33,7 +33,10 @@ try{
    END $$;
   `);
   const beforeCleanup=name==='202610110003_order_confirmation_customer_readiness.sql' ? (await db.query("SELECT to_jsonb(r) AS evidence FROM public.order_confirmation_revisions r ORDER BY id")).rows : null;
+  if(name==='202610110004_order_confirmation_prepare_without_billing.sql')await db.exec(read('supabase/tests/order_confirmation_readiness_before_removal.sql'));
+  const beforeUngating=name==='202610110004_order_confirmation_prepare_without_billing.sql' ? (await db.query("SELECT to_jsonb(r) AS evidence FROM public.order_confirmation_revisions r ORDER BY id")).rows : null;
   await db.exec(read('supabase/migrations/'+name));
+  if(beforeUngating)assert.deepEqual((await db.query("SELECT to_jsonb(r) AS evidence FROM public.order_confirmation_revisions r ORDER BY id")).rows,beforeUngating,'removing readiness must preserve every existing revision exactly');
   if(beforeCleanup)assert.deepEqual((await db.query("SELECT to_jsonb(r) AS evidence FROM public.order_confirmation_revisions r ORDER BY id")).rows,beforeCleanup,'cleanup must preserve every existing revision exactly');
   if(beforeCleanup) {
    const historical=(await db.query("SELECT to_jsonb(r) AS evidence FROM public.order_confirmation_revisions r WHERE status='signed' AND signer_id='012345674'")).rows;
@@ -60,7 +63,7 @@ try{
    console.log('PASS additive signer ID migration preserves legacy signed evidence exactly');
   }
  }
- for(const name of ['order_confirmation_signatures.sql','customer_vouchers.sql','order_confirmation_delivery.sql','delivery_acceptance.sql']){
+ for(const name of ['order_confirmation_signatures.sql','order_confirmation_without_billing.sql','customer_vouchers.sql','order_confirmation_delivery.sql','delivery_acceptance.sql']){
   await db.exec(read('supabase/tests/'+name));console.log('PASS '+name);
  }
  console.log('PASS canonical migrations and signature/HAKAFA/delivery suites; disposable database only');
