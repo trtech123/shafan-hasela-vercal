@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { customerDraft, customerPayload, customerErrorMessage, isPossibleDuplicate } from '@/lib/customers';
 import BillingAddressFields from './BillingAddressFields';
 
-const fields = [['display_name', 'שם לתצוגה'], ['contact_name', 'איש קשר'], ['phone', 'טלפון'], ['email', 'אימייל'], ['organization_name', 'שם ארגון'], ['billing_name', 'שם לחיוב'], ['billing_company_id', 'ח.פ / ע.מ'], ['billing_accounting_email', 'אימייל להנהלת חשבונות']];
+const fields = [['display_name', 'שם לתצוגה'], ['contact_name', 'איש קשר'], ['phone', 'טלפון'], ['email', 'אימייל'], ['organization_name', 'שם ארגון'], ['billing_name', 'שם לחיוב'], ['billing_company_id', 'מספר זיהוי הלקוח לחיוב (ת״ז / ח״פ / ע״מ)'], ['billing_accounting_email', 'אימייל להנהלת חשבונות']];
 
 export default function CustomerFormDialog({ customer = null, initialValues = {}, onClose, onSaved }) {
   const [draft, setDraft] = useState(() => customerDraft(customer || initialValues));

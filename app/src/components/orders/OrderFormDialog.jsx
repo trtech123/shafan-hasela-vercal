@@ -511,31 +511,15 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
 
             {!isTaskMode && (
               <TabsContent value="client" className="space-y-4 mt-4">
-                <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">פרטים אלו ישמשו להפקת חשבונית</p>
+                <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">פרטי האדם או הארגון לחיוב ישמשו להפקת חשבונית. פרטי החותם ייאספו בעת החתימה.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
                     <Label>שם המוסד / ארגון</Label>
                     <Input aria-label="שם המוסד / ארגון" disabled={customerLocked} value={displayedForm.billing_institution_name} onChange={e => handleChange("billing_institution_name", e.target.value)} placeholder="לדוגמה: עיריית חיפה" />
                   </div>
                   <div>
-                    <Label>שם החותם</Label>
-                    <Input value={form.billing_signer_name} onChange={e => handleChange("billing_signer_name", e.target.value)} placeholder="שם מלא" />
-                  </div>
-                  <div>
-                    <Label>ת.ז של החותם</Label>
-                    <Input value={form.billing_signer_id} onChange={e => handleChange("billing_signer_id", e.target.value)} placeholder="000000000" />
-                  </div>
-                  <div>
-                    <Label>תפקיד</Label>
-                    <Input value={form.billing_signer_role} onChange={e => handleChange("billing_signer_role", e.target.value)} placeholder="לדוגמה: מנהל רכש" />
-                  </div>
-                  <div>
-                    <Label>נייד החותם</Label>
-                    <Input value={form.billing_signer_phone} onChange={e => handleChange("billing_signer_phone", e.target.value)} placeholder="05X-XXXXXXX" />
-                  </div>
-                  <div>
-                    <Label>ח.פ / ע.מ</Label>
-                    <Input aria-label="ח.פ / ע.מ" disabled={customerLocked} value={displayedForm.billing_company_id} onChange={e => handleChange("billing_company_id", e.target.value)} placeholder="מספר ח.פ או ע.מ" />
+                    <Label>מספר זיהוי הלקוח לחיוב (ת״ז / ח״פ / ע״מ)</Label>
+                    <Input aria-label="מספר זיהוי הלקוח לחיוב (ת״ז / ח״פ / ע״מ)" disabled={customerLocked} value={displayedForm.billing_company_id} onChange={e => handleChange("billing_company_id", e.target.value)} placeholder="מספר הזיהוי של האדם או הארגון לחיוב" />
                   </div>
                   <div>
                     <Label>מייל הנהח</Label>

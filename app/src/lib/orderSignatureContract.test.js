@@ -11,12 +11,9 @@ describe('signature boundary',()=>{
  });
 });
 
-describe('Israeli signer ID boundary',()=>{
- const valid={fullName:'Synthetic Signer',accepted:true,strokes:[[{x:0,y:0},{x:1,y:1}]]};
- it('normalizes spaces and hyphens while preserving all nine digits',()=>{
-  expect(validateSignature({...valid,signerId:' 012-345 674 '}).signerId).toBe('012345674');
- });
- it('rejects missing, numeric, short, long, non-digit and checksum-invalid IDs',()=>{
-  for(const signerId of [undefined,null,123456782,'','12345674','0012345674','012345675','01234567x','000000000'])expect(()=>validateSignature({...valid,signerId})).toThrow('invalid_signer_id');
+describe('signature without identity collection',()=>{
+ it('accepts name, ink and consent without collecting an ID',()=>{
+ const input={fullName:'Synthetic Signer',accepted:true,strokes:[[{x:0,y:0},{x:1,y:1}]]};
+ expect(validateSignature(input)).toEqual({fullName:input.fullName,strokes:input.strokes});
  });
 });

@@ -34,8 +34,8 @@ test('isolated bundle and bounded synthetic API',async()=>{
  assert.equal((await request('/','GET',null,{host:'evil.test'})).status,421);
  assert.equal((await request('/api/order-confirmation','POST',{action:'view',token},{origin:'https://evil.test'})).status,403);
  assert.equal((await request('/api/order-confirmation','POST',{action:'view',token:'wrong'})).status,404);
- const submission={action:'sign',token,fullName:'Mobile Tester',signerId:'012345674',accepted:true,requestId:'00000000-0000-4000-8000-000000000002',strokes:[[{x:.1,y:.1},{x:.8,y:.8}]]};
- for(const signerId of [undefined,'','012345675','123456782'])assert.equal((await request('/api/order-confirmation','POST',{...submission,signerId})).status,400);
+ const submission={action:'sign',token,fullName:'Mobile Tester',accepted:true,requestId:'00000000-0000-4000-8000-000000000002',strokes:[[{x:.1,y:.1},{x:.8,y:.8}]]};
+ for(const signerId of ['','012345675','123456782'])assert.equal((await request('/api/order-confirmation','POST',{...submission,signerId})).status,400);
  assert.equal((await request('/api/order-confirmation','POST',{...submission,fullName:'Real Person'})).status,400);
  assert.equal((await request('/api/order-confirmation','POST',submission)).status,200);
  assert.equal(JSON.parse((await request('/api/order-confirmation','POST',{action:'view',token})).body).signed,true);

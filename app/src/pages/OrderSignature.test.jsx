@@ -15,25 +15,13 @@ beforeEach(()=>{
 afterEach(cleanup);
 async function fill(){
  const name=await screen.findByLabelText('שם מלא');fireEvent.change(name,{target:{value:'ישראל ישראלי'}});
- fireEvent.change(screen.getByLabelText('תעודת זהות של החותם'),{target:{value:'012-345 674'}});
  const canvas=screen.getByRole('img');canvas.getBoundingClientRect=()=>({left:0,top:0,width:640,height:240});
  fireEvent.pointerDown(canvas,{pointerId:1,clientX:20,clientY:30});fireEvent.pointerMove(canvas,{pointerId:1,clientX:200,clientY:120});fireEvent.pointerUp(canvas,{pointerId:1});
  fireEvent.click(screen.getByRole('checkbox'));
 }
 describe('public order confirmation signing',()=>{
- it('requires a valid nine-digit ID and explains the error in Hebrew',async()=>{
-  render(<OrderSignature/>);await fill();
-  const id=screen.getByLabelText('תעודת זהות של החותם');
-  expect(id.type).toBe('text');expect(id.inputMode).toBe('numeric');
-  for(const value of ['', '12345674','0012345674','012345675']) {
-   fireEvent.change(id,{target:{value}});fireEvent.blur(id);
-   expect(screen.getByRole('button',{name:'אישור וחתימה'}).disabled).toBe(true);
-   expect(screen.getByRole('alert').textContent).toContain('תעודת זהות תקינה בת 9 ספרות');
-  }
-  expect(signatureRequest.mock.calls.some(([body])=>body.action==='sign')).toBe(false);
-  fireEvent.change(id,{target:{value:'012345674'}});fireEvent.blur(id);
-  expect(screen.getByRole('button',{name:'אישור וחתימה'}).disabled).toBe(false);
-  expect(screen.queryByRole('alert')).toBeNull();
+ it('requires no signer ID to submit a complete signature',async()=>{
+ render(<OrderSignature/>);await fill();expect(screen.queryByLabelText('תעודת זהות של החותם')).toBeNull();expect(screen.getByRole('button',{name:'אישור וחתימה'}).disabled).toBe(false);
  });
  it('views server PDF without consuming authority and strips token fragment',async()=>{
   render(<OrderSignature/>);await screen.findByLabelText('שם מלא');
@@ -47,8 +35,8 @@ describe('public order confirmation signing',()=>{
   fireEvent.click(await screen.findByRole('button',{name:'בדיקת ושמירת אותה חתימה'}));
   await screen.findByText('האישור נחתם בהצלחה');
   const calls=signatureRequest.mock.calls.map(([body])=>body).filter(body=>body.action==='sign');
-  expect(calls[0].signerId).toBe('012345674');expect(calls).toHaveLength(2);expect(calls[0]).toEqual(calls[1]);
-  expect(Object.keys(calls[0]).sort()).toEqual(['accepted','action','fullName','signerId','requestId','strokes','token'].sort());
+  expect(calls[0]).not.toHaveProperty('signerId');expect(calls).toHaveLength(2);expect(calls[0]).toEqual(calls[1]);
+  expect(Object.keys(calls[0]).sort()).toEqual(['accepted','action','fullName','requestId','strokes','token'].sort());
  });
  it('expired/revoked/invalid links disclose no revision and provide no form',async()=>{
   signatureRequest.mockRejectedValue(Error('link_unavailable'));render(<OrderSignature/>);

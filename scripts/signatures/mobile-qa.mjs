@@ -27,7 +27,7 @@ export async function fixture(origin) {
   if(body.action==='pdf')return {status:200,pdf:bytes};
   if(body.action==='view')return {status:200,body:{signed,revision:{id:'00000000-0000-4000-8000-000000000001',revision_number:1,status:signed?'signed':'pending',expires_at:new Date(Date.now()+86400000).toISOString(),snapshot:{acceptanceText:'Synthetic QA acceptance only - no real order.'}}}};
   if(body.action==='sign'){
-   if(normalizeIsraeliId(body.signerId)!=='012345674')return {status:400,body:{error:'invalid_signer_id'}};
+   if(body.signerId!==undefined&&normalizeIsraeliId(body.signerId)!=='012345674')return {status:400,body:{error:'invalid_signer_id'}};
    if(body.fullName!=='Mobile Tester'||body.accepted!==true||!validSignature({width:1,height:1,strokes:body.strokes})||!/^[0-9a-f-]{36}$/i.test(body.requestId||''))return {status:400,body:{error:'invalid_signature'}};
    signed=true;return {status:200,body:{ok:true}};
   }

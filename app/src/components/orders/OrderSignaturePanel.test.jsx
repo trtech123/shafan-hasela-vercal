@@ -4,13 +4,14 @@ import {afterEach,beforeEach,it,expect,vi} from 'vitest';
 import OrderSignaturePanel from './OrderSignaturePanel';
 import {signatureRequest,downloadConfirmation} from '@/lib/orderSignatureClient';
 vi.mock('@/lib/orderSignatureClient',()=>({signatureRequest:vi.fn(),downloadConfirmation:vi.fn(),signatureStateText:{signed:'חתום',expired:'פג תוקף',revoked:'בוטל',superseded:'הוחלף בגרסה חדשה',awaiting_signature:'ממתין לחתימה'}}));
+vi.mock('../customers/CustomerSelector',()=>({default:()=>null}));
 vi.mock('@/api/supabaseClient',()=>({supabase:{from:()=>({select:()=>({eq:()=>({order:async()=>({data:[{id:'old',channel:'email',destination:'qa@example.test',state:'accepted',created_at:'2026-10-01'}]})})})})}}));
 beforeEach(()=>{vi.clearAllMocks();signatureRequest.mockResolvedValue({revisions:[{id:'signed',revision_number:1,status:'signed',full_name:'ישראל ישראלי',signed_at:'2026-10-11T10:00:00Z',current_differs:true},{id:'pending',revision_number:2,status:'awaiting_signature',expires_at:'2026-10-18'}],deliveries:[]});});
 afterEach(cleanup);
-it('labels pre-ID evidence as legacy and displays ID on a new signed revision',async()=>{
+it('shows historical ID when present without labeling ID-free evidence as legacy',async()=>{
  signatureRequest.mockResolvedValue({revisions:[{id:'old',revision_number:1,status:'signed',full_name:'Legacy Signer',signed_at:'2026-10-11T10:00:00Z'},{id:'new',revision_number:2,status:'signed',full_name:'New Signer',signer_id:'012345674',signed_at:'2026-10-11T11:00:00Z'}],deliveries:[]});
  render(<OrderSignaturePanel orderId="order"/>);
- await screen.findByText(/חתימה היסטורית — לפני דרישת תעודת זהות/);
+ await screen.findByText('012345674');expect(screen.queryByText(/לפני דרישת תעודת זהות/)).toBeNull();
  expect(screen.getByText('012345674')).toBeTruthy();
  expect(screen.getByRole('button',{name:'הורדת האישור המקורי (ללא חתימה) — גרסה 1'})).toBeTruthy();
  expect(screen.getAllByText(/פרטי החתימה מופיעים בעמודים האחרונים/)).toHaveLength(2);
@@ -44,4 +45,12 @@ it('allows staff to revoke an interrupted signing claim',async()=>{
  fireEvent.click(await screen.findByRole('button',{name:'ביטול קישור החתימה'}));
  fireEvent.click(screen.getByRole('button',{name:'אישור',exact:true}));
  await waitFor(()=>expect(signatureRequest).toHaveBeenCalledWith({action:'revoke',revisionId:'signing'},{staff:true}));
+});
+
+it('blocks preparation with actionable billing readiness details',async()=>{
+ signatureRequest.mockResolvedValue({readiness:['billing_identification','customer_snapshot'],revisions:[],deliveries:[]});
+ render(<OrderSignaturePanel orderId="order"/>);
+ await screen.findByText(/מספר הזיהוי של הלקוח לחיוב/);
+ expect(screen.getByRole('button',{name:'הכנת אישור לחתימה'}).disabled).toBe(true);
+ expect(screen.getByRole('button',{name:'השלמת פרטי לקוח ועדכון ההזמנה'})).toBeTruthy();
 });

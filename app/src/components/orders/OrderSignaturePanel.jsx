@@ -5,19 +5,23 @@ import {signatureRequest,signatureStateText,downloadConfirmation} from '@/lib/or
 import {validOrderEmail,orderDeliveryStateText} from '@/lib/orderConfirmation';
 import {canManuallyResend} from '@/lib/manualDelivery';
 
-export default function OrderSignaturePanel({orderId,email='',onBusyChange}) {
+import CustomerSelector from '../customers/CustomerSelector';
+import {customerErrorMessage} from '@/lib/customers';
+const readinessText={active_customer:'יש לבחור כרטיס לקוח פעיל.',customer_snapshot:'יש לשמור מחדש את פרטי הלקוח בהזמנה באמצעות עדכון מפורש מהכרטיס.',customer_name:'יש להשלים את שם הלקוח.',billing_name:'יש להשלים שם לחיוב או שם לקוח.',billing_identification:'יש להשלים מספר הזיהוי של הלקוח לחיוב: ת״ז לאדם פרטי או ח״פ / ע״מ לארגון, 9 ספרות.',vat_applicable:'יש לבחור במפורש מדיניות מע״מ.',customer_phone:'יש להשלים טלפון תקין בכרטיס הלקוח.',order_details:'יש להשלים תאריך פעילות ומספר משתתפים חיובי בעריכת ההזמנה.'};
+export default function OrderSignaturePanel({orderId,email='',onBusyChange,onCustomerUpdated}) {
  const [revisions,setRevisions]=useState([]),[deliveries,setDeliveries]=useState([]),[legacy,setLegacy]=useState([]),[recipient,setRecipient]=useState(email),[link,setLink]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false),[message,setMessage]=useState(''),[confirmation,setConfirmation]=useState(null);
+ const [readiness,setReadiness]=useState([]),[customerReview,setCustomerReview]=useState({}),[editingCustomer,setEditingCustomer]=useState(false),[selectedCustomer,setSelectedCustomer]=useState(null);
  const locked=useRef(false);
  const refresh=useCallback(async()=>{
   const history=await signatureRequest({action:'history',orderId},{staff:true});
-  setRevisions(history.revisions || []);setDeliveries(history.deliveries || []);setLoaded(true);
+  setReadiness(history.readiness || []);setCustomerReview(history.customerReview || {});setRevisions(history.revisions || []);setDeliveries(history.deliveries || []);setLoaded(true);
   const old=await supabase.from('order_delivery_attempts').select('id,channel,destination,state,created_at,attempt_type').eq('order_id',orderId).order('created_at',{ascending:false});
   if(!old.error)setLegacy(old.data || []);
  },[orderId]);
  useEffect(()=>{refresh().catch(()=>setMessage('לא ניתן לטעון את היסטוריית האישורים כרגע.'));},[refresh]);
  const perform=async operation=>{
   if(locked.current)return;locked.current=true;setBusy(true);onBusyChange?.(true);setMessage('');
-  try{await operation();}catch{setMessage('הפעולה לא הושלמה או שמצבה עדיין אינו ידוע. רעננו מצב לפני ניסיון נוסף.');}finally{locked.current=false;setBusy(false);onBusyChange?.(false);}
+  try{await operation();}catch(error){if(error.message==='billing_customer_incomplete'){await refresh();setMessage('יש להשלים את פרטי הלקוח לפני הכנת האישור.');return;}setMessage('הפעולה לא הושלמה או שמצבה עדיין אינו ידוע. רעננו מצב לפני ניסיון נוסף.');}finally{locked.current=false;setBusy(false);onBusyChange?.(false);}
  };
  const create=()=>perform(async()=>{setLink('');const result=await signatureRequest({action:'create',orderId},{staff:true});setLink(result.signingUrl);await refresh();});
  const download=(revision,signed)=>perform(async()=>{const pdf=await signatureRequest({action:'pdf',revisionId:revision.id,signed},{staff:true});downloadConfirmation(pdf,`order-confirmation-v${revision.revision_number}${signed?'-signed':''}.pdf`);});
@@ -31,7 +35,9 @@ export default function OrderSignaturePanel({orderId,email='',onBusyChange}) {
  const latest=(revision,channel)=>deliveries.find(row=>row.revision_id===revision.id&&row.channel===channel);
  return <section className="space-y-4 rounded-xl border p-4" aria-label="חתימות וגרסאות אישור הזמנה">
   <h2 className="font-semibold text-lg">אישור הזמנה וחתימת לקוח</h2><p className="text-sm">הכנת אישור שומרת גרסה קבועה של פרטי ההזמנה והתנאים. הלקוח יחתום רק על גרסה זו.</p>
-  <div className="flex flex-wrap gap-2"><Button disabled={busy||!loaded} onClick={create}>הכנת אישור לחתימה</Button><Button variant="outline" disabled={busy} onClick={()=>perform(refresh)}>רענון חתימות ושליחות</Button></div>
+  <div className="flex flex-wrap gap-2"><Button disabled={busy||!loaded||readiness.length>0} onClick={create}>הכנת אישור לחתימה</Button><Button variant="outline" disabled={busy} onClick={()=>perform(refresh)}>רענון חתימות ושליחות</Button></div>
+  {readiness.length>0&&<div role="alert" className="rounded border border-amber-300 p-3"><p>לפני הכנת אישור לחתימה:</p><ul>{readiness.map(code=><li key={code}>{readinessText[code] || 'יש לבדוק את פרטי הלקוח בהזמנה.'}</li>)}</ul><Button variant="outline" disabled={busy} onClick={()=>setEditingCustomer(true)}>השלמת פרטי לקוח ועדכון ההזמנה</Button></div>}
+  {editingCustomer&&<div className="space-y-3"><p>ערכו את כרטיס הלקוח, בחרו אותו ואז עדכנו במפורש את הפרטים השמורים להזמנה. עריכת הכרטיס לבדה אינה משנה את ההזמנה.</p><CustomerSelector value={selectedCustomer?.id || customerReview.customerId} onSelect={setSelectedCustomer}/><Button disabled={busy||!selectedCustomer} onClick={()=>perform(async()=>{const {error}=await supabase.rpc('link_order_customer',{p_order_id:orderId,p_customer_id:selectedCustomer.id,p_expected_version:customerReview.version});if(error){setMessage(customerErrorMessage(error));return;}await refresh();setEditingCustomer(false);setSelectedCustomer(null);onCustomerUpdated?.();})}>עדכון מפורש של פרטי הלקוח בהזמנה</Button></div>}
   {link&&<div className="space-y-2 rounded bg-blue-50 p-3"><p>קישור החתימה מוכן. אפשר לשלוח את האישור במייל או בוואטסאפ.</p><Button variant="outline" disabled={busy} onClick={()=>perform(async()=>{await navigator.clipboard.writeText(link);setMessage('קישור החתימה הועתק.');})}>העתקת קישור חתימה</Button></div>}
   <label className="block text-sm">כתובת אימייל לשליחת האישור<input type="email" value={recipient} disabled={busy} onChange={event=>setRecipient(event.target.value)} dir="ltr" className="mt-1 block w-full rounded border p-2"/></label>
   {revisions.length===0&&loaded&&<p>טרם הוכנה גרסת אישור לחתימה.</p>}
@@ -39,7 +45,7 @@ export default function OrderSignaturePanel({orderId,email='',onBusyChange}) {
    <p className="font-semibold">גרסה {revision.revision_number} · {signatureStateText[revision.status] || 'מצב לא זמין'}</p>
    {revision.current_differs&&<p className="font-semibold text-amber-800" role="status">ההזמנה הנוכחית שונה מהגרסה השמורה{revision.signed_at?' והחתומה':''}. יש להכין אישור חדש ולקבל חתימה חדשה.</p>}
    {revision.signed_at&&<p>חתם/ה: {revision.full_name} · {new Date(revision.signed_at).toLocaleString('he-IL')} · גרסה {revision.revision_number}</p>}
-   {revision.signed_at&&(revision.signer_id?<p>תעודת זהות: <bdi>{revision.signer_id}</bdi></p>:<p className="text-amber-800">חתימה היסטורית — לפני דרישת תעודת זהות. המסמך המקורי נשמר ללא שינוי.</p>)}
+   {revision.signed_at&&revision.signer_id&&<p>תעודת זהות: <bdi>{revision.signer_id}</bdi></p>}
    {revision.signed_at&&<p className="text-sm">פרטי החתימה מופיעים בעמודים האחרונים של האישור החתום.</p>}
    {awaiting(revision)&&<p className="text-sm">תוקף קישור החתימה: {new Date(revision.expires_at).toLocaleString('he-IL')}</p>}
    <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={()=>download(revision,false)}>הורדת האישור המקורי (ללא חתימה) — גרסה {revision.revision_number}</Button>

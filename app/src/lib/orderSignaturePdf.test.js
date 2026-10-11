@@ -27,7 +27,7 @@ describe('confirmation PDF security and frozen copy',()=>{
  });
  it('limits signature to a separate acceptance evidence page',()=>{
   const html=evidenceHtml({...evidence,unsignedHash:'b'.repeat(64)});
-  expect(html).toContain('<svg');expect(html).toContain('לקוח בדיקה');
+  expect(html).not.toContain('תעודת זהות');expect(html).not.toContain('היסטורית');expect(html).toContain('<svg');expect(html).toContain('לקוח בדיקה');
   expect(html).not.toContain(text.SAFETY_SIGNATURE);
   expect(()=>evidenceHtml({...evidence,strokes:[[{x:-1,y:0},{x:1,y:1}]]})).toThrow();
  });
@@ -42,7 +42,7 @@ function links(pdf){return pdf.getPages().flatMap(page=>{
 describe('real PDF artifacts',()=>{
  it('renders actual signature ink and signer identity in the archived acceptance page',async()=>{
   const unsigned=await renderUnsigned(snapshot,url);
-  const identity={...evidence,signerId:'012345674',unsignedHash:createHash('sha256').update(unsigned).digest('hex')};
+  const identity={...evidence,unsignedHash:createHash('sha256').update(unsigned).digest('hex')};
   const signed=await renderSigned(unsigned,identity);
   const alternate=await renderSigned(unsigned,{...identity,strokes:[[{x:.1,y:.8},{x:.4,y:.1},{x:.9,y:.8}]]});
   const page=(await PDFDocument.load(signed)).getPageCount();
@@ -57,7 +57,9 @@ describe('real PDF artifacts',()=>{
   for(let i=0;i<a.length;i++)if(Math.abs(a[i]-b[i])>80&&(a[i]<80||b[i]<80))inkDifference++;
   expect(inkDifference,'archived signature must produce visible ink in rendered PDF').toBeGreaterThan(500);
   const extracted=execFileSync('pdftotext',['-f',String(page),'-','-'],{input:signed,maxBuffer:1_000_000,timeout:20000}).toString('utf8').replace(/[\u200e\u200f\u202a-\u202e]/g,'');
-  expect(extracted).toContain(identity.signerId);
+  expect(extracted).not.toContain('012345674');expect(extracted).not.toContain('היסטורית');
+  const historical=await renderSigned(unsigned,{...identity,signerId:'012345674'});
+  expect(execFileSync('pdftotext',['-','-'],{input:historical,maxBuffer:1_000_000,timeout:20000}).toString('utf8')).toContain('012345674');
   expect(extracted.includes(identity.fullName)||extracted.includes([...identity.fullName].reverse().join(''))).toBe(true);
   expect(extracted).toContain('11.10.2026');expect(extracted).toContain('13:00:00');
   expect(extracted.includes('חתימה')||extracted.includes('המיתח')).toBe(true);

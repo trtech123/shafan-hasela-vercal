@@ -10,11 +10,12 @@ import OrderConfirmationDocument from './OrderConfirmationDocument';
 import OrderSignaturePanel from './OrderSignaturePanel';
 export default function OrderConfirmationPDF({order,onClose}) {
  const {user}=useAuth();const [document,setDocument]=useState(null),[loadError,setLoadError]=useState(''),[error,setError]=useState(''),[downloading,setDownloading]=useState(false),[sending,setSending]=useState(false);
+ const [customerRevision,setCustomerRevision]=useState(0);
  const docRef=useRef(null),inFlight=useRef(false);
  useEffect(()=>{let active=true;setDocument(null);setLoadError('');
   boundedQuotationOperation(()=>supabase.rpc('order_confirmation_document',{p_order_id:order.id}),15000).then(({data,error})=>{if(!active)return;if(error||!data?.version||!data?.data)throw Error('document_unavailable');setDocument(data);}).catch(()=>{if(active)setLoadError('לא ניתן לקרוא את ההזמנה השמורה. סגרו ופתחו שוב לאחר בדיקת ההרשאות והחיבור.');});
   return()=>{active=false;};
- },[order.id]);
+ },[order.id,customerRevision]);
  const createPdf=()=>boundedQuotationOperation(signal=>buildQuotePdf(docRef.current,{signal}),45000);
  const download=async()=>{if(inFlight.current||!document)return;inFlight.current=true;setDownloading(true);setError('');try{const pdf=await createPdf();pdf.save('אישור_הזמנה_'+document.data.order_number+'.pdf');}catch{setError('יצירת ה-PDF לא הושלמה. לא נשלחה הודעה.');}finally{inFlight.current=false;setDownloading(false);}};
  return <Dialog open onOpenChange={()=>{if(!downloading&&!sending)onClose();}}><DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto" dir="rtl" aria-describedby={undefined}>
@@ -23,7 +24,7 @@ export default function OrderConfirmationPDF({order,onClose}) {
   {!document&&!loadError&&<p role="status">טוען את פרטי ההזמנה השמורים...</p>}
   {(loadError||error)&&<p role="alert">{loadError||error}</p>}
   {document && <>
-   {document.can_send&&canSendOrderConfirmation(user?.role)?<OrderSignaturePanel key={order.id+document.version} orderId={order.id} email={document.data.client_email} onBusyChange={setSending}/>:<p>האישור זמין לצפייה ולהורדה בלבד בהתאם להרשאות שלך.</p>}
+   {document.can_send&&canSendOrderConfirmation(user?.role)?<OrderSignaturePanel key={order.id+document.version} orderId={order.id} email={document.data.client_email} onBusyChange={setSending} onCustomerUpdated={()=>setCustomerRevision(value=>value+1)}/>:<p>האישור זמין לצפייה ולהורדה בלבד בהתאם להרשאות שלך.</p>}
    <p className="text-sm text-slate-600">התצוגה להלן היא ההזמנה הנוכחית. המסמכים הקבועים והחתומים זמינים בהיסטוריית הגרסאות למעלה.</p>
    <div className="overflow-x-auto rounded-lg border bg-slate-100"><div ref={docRef}><OrderConfirmationDocument data={document.data}/></div></div>
   </>}

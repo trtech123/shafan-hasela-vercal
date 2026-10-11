@@ -2,7 +2,7 @@ import {normalizeIsraeliId} from '../../src/lib/israeliId.js';
 import {createHash, randomBytes} from 'node:crypto';
 
 export const ACCEPTANCE_VERSION = '1';
-export const RENDER_VERSION = '1';
+export const RENDER_VERSION = '2';
 export const ACCEPTANCE_TEXT = 'קראתי את אישור ההזמנה המצורף ואני מאשר/ת את פרטי ההזמנה ואת תנאי ההתקשרות המופיעים בו. חתימה זו מאשרת את ההזמנה בלבד ואינה מחליפה חתימות על הצהרות בטיחות, בריאות או אישור הורים.';
 export const BUCKET = 'order-signatures-private';
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
@@ -21,8 +21,8 @@ export function tokenLifetimeDays(value='7') {
 }
 export function validId(value) { return typeof value==='string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value); }
 export function validateSignature(input) {
-  const signerId=normalizeIsraeliId(input.signerId);
-  if (!signerId) throw new SignatureError('invalid_signer_id');
+  const signerId=input.signerId===undefined ? undefined : normalizeIsraeliId(input.signerId);
+  if (input.signerId!==undefined && !signerId) throw new SignatureError('invalid_signer_id');
   const fullName=typeof input.fullName==='string' ? input.fullName.trim().normalize('NFC') : '';
   if (fullName.length<3 || fullName.length>120 || /[\p{Cc}\p{Cf}<>]/u.test(fullName) || !/^\p{L}[\p{L}\p{M}'’". -]*\s+\p{L}[\p{L}\p{M}'’". -]*$/u.test(fullName) || input.accepted!==true) throw new SignatureError('invalid_signature');
   const strokes=input.strokes;
@@ -37,7 +37,7 @@ export function validateSignature(input) {
     });
   }
   if(count>4096 || distance<0.03) throw new SignatureError('invalid_signature');
-  return {fullName,signerId,strokes};
+  return {fullName,...(signerId?{signerId}:{}),strokes};
 }
 export function canonicalJson(value) {
   if(Array.isArray(value)) return '['+value.map(canonicalJson).join(',')+']';

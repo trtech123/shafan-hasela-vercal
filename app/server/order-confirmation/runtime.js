@@ -26,7 +26,7 @@ export function signatureRuntime(env=process.env) {
   const result=async promise=>{
     const {data,error}=await promise;
     if(error) {
-      const safe=['signature_forbidden','link_unavailable','order_not_found','revision_conflict','invalid_signature','invalid_signer_id','delivery_already_claimed','delivery_conflict','invalid_destination','delivery_still_in_progress','delivery_resend_stale'];
+      const safe=['billing_customer_incomplete','signature_forbidden','link_unavailable','order_not_found','revision_conflict','invalid_signature','invalid_signer_id','delivery_already_claimed','delivery_conflict','invalid_destination','delivery_still_in_progress','delivery_resend_stale'];
       throw new SignatureError(safe.includes(error.message)?error.message:'signature_unavailable',error.code==='42501'?403:error.code==='PT404'?404:error.code==='PT409'?409:503);
     }
     return data;

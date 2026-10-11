@@ -5,9 +5,9 @@ const token='a'.repeat(43), id='98000000-0000-4000-8000-000000000001';
 const request=(body,headers={})=>new Request('https://example.invalid/api/order-confirmation',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
 function deps(){return {authorize:vi.fn(async()=>id),rateLimit:vi.fn(async()=>true),action:vi.fn(async()=>({id,revision_number:1,status:'pending',snapshot:{data:{},text:{}},unsigned_path:id+'/unsigned.pdf',unsigned_hash:'hash'})),readPdf:vi.fn(async()=>Buffer.from('%PDF-test')),writePdf:vi.fn(),renderUnsigned:vi.fn(async()=>Buffer.from('%PDF-test')),renderSigned:vi.fn(async()=>Buffer.from('%PDF-signed')),origin:'https://example.invalid',days:7};}
 describe('order signature HTTP boundary',()=>{
- it('rejects missing or invalid ID before claiming and never echoes it',async()=>{
+ it('rejects invalid optional legacy ID before claiming and never echoes it',async()=>{
   const d=deps(),handler=createSignatureHandler(d);
-  for(const signerId of [undefined,'','012345675',123456782]) {
+  for(const signerId of ['','012345675',123456782]) {
    const response=await handler(request({action:'sign',token,requestId:id,signerId,fullName:'Synthetic Signer',accepted:true,strokes:[[{x:0,y:0},{x:1,y:1}]]}));
    expect(response.status).toBe(400);expect(await response.json()).toEqual({error:'invalid_signer_id'});
   }
@@ -33,7 +33,7 @@ describe('order signature HTTP boundary',()=>{
   expect(d.renderSigned.mock.calls[0][1].signerId).toBe('012345674');expect(d.action.mock.calls[0][1].signerId).toBe('012345674');expect(d.writePdf.mock.calls[0][0]).toBe(id+'/'+id+'-signed.pdf');expect(d.action.mock.calls[1]).toEqual(['finish',expect.objectContaining({signedHash:sha256(signed)})]);
  });
  it('a failed upload never finalizes and a committed replay never renders again',async()=>{
-  const d=deps(),input={action:'sign',token,requestId:id,signerId:'012345674',fullName:'ישראל ישראלי',strokes:[[{x:.1,y:.1},{x:.5,y:.5}]],accepted:true};
+  const d=deps(),input={action:'sign',token,requestId:id,fullName:'ישראל ישראלי',strokes:[[{x:.1,y:.1},{x:.5,y:.5}]],accepted:true};
   const row={id,status:'signing',snapshot:{},unsigned_path:id+'/unsigned.pdf',unsigned_hash:sha256(Buffer.from('%PDF-test'))};
   d.action.mockResolvedValue(row);d.writePdf.mockRejectedValue(Error('storage failure'));
   expect((await createSignatureHandler(d)(request(input))).status).toBe(503);expect(d.action).toHaveBeenCalledOnce();

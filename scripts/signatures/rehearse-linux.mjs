@@ -22,7 +22,6 @@ function links(pdf){return pdf.getPages().flatMap(page=>{
  return (annotations?.asArray()||[]).flatMap(ref=>{const action=pdf.context.lookup(ref,PDFDict).lookupMaybe(PDFName.of('A'),PDFDict),uri=action?.lookup(PDFName.of('URI'));return uri instanceof PDFString||uri instanceof PDFHexString?[uri.decodeText()]:[];});
 });}
 const started=performance.now();
-evidence.signerId='012345674';
 const unsigned=await renderUnsigned(snapshot,signingUrl),unsignedMs=performance.now()-started;
 evidence.unsignedHash=sha256(unsigned);
 const signedStart=performance.now(),signed=await renderSigned(unsigned,evidence),signedMs=performance.now()-signedStart;
@@ -41,9 +40,12 @@ assert(inkDifference>500,'Signature evidence exists but visible ink is absent');
 const appendix=b.getPages().at(-1),images=appendix.node.Resources()?.lookupMaybe(PDFName.of('XObject'),PDFDict);
 assert(images?.values().some(ref=>b.context.lookup(ref)?.dict?.get(PDFName.of('Subtype'))?.toString()==='/Image'),'Missing portable signature image');
 const extracted=execFileSync('pdftotext',['-f',String(b.getPageCount()),'-','-'],{input:signed,maxBuffer:1_000_000,timeout:20000}).toString('utf8').replace(/[\u200e\u200f\u202a-\u202e]/g,'');
-assert(extracted.includes(evidence.signerId));assert(extracted.includes(evidence.fullName)||extracted.includes([...evidence.fullName].reverse().join('')));
+assert(!extracted.includes('012345674'));assert(!extracted.includes('היסטורית')&&!extracted.includes('תירוטסיה'));assert(!extracted.includes('תעודת זהות')&&!extracted.includes('תוהז תדועת'));
+const historical=await renderSigned(unsigned,{...evidence,signerId:'012345674'});
+const historicalText=execFileSync('pdftotext',['-','-'],{input:historical,maxBuffer:5_000_000,timeout:20000}).toString('utf8');assert(historicalText.includes('012345674'));
+assert(extracted.includes(evidence.fullName)||extracted.includes([...evidence.fullName].reverse().join('')));
 assert(extracted.includes('11.10.2026')&&extracted.includes('13:00:00'));
-console.log(JSON.stringify({signatureRasterImage:true,visibleInkDifference:inkDifference,signerIdNameTimestampInPdf:true}));
+console.log(JSON.stringify({signatureRasterImage:true,visibleInkDifference:inkDifference,noNewSignerId:true,historicalIdDisplayed:true,signerNameTimestampInPdf:true}));
 await assert.rejects(renderSigned(unsigned,{...evidence,unsignedHash:'0'.repeat(64)}),/unsigned_artifact_hash_mismatch/);
 writeFileSync(resolve(out,'unsigned.pdf'),unsigned);writeFileSync(resolve(out,'signed.pdf'),signed);
 const result={node:process.version,platform:process.platform,arch:process.arch,unsignedMs:Math.round(unsignedMs),signedMs:Math.round(signedMs),unsignedPages:a.getPageCount(),signedPages:b.getPageCount(),unsignedBytes:unsigned.length,signedBytes:signed.length,unsignedHash:evidence.unsignedHash,signedHash:sha256(signed),linkInBoth:true,originalEmbeddedExactly:true,badHashRejected:true};
