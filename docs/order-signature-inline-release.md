@@ -58,3 +58,18 @@ ORD-1044 has signed revisions 1/3, superseded revision 2 and pending revision 4.
 None is changed by release or automated testing. Pending revision 4's snapshot
 hash and revision binding were verified read-only. Do not create another QA
 revision automatically. Production Verified remains withheld until user QA.
+
+## Release receipt
+
+- Runtime commit: `514735bf85c47d7302698077e4d28208cda16863` (local only).
+- Deployment: `dpl_6pzSe9vsoSAFH6GKoeUnQK1XFamg`, promoted
+  2026-10-11 16:57:39 UTC after protected staged API/source verification.
+- Exactly four runtime source files overlaid; 194 preserved unchanged.
+- Non-sending production checks passed: public page 200, invalid capability
+  404, unauthenticated staff 401, anonymous direct table/RPC 401.
+- Revision/storage fingerprints, all public database functions, 35 business
+  tables, Edge Functions, environment metadata and Git-source policy unchanged.
+- Read-only admin UI confirms revision 4 still awaits signature, 1/3 remain
+  signed and 2 superseded. No new revision or signature was created by release.
+- No migration, email/WhatsApp send, provider call, Git push or main merge.
+- Physical-phone/Edge final UX confirmation remains **PENDING**.
