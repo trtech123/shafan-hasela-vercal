@@ -1,5 +1,7 @@
 # Customer billing and confirmation signature finalization
 
+Historical release receipt: the billing prerequisite below was subsequently removed by [the simple-flow correction](order-signature-simple-flow-release.md). Billing completion is no longer required for confirmation signing.
+
 Released October 11, 2026. **Physical customer/billing/signature QA remains pending. Neither workflow is Production Verified yet.**
 
 ## Scope and behavior
