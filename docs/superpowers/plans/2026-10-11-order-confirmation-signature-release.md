@@ -1,5 +1,7 @@
 # Order confirmation signature candidate — release evidence
 
+Follow-up: [pre-release validation](../../order-signature-prerelease-validation.md) records the successful isolated Linux package rehearsal, 92-test regression run, refreshed baseline classification and synthetic HTTPS mobile harness. Physical handset QA remains pending. The original evidence below is retained as a chronological record.
+
 Implementation branch: `feat/order-confirmation-signature`, based on `ee8a44745484ff919a19ab00a5c8c183c83a2e6f`. This preserves the production-applied UUID migration. No production database, provider, Git remote, Meta or deployment settings were changed.
 
 ## Architecture
