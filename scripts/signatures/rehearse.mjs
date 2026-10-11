@@ -24,6 +24,10 @@ try{
    SELECT set_config('request.jwt.claims','{"role":"service_role"}',false);
    DO $$ DECLARE old public.order_confirmation_revisions; fresh jsonb; BEGIN
     SELECT * INTO old FROM public.order_confirmation_revisions WHERE id='98200000-0000-4000-8000-000000000010';
+    fresh=public.order_signature_action('create',jsonb_build_object('actorId',old.created_by,'orderId',old.order_id,'tokenHash',repeat('cd',32),'days',7,'text','{"ORDER_TERMS":["original"]}'::jsonb,'renderVersion','2','acceptanceVersion','1','acceptanceText','Synthetic historical signed ID before cleanup migration'));
+    PERFORM public.order_signature_action('ready',jsonb_build_object('actorId',old.created_by,'revisionId',fresh->>'id','revisionHash',repeat('b',64),'unsignedHash',repeat('c',64)));
+    PERFORM public.order_signature_action('claim',jsonb_build_object('tokenHash',repeat('cd',32),'requestId','98200000-0000-4000-8000-000000000014','fullName','Historical Signer','signerId','012345674','strokes','[[{"x":0,"y":0},{"x":1,"y":1}]]'::jsonb,'accepted',true));
+    PERFORM public.order_signature_action('finish',jsonb_build_object('tokenHash',repeat('cd',32),'requestId','98200000-0000-4000-8000-000000000014','signedHash',repeat('d',64)));
     fresh=public.order_signature_action('create',jsonb_build_object('actorId',old.created_by,'orderId',old.order_id,'tokenHash',repeat('ab',32),'days',7,'text','{"ORDER_TERMS":["original"]}'::jsonb,'renderVersion','2','acceptanceVersion','1','acceptanceText','Synthetic existing pending before cleanup migration'));
     PERFORM public.order_signature_action('ready',jsonb_build_object('actorId',old.created_by,'revisionId',fresh->>'id','revisionHash',repeat('b',64),'unsignedHash',repeat('c',64)));
    END $$;
@@ -31,6 +35,13 @@ try{
   const beforeCleanup=name==='202610110003_order_confirmation_customer_readiness.sql' ? (await db.query("SELECT to_jsonb(r) AS evidence FROM public.order_confirmation_revisions r ORDER BY id")).rows : null;
   await db.exec(read('supabase/migrations/'+name));
   if(beforeCleanup)assert.deepEqual((await db.query("SELECT to_jsonb(r) AS evidence FROM public.order_confirmation_revisions r ORDER BY id")).rows,beforeCleanup,'cleanup must preserve every existing revision exactly');
+  if(beforeCleanup) {
+   const historical=(await db.query("SELECT to_jsonb(r) AS evidence FROM public.order_confirmation_revisions r WHERE status='signed' AND signer_id='012345674'")).rows;
+   assert.equal(historical.length,1,'signed historical ID fixture must survive cleanup');
+   const row=historical[0].evidence;
+   const history=(await db.query("SELECT public.order_signature_action('history',jsonb_build_object('actorId',$1::text,'orderId',$2::text)) AS history",[row.created_by,row.order_id])).rows[0].history;
+   assert.equal(history.revisions.find(revision=>revision.id===row.id)?.signer_id,'012345674','authorized history must preserve historical signer ID');
+  }
   if(beforeCleanup)await db.exec(`
    BEGIN;
    DO $$ DECLARE input jsonb; r jsonb; BEGIN
