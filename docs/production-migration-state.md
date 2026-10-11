@@ -1,5 +1,9 @@
 # Production migration state
 
+## Order confirmation signatures — 2026-10-11
+
+Installed and verified: `202610110001_order_confirmation_signatures.sql`; SHA256 `e2cc7f144677114d318bf3ea87edcc78cd730fe45dbecd50e4eaff47ab7b47fe`. Do not replay. Live markers: four signature tables, service-only `order_signature_action`, `order_signature_delivery`, `order_signature_rate_limit`, and private `order-signatures-private` bucket. No internal migration ledger introduced. See `docs/releases/order-confirmation-signature-20261011.md`. Release is awaiting the user's physical-phone test; preserve all evidence on rollback.
+
 Historical baseline verified: 2026-09-10. Reconciliation inventory checked: 2026-10-07.
 
 Production Supabase project `shafan-hasela` (`divzxsynczeifkpnpupl`) has migrations 021 through 028 applied in order:
