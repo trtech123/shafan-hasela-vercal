@@ -60,7 +60,7 @@ function signatureSvg(strokes) {
 export function evidenceHtml(evidence) {
  const signedAt=new Date(evidence.signedAt);
  if(!Number.isFinite(signedAt.getTime())||typeof evidence.fullName!=='string'||evidence.fullName.trim().length<2||evidence.fullName.length>120||!evidence.acceptanceText)throw new Error('invalid_signature_evidence');
- return shell(`<h1>אישור קבלת הזמנה וחתימה</h1><p>המסמך המקורי מופיע בעמודים הקודמים. חתימה זו קשורה רק לגרסה המזוהה להלן.</p><section class="acceptance">${paragraph(evidence.acceptanceText)}${paragraph(`שם החותם/ת: ${evidence.fullName}`)}${paragraph(`מועד החתימה (שעון ישראל): ${signedAt.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'})}`)}${signatureSvg(evidence.strokes)}</section><p>אישור מפורש של ההזמנה והתנאים הכלליים. אין בכך חתימה על הצהרות בטיחות או קטינים נפרדות.</p><p>מזהה גרסת האישור:</p><p class="hash">${escape(evidence.revisionId)}</p><p>טביעת גרסת האישור (SHA-256):</p><p class="hash">${escape(evidence.revisionHash)}</p><p>טביעת המסמך המקורי (SHA-256):</p><p class="hash">${escape(evidence.unsignedHash)}</p><p>גרסת הסכמה: ${escape(evidence.acceptanceVersion)}</p>`);
+ return shell(`<h1>אישור קבלת הזמנה וחתימה</h1><p>המסמך המקורי מופיע בעמודים הקודמים. חתימה זו קשורה רק לגרסה המזוהה להלן.</p><section class="acceptance">${paragraph(evidence.acceptanceText)}${paragraph(`שם החותם: ${evidence.fullName}`)}${paragraph(evidence.signerId?`תעודת זהות: ${evidence.signerId}`:'גרסה היסטורית — תעודת זהות לא נאספה')}${paragraph(`תאריך ושעת חתימה (שעון ישראל): ${signedAt.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'})}`)}<p>חתימה — אישור הלקוח להזמנה ולתנאים הכלליים:</p>${signatureSvg(evidence.strokes)}</section><p>אישור מפורש של ההזמנה והתנאים הכלליים. אין בכך חתימה על הצהרות בטיחות או קטינים נפרדות.</p><p>מזהה גרסת האישור:</p><p class="hash">${escape(evidence.revisionId)}</p><p>טביעת גרסת האישור (SHA-256):</p><p class="hash">${escape(evidence.revisionHash)}</p><p>טביעת המסמך המקורי (SHA-256):</p><p class="hash">${escape(evidence.unsignedHash)}</p><p>גרסת הסכמה: ${escape(evidence.acceptanceVersion)}</p>`);
 }
 
 async function launch() {
@@ -75,10 +75,20 @@ async function render(html) {
  const browser=await launch();
  try{
   const page=await browser.newPage();
+  await page.setViewport({width:1024,height:768,deviceScaleFactor:2});
   await page.setJavaScriptEnabled(false);
   await page.setRequestInterception(true);
   page.on('request',request=>{if(request.url().startsWith('data:')||request.url()==='about:blank')void request.continue();else void request.abort();});
   await page.setContent(html,{waitUntil:'load',timeout:15000});
+  const signature=await page.$('svg.signature');
+  if(signature){
+   // Flatten only the trusted, bounded signature drawing into high-resolution
+   // PNG ink. Reader-specific vector clipping/printing behavior must not control
+   // visibility of acceptance evidence. Original confirmation pages stay intact.
+   const ink=await signature.screenshot({type:'png',omitBackground:false});
+   const image=`<img class="signature" alt="חתימת הלקוח" src="data:image/png;base64,${Buffer.from(ink).toString('base64')}">`;
+   await page.setContent(html.replace(/<svg class="signature"[\s\S]*?<\/svg>/,image),{waitUntil:'load',timeout:15000});
+  }
   const bytes=Buffer.from(await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,waitForFonts:true,timeout:20000}));
   const pdf=await PDFDocument.load(bytes);
   if(pdf.getPageCount()>100||bytes.length>10*1024*1024)throw new Error('confirmation_too_large');

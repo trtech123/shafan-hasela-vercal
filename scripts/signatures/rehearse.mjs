@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 ﻿import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -14,7 +15,18 @@ try{
  for(const name of ['scripts/payments/fixture.sql','scripts/payments/assertions.sql']) await db.exec(read(name));
  for(const name of fs.readdirSync(path.join(root,'supabase/migrations')).filter(n=>n.endsWith('.sql')).sort()){
   if(process.argv.includes('--red')&&name.includes('order_confirmation_signatures'))continue;
+  let legacy;
+  if(name==='202610110002_order_confirmation_signer_id.sql') {
+   await db.exec(read('supabase/tests/order_confirmation_signer_id_before.sql'));
+   legacy=(await db.query("SELECT to_jsonb(r) AS evidence FROM public.order_confirmation_revisions r WHERE id='98200000-0000-4000-8000-000000000010'")).rows[0].evidence;
+  }
   await db.exec(read('supabase/migrations/'+name));
+  if(legacy) {
+   const after=(await db.query("SELECT to_jsonb(r)-'signer_id' AS evidence,signer_id FROM public.order_confirmation_revisions r WHERE id='98200000-0000-4000-8000-000000000010'")).rows[0];
+   assert.deepEqual(after.evidence,legacy);assert.equal(after.signer_id,null);
+   await db.exec(read('supabase/tests/order_confirmation_signer_id_after.sql'));
+   console.log('PASS additive signer ID migration preserves legacy signed evidence exactly');
+  }
  }
  for(const name of ['order_confirmation_signatures.sql','customer_vouchers.sql','order_confirmation_delivery.sql','delivery_acceptance.sql']){
   await db.exec(read('supabase/tests/'+name));console.log('PASS '+name);

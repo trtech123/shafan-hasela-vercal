@@ -19,7 +19,7 @@ export default function OrderConfirmationPDF({order,onClose}) {
  const download=async()=>{if(inFlight.current||!document)return;inFlight.current=true;setDownloading(true);setError('');try{const pdf=await createPdf();pdf.save('אישור_הזמנה_'+document.data.order_number+'.pdf');}catch{setError('יצירת ה-PDF לא הושלמה. לא נשלחה הודעה.');}finally{inFlight.current=false;setDownloading(false);}};
  return <Dialog open onOpenChange={()=>{if(!downloading&&!sending)onClose();}}><DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto" dir="rtl" aria-describedby={undefined}>
   <DialogHeader><DialogTitle>אישור הזמנה ללקוח</DialogTitle></DialogHeader>
-  <div className="flex gap-2"><Button disabled={!document||downloading||sending} onClick={download}>{downloading?'מכין PDF...':'הורד PDF'}</Button><Button variant="outline" disabled={downloading||sending} onClick={onClose}>סגירה</Button></div>
+  <div className="flex gap-2"><Button disabled={!document||downloading||sending} onClick={download}>{downloading?'מכין PDF...':'הורדת תצוגה נוכחית (ללא חתימה)'}</Button><Button variant="outline" disabled={downloading||sending} onClick={onClose}>סגירה</Button></div>
   {!document&&!loadError&&<p role="status">טוען את פרטי ההזמנה השמורים...</p>}
   {(loadError||error)&&<p role="alert">{loadError||error}</p>}
   {document && <>

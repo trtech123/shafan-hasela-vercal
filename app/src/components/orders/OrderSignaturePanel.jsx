@@ -39,9 +39,11 @@ export default function OrderSignaturePanel({orderId,email='',onBusyChange}) {
    <p className="font-semibold">גרסה {revision.revision_number} · {signatureStateText[revision.status] || 'מצב לא זמין'}</p>
    {revision.current_differs&&<p className="font-semibold text-amber-800" role="status">ההזמנה הנוכחית שונה מהגרסה השמורה{revision.signed_at?' והחתומה':''}. יש להכין אישור חדש ולקבל חתימה חדשה.</p>}
    {revision.signed_at&&<p>חתם/ה: {revision.full_name} · {new Date(revision.signed_at).toLocaleString('he-IL')} · גרסה {revision.revision_number}</p>}
+   {revision.signed_at&&(revision.signer_id?<p>תעודת זהות: <bdi>{revision.signer_id}</bdi></p>:<p className="text-amber-800">חתימה היסטורית — לפני דרישת תעודת זהות. המסמך המקורי נשמר ללא שינוי.</p>)}
+   {revision.signed_at&&<p className="text-sm">פרטי החתימה מופיעים בעמודים האחרונים של האישור החתום.</p>}
    {awaiting(revision)&&<p className="text-sm">תוקף קישור החתימה: {new Date(revision.expires_at).toLocaleString('he-IL')}</p>}
-   <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={()=>download(revision,false)}>הורדת אישור גרסה {revision.revision_number}</Button>
-    {revision.signed_at&&<Button variant="outline" disabled={busy} onClick={()=>download(revision,true)}>הורדת האישור החתום — גרסה {revision.revision_number}</Button>}
+   <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={()=>download(revision,false)}>הורדת האישור המקורי (ללא חתימה) — גרסה {revision.revision_number}</Button>
+    {revision.signed_at&&<Button disabled={busy} onClick={()=>download(revision,true)}>הורדת האישור החתום — גרסה {revision.revision_number}</Button>}
     {(awaiting(revision)||['preparing','signing'].includes(revision.status))&&<Button variant="outline" disabled={busy} onClick={()=>setConfirmation({action:'revoke',revision})}>ביטול קישור החתימה</Button>}
    </div>
    {awaiting(revision)&&!revision.current_differs&&<div className="flex flex-wrap gap-2">{['email','whatsapp'].map(channel=>{const previous=latest(revision,channel);const label=channel==='email'?'מייל':'וואטסאפ';return <Button key={channel} disabled={busy||(channel==='email'&&!validOrderEmail(recipient.trim()))||(previous&&!canManuallyResend(previous))} onClick={()=>previous?setConfirmation({action:'send',revision,channel,resendOf:previous.id}):send(revision,channel)}>{previous?`שליחה חוזרת ב${label}`:`שליחת האישור ב${label}`}</Button>;})}</div>}

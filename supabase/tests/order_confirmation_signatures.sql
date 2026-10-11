@@ -21,8 +21,11 @@ BEGIN
  r=public.order_signature_action('ready',jsonb_build_object('actorId',input->>'actorId','revisionId',r->>'id','revisionHash',repeat('b',64),'unsignedHash',repeat('c',64)));
  IF public.order_signature_action('view',jsonb_build_object('tokenHash',repeat('a',64)))->>'status'<>'pending' THEN RAISE EXCEPTION 'view consumed token';END IF;
  PERFORM public.order_signature_action('view',jsonb_build_object('tokenHash',repeat('a',64)));
- claim=jsonb_build_object('tokenHash',repeat('a',64),'requestId','98100000-0000-4000-8000-000000000004','fullName','Synthetic Signer','strokes','[[{"x":0.1,"y":0.1},{"x":0.5,"y":0.3}]]'::jsonb,'accepted',true);
+ claim=jsonb_build_object('tokenHash',repeat('a',64),'requestId','98100000-0000-4000-8000-000000000004','signerId','012345674','fullName','Synthetic Signer','strokes','[[{"x":0.1,"y":0.1},{"x":0.5,"y":0.3}]]'::jsonb,'accepted',true);
+ failed=false;BEGIN PERFORM public.order_signature_action('claim',claim-'signerId');EXCEPTION WHEN OTHERS THEN IF SQLERRM='invalid_signer_id' THEN failed=true; ELSE RAISE; END IF;END;IF NOT failed THEN RAISE EXCEPTION 'missing signer ID accepted';END IF;
  r=public.order_signature_action('claim',claim);
+ IF r->>'signer_id' IS DISTINCT FROM '012345674' THEN RAISE EXCEPTION 'signer ID not persisted';END IF;
+ failed=false;BEGIN PERFORM public.order_signature_action('claim',claim||'{"signerId":"123456782"}');EXCEPTION WHEN SQLSTATE 'PT404' THEN failed=true;END;IF NOT failed THEN RAISE EXCEPTION 'replay mutated signer ID';END IF;
  r2=public.order_signature_action('claim',claim);
  IF r->>'signed_at' IS DISTINCT FROM r2->>'signed_at' THEN RAISE EXCEPTION 'claim retry changed signing time';END IF;
  failed=false;BEGIN PERFORM public.order_signature_action('claim',claim||'{"requestId":"98100000-0000-4000-8000-000000000005"}');EXCEPTION WHEN SQLSTATE 'PT404' THEN failed=true;END;IF NOT failed THEN RAISE EXCEPTION 'competing signer accepted';END IF;

@@ -7,6 +7,14 @@ vi.mock('@/lib/orderSignatureClient',()=>({signatureRequest:vi.fn(),downloadConf
 vi.mock('@/api/supabaseClient',()=>({supabase:{from:()=>({select:()=>({eq:()=>({order:async()=>({data:[{id:'old',channel:'email',destination:'qa@example.test',state:'accepted',created_at:'2026-10-01'}]})})})})}}));
 beforeEach(()=>{vi.clearAllMocks();signatureRequest.mockResolvedValue({revisions:[{id:'signed',revision_number:1,status:'signed',full_name:'ישראל ישראלי',signed_at:'2026-10-11T10:00:00Z',current_differs:true},{id:'pending',revision_number:2,status:'awaiting_signature',expires_at:'2026-10-18'}],deliveries:[]});});
 afterEach(cleanup);
+it('labels pre-ID evidence as legacy and displays ID on a new signed revision',async()=>{
+ signatureRequest.mockResolvedValue({revisions:[{id:'old',revision_number:1,status:'signed',full_name:'Legacy Signer',signed_at:'2026-10-11T10:00:00Z'},{id:'new',revision_number:2,status:'signed',full_name:'New Signer',signer_id:'012345674',signed_at:'2026-10-11T11:00:00Z'}],deliveries:[]});
+ render(<OrderSignaturePanel orderId="order"/>);
+ await screen.findByText(/חתימה היסטורית — לפני דרישת תעודת זהות/);
+ expect(screen.getByText('012345674')).toBeTruthy();
+ expect(screen.getByRole('button',{name:'הורדת האישור המקורי (ללא חתימה) — גרסה 1'})).toBeTruthy();
+ expect(screen.getAllByText(/פרטי החתימה מופיעים בעמודים האחרונים/)).toHaveLength(2);
+});
 it('shows old signed revision, difference warning, protected download and legacy delivery history',async()=>{
  render(<OrderSignaturePanel orderId="order" email="qa@example.test"/>);
  await screen.findByText(/חתם\/ה: ישראל ישראלי/);expect(screen.getByText(/ההזמנה הנוכחית שונה/)).toBeTruthy();

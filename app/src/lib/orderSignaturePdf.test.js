@@ -40,6 +40,28 @@ function links(pdf){return pdf.getPages().flatMap(page=>{
 });}
 
 describe('real PDF artifacts',()=>{
+ it('renders actual signature ink and signer identity in the archived acceptance page',async()=>{
+  const unsigned=await renderUnsigned(snapshot,url);
+  const identity={...evidence,signerId:'012345674',unsignedHash:createHash('sha256').update(unsigned).digest('hex')};
+  const signed=await renderSigned(unsigned,identity);
+  const alternate=await renderSigned(unsigned,{...identity,strokes:[[{x:.1,y:.8},{x:.4,y:.1},{x:.9,y:.8}]]});
+  const page=(await PDFDocument.load(signed)).getPageCount();
+  const appendix=(await PDFDocument.load(signed)).getPages().at(-1);
+  const objects=appendix.node.Resources()?.lookupMaybe(PDFName.of('XObject'),PDFDict);
+  expect(objects?.values().some(ref=>appendix.doc.context.lookup(ref)?.dict?.get(PDFName.of('Subtype'))?.toString()==='/Image'),'acceptance ink must be embedded as a portable image').toBe(true);
+  // Raster differences must be dark ink, not PDF objects, metadata or merely
+  // the presence of strokes in the renderer input. Both PDFs have identical text.
+  const pixels=bytes=>execFileSync('pdftoppm',['-f',String(page),'-singlefile','-r','72','-'],{input:bytes,maxBuffer:5_000_000,timeout:20000});
+  const a=pixels(signed),b=pixels(alternate);expect(a.length).toBe(b.length);
+  let inkDifference=0;
+  for(let i=0;i<a.length;i++)if(Math.abs(a[i]-b[i])>80&&(a[i]<80||b[i]<80))inkDifference++;
+  expect(inkDifference,'archived signature must produce visible ink in rendered PDF').toBeGreaterThan(500);
+  const extracted=execFileSync('pdftotext',['-f',String(page),'-','-'],{input:signed,maxBuffer:1_000_000,timeout:20000}).toString('utf8').replace(/[\u200e\u200f\u202a-\u202e]/g,'');
+  expect(extracted).toContain(identity.signerId);
+  expect(extracted.includes(identity.fullName)||extracted.includes([...identity.fullName].reverse().join(''))).toBe(true);
+  expect(extracted).toContain('11.10.2026');expect(extracted).toContain('13:00:00');
+  expect(extracted.includes('חתימה')||extracted.includes('המיתח')).toBe(true);
+ },60000);
  it('creates clickable link annotations, paginates long RTL documents, appends signed evidence to original',async()=>{
   const long={...snapshot,data:{...snapshot.data,quotation_snapshot:{selected_activities:Array.from({length:80},(_,i)=>({activity_name:`פעילות ${i+1} QA_ITEM_${i+1}`,quantity:2,price_per_person:60,line_total:120,description:'מידע שמור על הפעילות ללקוח '.repeat(20)}))}}};
   const unsigned=await renderUnsigned(long,url);
