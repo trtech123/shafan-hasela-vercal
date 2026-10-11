@@ -39,6 +39,20 @@ let inkDifference=0;for(let i=0;i<raster.length;i++)if(Math.abs(raster[i]-other[
 assert(inkDifference>500,'Signature evidence exists but visible ink is absent');
 const appendix=b.getPages().at(-1),images=appendix.node.Resources()?.lookupMaybe(PDFName.of('XObject'),PDFDict);
 assert(images?.values().some(ref=>b.context.lookup(ref)?.dict?.get(PDFName.of('Subtype'))?.toString()==='/Image'),'Missing portable signature image');
+assert.equal(b.catalog.lookup(PDFName.of('OpenAction'),PDFArray).get(0).toString(),appendix.ref.toString());
+const blankPdf=await PDFDocument.load(signed),blankResources=blankPdf.getPages().at(-1).node.Resources().lookup(PDFName.of('XObject'),PDFDict);
+for(const ref of blankResources.values()){
+ const image=blankPdf.context.lookup(ref);
+ if(image?.dict?.get(PDFName.of('Subtype'))?.toString()!=='/Image')continue;
+ const attributes=Object.fromEntries(image.dict.entries().filter(([key])=>!['/Length','/Filter','/DecodeParms','/SMask'].includes(key.toString())).map(([key,value])=>[key.toString().slice(1),value]));
+ blankPdf.context.assign(ref,blankPdf.context.flateStream(Buffer.alloc(decodePDFRawStream(image).decode().length,255),attributes));
+}
+const blank=Buffer.from(await blankPdf.save());
+const crop=bytes=>execFileSync('pdftoppm',['-f',String(b.getPageCount()),'-singlefile','-r','72','-x','110','-y','250','-W','360','-H','130','-'],{input:bytes,maxBuffer:1_000_000,timeout:20000});
+const background=crop(blank);
+const visibleInk=bytes=>{const pixels=crop(bytes);assert.equal(pixels.length,background.length);let n=0;for(let i=0;i<pixels.length;i++)if(pixels[i]<80&&background[i]>200)n++;return n;};
+assert(visibleInk(signed)>500,'No non-background ink in expected signature area');assert.equal(visibleInk(blank),0,'Blank image must fail ink verification');
+console.log(JSON.stringify({signatureAreaInkChannels:visibleInk(signed),blankImageRejected:true,opensOnSignaturePage:true}));
 const extracted=execFileSync('pdftotext',['-f',String(b.getPageCount()),'-','-'],{input:signed,maxBuffer:1_000_000,timeout:20000}).toString('utf8').replace(/[\u200e\u200f\u202a-\u202e]/g,'');
 assert(!extracted.includes('012345674'));assert(!extracted.includes('היסטורית')&&!extracted.includes('תירוטסיה'));assert(!extracted.includes('תעודת זהות')&&!extracted.includes('תוהז תדועת'));
 const historical=await renderSigned(unsigned,{...evidence,signerId:'012345674'});

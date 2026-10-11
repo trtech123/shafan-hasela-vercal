@@ -7,6 +7,12 @@ import {canManuallyResend} from '@/lib/manualDelivery';
 
 export default function OrderSignaturePanel({orderId,email='',onBusyChange}) {
  const [revisions,setRevisions]=useState([]),[deliveries,setDeliveries]=useState([]),[legacy,setLegacy]=useState([]),[recipient,setRecipient]=useState(email),[link,setLink]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false),[message,setMessage]=useState(''),[confirmation,setConfirmation]=useState(null);
+ const [preview,setPreview]=useState(null);
+ const previewGeneration=useRef(0),previewRef=useRef(null);
+ useEffect(()=>{if(preview)previewRef.current?.scrollIntoView?.({block:'start',behavior:'smooth'});},[preview]);
+ useEffect(()=>{previewGeneration.current++;setPreview(null);return()=>{previewGeneration.current++;};},[orderId]);
+ useEffect(()=>()=>{if(preview)URL.revokeObjectURL(preview.url);},[preview]);
+ const closePreview=()=>{previewGeneration.current++;setPreview(null);};
  const locked=useRef(false);
  const refresh=useCallback(async()=>{
   const history=await signatureRequest({action:'history',orderId},{staff:true});
@@ -20,7 +26,23 @@ export default function OrderSignaturePanel({orderId,email='',onBusyChange}) {
   try{await operation();}catch{setMessage('הפעולה לא הושלמה או שמצבה עדיין אינו ידוע. רעננו מצב לפני ניסיון נוסף.');}finally{locked.current=false;setBusy(false);onBusyChange?.(false);}
  };
  const create=()=>perform(async()=>{setLink('');const result=await signatureRequest({action:'create',orderId},{staff:true});setLink(result.signingUrl);await refresh();});
- const download=(revision,signed)=>perform(async()=>{const pdf=await signatureRequest({action:'pdf',revisionId:revision.id,signed},{staff:true});downloadConfirmation(pdf,`order-confirmation-v${revision.revision_number}${signed?'-signed':''}.pdf`);});
+ const download=(revision,signed)=>perform(async()=>{const pdf=signed&&preview?.revision.id===revision.id?preview.pdf:await signatureRequest({action:'pdf',revisionId:revision.id,signed},{staff:true});downloadConfirmation(pdf,`order-confirmation-v${revision.revision_number}${signed?'-signed':''}.pdf`);});
+ const showSigned=revision=>perform(async()=>{
+  closePreview();const generation=previewGeneration.current;
+  try{
+   const pdf=await signatureRequest({action:'pdf',revisionId:revision.id,signed:true},{staff:true});
+   const {PDFDocument,PDFName,PDFArray,PDFRef}=await import('pdf-lib');
+   const document=await PDFDocument.load(new Uint8Array(await pdf.arrayBuffer()));
+   const pages=document.getPages(),destination=document.catalog.lookup(PDFName.of('OpenAction'));
+   const target=destination instanceof PDFArray?destination.get(0):null;
+   // Only a direct destination to a page in this PDF is used; actions are never followed.
+   const targetIndex=target instanceof PDFRef?pages.findIndex(item=>item.ref.toString()===target.toString()):-1;
+   const page=targetIndex>=0?targetIndex+1:pages.length;
+   if(page<1)throw Error('empty_pdf');
+   if(generation!==previewGeneration.current)return;
+   setPreview({revision,pdf,page,url:URL.createObjectURL(pdf)});
+  }catch{if(generation===previewGeneration.current)setMessage('לא ניתן לפתוח את האישור החתום כרגע. נסו שוב.');}
+ });
  const send=(revision,channel,resendOf)=>perform(async()=>{
   setConfirmation(null);
   const result=await signatureRequest({action:'deliver',revisionId:revision.id,channel,requestId:crypto.randomUUID(),...(channel==='email'?{recipient:recipient.trim()}:{}),...(resendOf?{resendOf,confirmed:true}:{})},{staff:true});
@@ -42,13 +64,19 @@ export default function OrderSignaturePanel({orderId,email='',onBusyChange}) {
    {revision.signed_at&&revision.signer_id&&<p>תעודת זהות: <bdi>{revision.signer_id}</bdi></p>}
    {revision.signed_at&&<p className="text-sm">פרטי החתימה מופיעים בעמודים האחרונים של האישור החתום.</p>}
    {awaiting(revision)&&<p className="text-sm">תוקף קישור החתימה: {new Date(revision.expires_at).toLocaleString('he-IL')}</p>}
-   <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={()=>download(revision,false)}>הורדת האישור המקורי (ללא חתימה) — גרסה {revision.revision_number}</Button>
+   <div className="flex flex-wrap gap-2">{revision.signed_at&&<Button disabled={busy} onClick={()=>showSigned(revision)}>צפייה באישור החתום — גרסה {revision.revision_number}</Button>}<Button variant="outline" disabled={busy} onClick={()=>download(revision,false)}>הורדת האישור המקורי (ללא חתימה) — גרסה {revision.revision_number}</Button>
     {revision.signed_at&&<Button disabled={busy} onClick={()=>download(revision,true)}>הורדת האישור החתום — גרסה {revision.revision_number}</Button>}
     {(awaiting(revision)||['preparing','signing'].includes(revision.status))&&<Button variant="outline" disabled={busy} onClick={()=>setConfirmation({action:'revoke',revision})}>ביטול קישור החתימה</Button>}
    </div>
    {awaiting(revision)&&!revision.current_differs&&<div className="flex flex-wrap gap-2">{['email','whatsapp'].map(channel=>{const previous=latest(revision,channel);const label=channel==='email'?'מייל':'וואטסאפ';return <Button key={channel} disabled={busy||(channel==='email'&&!validOrderEmail(recipient.trim()))||(previous&&!canManuallyResend(previous))} onClick={()=>previous?setConfirmation({action:'send',revision,channel,resendOf:previous.id}):send(revision,channel)}>{previous?`שליחה חוזרת ב${label}`:`שליחת האישור ב${label}`}</Button>;})}</div>}
    {deliveries.filter(row=>row.revision_id===revision.id).map(row=><p key={row.id} className="text-sm">{new Date(row.created_at).toLocaleString('he-IL')} · {row.channel==='email'?'מייל':'WhatsApp'} · <bdi>{row.destination}</bdi> · {orderDeliveryStateText(row.state)}</p>)}
   </li>)}</ul>
+  {preview&&<section ref={previewRef} className="space-y-3 rounded border p-3" aria-label="תצוגת אישור חתום">
+   <h3 className="font-semibold">האישור החתום — גרסה {preview.revision.revision_number}</h3>
+   <p>התצוגה נפתחת בעמוד החתימה של המסמך החתום. ההורדה שומרת את אותו המסמך במלואו.</p>
+   <div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={()=>download(preview.revision,true)}>הורדת המסמך המוצג (חתום) — גרסה {preview.revision.revision_number}</Button><Button variant="outline" onClick={closePreview}>סגירת התצוגה החתומה</Button></div>
+   <iframe title={'האישור החתום — גרסה '+preview.revision.revision_number} src={preview.url+'#page='+preview.page+'&zoom=page-width'} className="h-[70vh] w-full rounded border"/>
+  </section>}
   {confirmation&&<div role="alertdialog" aria-label="אישור פעולה" className="space-y-2 rounded border border-amber-300 bg-amber-50 p-4"><p>{confirmation.action==='revoke'?'הקישור לא יאפשר עוד חתימה. הגרסה השמורה לא תימחק. לבטל את הקישור?':'ייתכן שההודעה הקודמת כבר הגיעה ללקוח. לשלוח שוב את אותה גרסה?'}</p><Button disabled={busy} onClick={()=>confirmation.action==='revoke'?revoke(confirmation.revision):send(confirmation.revision,confirmation.channel,confirmation.resendOf)}>אישור</Button><Button variant="outline" disabled={busy} onClick={()=>setConfirmation(null)}>חזרה</Button></div>}
   {legacy.length>0&&<details><summary>היסטוריית שליחות קודמות ({legacy.length})</summary><ul>{legacy.map(row=><li key={row.id} className="border-t py-2 text-sm">{new Date(row.created_at).toLocaleString('he-IL')} · {row.channel==='email'?'מייל':'WhatsApp'} · <bdi>{row.destination}</bdi> · {orderDeliveryStateText(row.state)}</li>)}</ul></details>}
   {busy&&<p role="status">הפעולה מתבצעת...</p>}{message&&<p role="status">{message}</p>}

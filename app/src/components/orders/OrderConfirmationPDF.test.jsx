@@ -32,7 +32,8 @@ describe('order confirmation revision management integration',()=>{
  it('clearly separates the live preview from archived signed revisions',async()=>{
   render(<OrderConfirmationPDF order={order} onClose={()=>{}}/>);await screen.findByText('FROZEN-1');
   expect(screen.getByText(/התצוגה להלן היא ההזמנה הנוכחית/)).toBeTruthy();
-  expect(screen.getByRole('button',{name:'הורדת תצוגה נוכחית (ללא חתימה)'})).toBeTruthy();
+  const details=screen.getByText('תצוגת ההזמנה הנוכחית (ללא חתימה)').closest('details');
+  expect(details.open).toBe(false);expect(screen.getByText('הורדת תצוגה נוכחית (ללא חתימה)').closest('details')).toBe(details);
   expect(screen.queryByRole('button',{name:'הורד PDF',exact:true})).toBeNull();
   expect(mocks.rpc.mock.calls.map(([name])=>name)).toEqual(['order_confirmation_document']);
  });

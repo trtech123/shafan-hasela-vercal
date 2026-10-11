@@ -19,13 +19,16 @@ export default function OrderConfirmationPDF({order,onClose}) {
  const download=async()=>{if(inFlight.current||!document)return;inFlight.current=true;setDownloading(true);setError('');try{const pdf=await createPdf();pdf.save('אישור_הזמנה_'+document.data.order_number+'.pdf');}catch{setError('יצירת ה-PDF לא הושלמה. לא נשלחה הודעה.');}finally{inFlight.current=false;setDownloading(false);}};
  return <Dialog open onOpenChange={()=>{if(!downloading&&!sending)onClose();}}><DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto" dir="rtl" aria-describedby={undefined}>
   <DialogHeader><DialogTitle>אישור הזמנה ללקוח</DialogTitle></DialogHeader>
-  <div className="flex gap-2"><Button disabled={!document||downloading||sending} onClick={download}>{downloading?'מכין PDF...':'הורדת תצוגה נוכחית (ללא חתימה)'}</Button><Button variant="outline" disabled={downloading||sending} onClick={onClose}>סגירה</Button></div>
+  <div className="flex gap-2"><Button variant="outline" disabled={downloading||sending} onClick={onClose}>סגירה</Button></div>
   {!document&&!loadError&&<p role="status">טוען את פרטי ההזמנה השמורים...</p>}
   {(loadError||error)&&<p role="alert">{loadError||error}</p>}
   {document && <>
    {document.can_send&&canSendOrderConfirmation(user?.role)?<OrderSignaturePanel key={order.id+document.version} orderId={order.id} email={document.data.client_email} onBusyChange={setSending}/>:<p>האישור זמין לצפייה ולהורדה בלבד בהתאם להרשאות שלך.</p>}
+   <details className="space-y-3 rounded border p-3"><summary className="cursor-pointer font-medium">תצוגת ההזמנה הנוכחית (ללא חתימה)</summary>
+   <Button disabled={!document||downloading||sending} onClick={download}>{downloading?'מכין PDF...':'הורדת תצוגה נוכחית (ללא חתימה)'}</Button>
    <p className="text-sm text-slate-600">התצוגה להלן היא ההזמנה הנוכחית. המסמכים הקבועים והחתומים זמינים בהיסטוריית הגרסאות למעלה.</p>
    <div className="overflow-x-auto rounded-lg border bg-slate-100"><div ref={docRef}><OrderConfirmationDocument data={document.data}/></div></div>
+   </details>
   </>}
  </DialogContent></Dialog>;
 }

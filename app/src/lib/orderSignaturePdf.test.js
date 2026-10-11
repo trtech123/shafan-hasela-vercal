@@ -1,6 +1,7 @@
 // Real local Chromium PDFs; no provider requests or customer data.
 import { describe, it, expect } from 'vitest';
 import {RENDER_VERSION} from '../../server/order-confirmation/contract.js';
+import {createSignatureHandler} from '../../server/order-confirmation/handler.js';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { PDFDocument, PDFName, PDFArray, PDFDict, PDFString, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
@@ -30,6 +31,7 @@ describe('confirmation PDF security and frozen copy',()=>{
  });
  it('limits signature to a separate acceptance evidence page',()=>{
   const html=evidenceHtml({...evidence,unsignedHash:'b'.repeat(64)});
+  expect(html.includes('<h1>אישור וחתימה דיגיטלית</h1>')).toBe(true);
   expect(html).not.toContain('תעודת זהות');expect(html).not.toContain('היסטורית');expect(html).toContain('<svg');expect(html).toContain('לקוח בדיקה');
   expect(html).not.toContain(text.SAFETY_SIGNATURE);
   expect(()=>evidenceHtml({...evidence,strokes:[[{x:-1,y:0},{x:1,y:1}]]})).toThrow();
@@ -49,6 +51,9 @@ describe('real PDF artifacts',()=>{
   const signed=await renderSigned(unsigned,identity);
   const alternate=await renderSigned(unsigned,{...identity,strokes:[[{x:.1,y:.8},{x:.4,y:.1},{x:.9,y:.8}]]});
   const page=(await PDFDocument.load(signed)).getPageCount();
+  const document=await PDFDocument.load(signed);
+  const opening=document.catalog.lookup(PDFName.of('OpenAction'),PDFArray);
+  expect(opening.get(0).toString(),'signed PDF opens on actual acceptance ink, not the old signing CTA').toBe(document.getPages().at(-1).ref.toString());
   const appendix=(await PDFDocument.load(signed)).getPages().at(-1);
   const objects=appendix.node.Resources()?.lookupMaybe(PDFName.of('XObject'),PDFDict);
   expect(objects?.values().some(ref=>appendix.doc.context.lookup(ref)?.dict?.get(PDFName.of('Subtype'))?.toString()==='/Image'),'acceptance ink must be embedded as a portable image').toBe(true);
@@ -59,6 +64,31 @@ describe('real PDF artifacts',()=>{
   let inkDifference=0;
   for(let i=0;i<a.length;i++)if(Math.abs(a[i]-b[i])>80&&(a[i]<80||b[i]<80))inkDifference++;
   expect(inkDifference,'archived signature must produce visible ink in rendered PDF').toBeGreaterThan(500);
+  // Remove only the embedded image pixels. Text, dimensions and page count
+  // stay identical, so metadata or an empty image cannot pass the ink gate.
+  const blankPdf=await PDFDocument.load(signed),last=blankPdf.getPages().at(-1);
+  const resources=last.node.Resources().lookup(PDFName.of('XObject'),PDFDict);
+  for(const ref of resources.values()){
+   const image=blankPdf.context.lookup(ref);
+   if(image?.dict?.get(PDFName.of('Subtype'))?.toString()!=='/Image')continue;
+   const attributes=Object.fromEntries(image.dict.entries().filter(([key])=>!['/Length','/Filter','/DecodeParms','/SMask'].includes(key.toString())).map(([key,value])=>[key.toString().slice(1),value]));
+   blankPdf.context.assign(ref,blankPdf.context.flateStream(Buffer.alloc(decodePDFRawStream(image).decode().length,255),attributes));
+  }
+  const blank=Buffer.from(await blankPdf.save());
+  const crop=bytes=>execFileSync('pdftoppm',['-f',String(page),'-singlefile','-r','72','-x','110','-y','210','-W','360','-H','180','-'],{input:bytes,maxBuffer:1_000_000,timeout:20000});
+  const background=crop(blank);
+  const visibleInk=bytes=>{const rendered=crop(bytes);expect(rendered.length).toBe(background.length);let n=0;for(let i=0;i<rendered.length;i++)if(rendered[i]<80&&background[i]>200)n++;return n;};
+  expect(visibleInk(signed),'visible non-background pixels in acceptance signature area').toBeGreaterThan(500);
+  expect(visibleInk(blank),'blank embedded image must fail the ink gate').toBe(0);
+  await expect(renderSigned(unsigned,{...identity,strokes:[]})).rejects.toThrow('invalid_signature');
+  // Exercise the real response selector using two different real PDF artifacts.
+  const row={id:snapshot.data.id,signed_path:'signed.pdf',unsigned_path:'unsigned.pdf',signed_hash:createHash('sha256').update(signed).digest('hex'),unsigned_hash:identity.unsignedHash};
+  const handler=createSignatureHandler({rateLimit:async()=>true,authorize:async()=>snapshot.data.id,action:async()=>row,readPdf:async path=>path==='signed.pdf'?signed:unsigned});
+  const request=new Request('https://example.test/api/order-confirmation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pdf',revisionId:row.id,signed:true})});
+  const response=await handler(request);expect(response.status).toBe(200);
+  const downloaded=Buffer.from(await response.arrayBuffer());
+  expect(downloaded.equals(signed),'admin must download the exact signed archive').toBe(true);
+  expect(downloaded.equals(unsigned)).toBe(false);expect(visibleInk(downloaded)).toBeGreaterThan(500);
   const extracted=execFileSync('pdftotext',['-f',String(page),'-','-'],{input:signed,maxBuffer:1_000_000,timeout:20000}).toString('utf8').replace(/[\u200e\u200f\u202a-\u202e]/g,'');
   expect(extracted).not.toContain('012345674');expect(extracted).not.toContain('היסטורית');
   const historical=await renderSigned(unsigned,{...identity,signerId:'012345674'});

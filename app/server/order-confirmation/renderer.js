@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFName } from 'pdf-lib';
 import { orderConfirmationModel } from '../../src/lib/orderConfirmation.js';
 
 const font = readFileSync(new URL('./assets/Heebo.ttf', import.meta.url)).toString('base64');
@@ -60,7 +60,7 @@ function signatureSvg(strokes) {
 export function evidenceHtml(evidence) {
  const signedAt=new Date(evidence.signedAt);
  if(!Number.isFinite(signedAt.getTime())||typeof evidence.fullName!=='string'||evidence.fullName.trim().length<2||evidence.fullName.length>120||!evidence.acceptanceText)throw new Error('invalid_signature_evidence');
- return shell(`<h1>אישור קבלת הזמנה וחתימה</h1><p>המסמך המקורי מופיע בעמודים הקודמים. חתימה זו קשורה רק לגרסה המזוהה להלן.</p><section class="acceptance">${paragraph(evidence.acceptanceText)}${paragraph(`שם החותם: ${evidence.fullName}`)}${evidence.signerId?paragraph(`תעודת זהות: ${evidence.signerId}`):''}${paragraph(`תאריך ושעת חתימה (שעון ישראל): ${signedAt.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'})}`)}<p>חתימה — אישור הלקוח להזמנה ולתנאים הכלליים:</p>${signatureSvg(evidence.strokes)}</section><p>אישור מפורש של ההזמנה והתנאים הכלליים. אין בכך חתימה על הצהרות בטיחות או קטינים נפרדות.</p><p>מזהה גרסת האישור:</p><p class="hash">${escape(evidence.revisionId)}</p><p>טביעת גרסת האישור (SHA-256):</p><p class="hash">${escape(evidence.revisionHash)}</p><p>טביעת המסמך המקורי (SHA-256):</p><p class="hash">${escape(evidence.unsignedHash)}</p><p>גרסת הסכמה: ${escape(evidence.acceptanceVersion)}</p>`);
+ return shell(`<h1>אישור וחתימה דיגיטלית</h1><p>המסמך המקורי מופיע בעמודים הקודמים. חתימה זו קשורה רק לגרסה המזוהה להלן.</p><section class="acceptance">${paragraph(evidence.acceptanceText)}${paragraph(`שם החותם: ${evidence.fullName}`)}${evidence.signerId?paragraph(`תעודת זהות: ${evidence.signerId}`):''}${paragraph(`תאריך ושעת חתימה (שעון ישראל): ${signedAt.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'})}`)}<p>חתימה — אישור הלקוח להזמנה ולתנאים הכלליים:</p>${signatureSvg(evidence.strokes)}</section><p>אישור מפורש של ההזמנה והתנאים הכלליים. אין בכך חתימה על הצהרות בטיחות או קטינים נפרדות.</p><p>מזהה גרסת האישור:</p><p class="hash">${escape(evidence.revisionId)}</p><p>טביעת גרסת האישור (SHA-256):</p><p class="hash">${escape(evidence.revisionHash)}</p><p>טביעת המסמך המקורי (SHA-256):</p><p class="hash">${escape(evidence.unsignedHash)}</p><p>גרסת הסכמה: ${escape(evidence.acceptanceVersion)}</p>`);
 }
 
 async function launch() {
@@ -106,6 +106,9 @@ export async function renderSigned(unsignedBytes, evidence) {
  for(const page of pages)original.addPage(page);
  // Preserve the byte-for-byte unsigned original, not only its visual pages.
  await original.attach(unsignedBytes,'original-confirmation.pdf',{mimeType:'application/pdf',description:'Original frozen confirmation; SHA-256 '+evidence.unsignedHash});
+ // Preserve frozen pages, but open new signed artifacts at the actual ink.
+ // This is a standard PDF destination, not a script or external viewer link.
+ original.catalog.set(PDFName.of('OpenAction'),original.context.obj([pages[0].ref,PDFName.of('Fit')]));
  original.setTitle('אישור הזמנה חתום');
  const signed=Buffer.from(await original.save());
  if(signed.length>10*1024*1024)throw new Error('confirmation_too_large');
