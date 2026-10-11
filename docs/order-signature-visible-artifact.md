@@ -50,3 +50,23 @@ After promotion, inspect the existing revision 3 preview read-only and confirm
 all historical data/artifact fingerprints remain unchanged. Do not create or
 sign a new revision automatically. Physical-phone/Windows Edge retest remains
 the user's final acceptance gate; do not mark Production Verified.
+
+## Release receipt
+
+- Runtime commit: `4c092ad202159f0adc89d8f6d533521442c1f2f7` (local branch only).
+- Live deployment: `dpl_7Gy3Rt6SgZ4xLs1n9mTiUGwBwJ6x`.
+- Promoted: 2026-10-11 16:38:25 UTC. All 198 staged source hashes verified;
+  three runtime files changed and 195 preserved exactly.
+- Relevant suite: 108 tests passed. Final UI refinement: 18 tests passed.
+  Build passed; disposable signature/HAKAFA/customer/delivery suites passed.
+- Network-isolated Linux rehearsal: 27 unsigned / 28 signed pages, 1,988
+  signature-area ink color channels; blank-image negative control rejected.
+- Production authorization: invalid token 404; unauthenticated staff 401;
+  anonymous direct table/RPC 401; instructor denied; authorized history passed.
+- Production UI opened existing revision 3 at page 5 and visibly displayed its
+  original ink. Download from that preview exactly matched archived bytes.
+- All three revision rows and stored artifacts retained identical fingerprints;
+  35 business tables, Edge Functions and Git deployment policy unchanged.
+- No migration, provider sends, new QA revisions or production business writes.
+  Technical rate-limit counters may advance during non-sending API checks.
+- Physical new-revision/Windows Edge acceptance remains **PENDING**.
