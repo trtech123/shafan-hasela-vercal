@@ -1,5 +1,30 @@
 # Production migration state
 
+## Final order signature state and Git reconciliation — 2026-10-11
+
+**ORDER CONFIRMATION SIGNATURE: PRODUCTION VERIFIED.** The user completed
+physical-phone signing and acceptance and visually confirmed the handwritten
+signature, signer name and timestamp inside the final signed confirmation.
+This supersedes the pending-QA notices in the historical release receipts below.
+
+The complete installed signature migration sequence is 202610110001–004.
+Preserve all four files; do not replay them on production:
+
+- `202610110003_order_confirmation_customer_readiness.sql` — SHA256
+  `f81e0cecc6b41349add2a68e892c0318785cd024d5a532d8961ab97aa6f49197`.
+  Removed the mandatory signer-ID constraint while preserving historical IDs;
+  introduced the subsequently removed preparation billing prerequisite.
+- `202610110004_order_confirmation_prepare_without_billing.sql` — SHA256
+  `45487c28b08c31ad303c7cb658d671b7c271cdb9a6feffbbe9efca100659835a`.
+  Removed that prerequisite. Preparation freezes existing order information;
+  customer billing completion is not required for signing.
+
+Hashes use the original LF file contents. Read-only reconciliation matched the
+seven final signature function bodies against production, confirmed the private
+artifact bucket/RLS and optional historical signer-ID column, and preserved all
+historical migration bytes in Git. No migration was applied during reconciliation.
+See [the reconciliation record](releases/order-signature-git-reconciliation-20261011.md).
+
 ## Order signature signer ID — 2026-10-11
 
 Installed and verified at `2026-10-11T12:47:08.765Z`: `202610110002_order_confirmation_signer_id.sql`; SHA256 `6761793c814b37c9d4de610a6146c255a289943f8db7d3919c8c5175283647dd`. Do not replay. Adds private `signer_id` evidence, checksum validation and future-signing requirement; legacy signed evidence/PDFs unchanged and not backfilled. Service-only action RPC replaced narrowly. Existing no-internal-ledger convention unchanged. See `docs/releases/order-signature-id-ink-20261011.md`. Physical retest remains pending.
