@@ -1,5 +1,6 @@
 // Real local Chromium PDFs; no provider requests or customer data.
 import { describe, it, expect } from 'vitest';
+import {RENDER_VERSION} from '../../server/order-confirmation/contract.js';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { PDFDocument, PDFName, PDFArray, PDFDict, PDFString, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
@@ -7,12 +8,14 @@ import * as text from './orderDocText';
 import { confirmationHtml, evidenceHtml, renderUnsigned, renderSigned } from '../../server/order-confirmation/renderer.js';
 
 const url = 'https://example.test/order-sign#synthetic-test-capability';
-const snapshot = {data:{id:'00000000-0000-4000-8000-000000000001',order_number:'QA-LOCAL',client_name:'לקוח בדיקה',total_price:120,vat_applicable:true,notes:'הערה ללקוח',internal_notes:'DO-NOT-RENDER',quotation_snapshot:{selected_activities:[{activity_name:'טיפוס',quantity:2,price_per_person:60,line_total:120}]}},text,renderVersion:'1',acceptanceVersion:'1',acceptanceText:'אני מאשר/ת את אישור ההזמנה ותנאיו הכלליים בלבד.'};
+const snapshot = {data:{id:'00000000-0000-4000-8000-000000000001',order_number:'QA-LOCAL',client_name:'לקוח בדיקה',total_price:120,vat_applicable:true,notes:'הערה ללקוח',internal_notes:'DO-NOT-RENDER',quotation_snapshot:{selected_activities:[{activity_name:'טיפוס',quantity:2,price_per_person:60,line_total:120}]}},text,renderVersion:RENDER_VERSION,acceptanceVersion:'1',acceptanceText:'אני מאשר/ת את אישור ההזמנה ותנאיו הכלליים בלבד.'};
 const evidence = {fullName:'לקוח בדיקה',strokes:[[{x:.1,y:.1},{x:.4,y:.8},{x:.9,y:.2}]],signedAt:'2026-10-11T10:00:00Z',revisionId:snapshot.data.id,revisionHash:'a'.repeat(64),acceptanceText:snapshot.acceptanceText,acceptanceVersion:'1'};
 
 describe('confirmation PDF security and frozen copy',()=>{
  it('renders Hebrew frozen content and real anchor, without internal notes',()=>{
   const html=confirmationHtml(snapshot,url);
+  expect(()=>confirmationHtml({...snapshot,renderVersion:'1'},url)).not.toThrow();
+  expect(()=>confirmationHtml({...snapshot,renderVersion:'unsupported'},url)).toThrow('invalid_confirmation_snapshot');
   expect(html).toContain('dir="rtl"');expect(html).toContain('לקוח בדיקה');
   expect(html).toContain(`href="${url}"`);expect(html).toContain('הערה ללקוח');
   expect(html).not.toContain('DO-NOT-RENDER');

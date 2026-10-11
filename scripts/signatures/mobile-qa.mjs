@@ -9,6 +9,7 @@ import {resolve} from 'node:path';
 import {build} from '../../app/node_modules/vite/dist/node/index.js';
 import {validSignature} from '../../app/src/lib/signature.js';
 import {normalizeIsraeliId} from '../../app/src/lib/israeliId.js';
+import {RENDER_VERSION} from '../../app/server/order-confirmation/contract.js';
 import {renderUnsigned} from '../../app/server/order-confirmation/renderer.js';
 import * as frozenText from '../../app/src/lib/orderDocText.js';
 const require=createRequire(new URL('../../app/package.json',import.meta.url));
@@ -19,7 +20,7 @@ const src=fileURLToPath(new URL('../../app/src/',import.meta.url));
 
 export async function fixture(origin) {
  const token=randomBytes(32).toString('base64url');
- const snapshot={data:{id:'00000000-0000-4000-8000-000000000001',order_number:'SYNTHETIC-MOBILE-QA',client_name:'Mobile Tester',total_price:120,vat_applicable:true,notes:'SYNTHETIC QA ONLY - NO REAL ORDER',quotation_snapshot:{selected_activities:[{activity_name:'Synthetic QA activity',quantity:2,price_per_person:60,line_total:120}]}},text:frozenText,renderVersion:'1',acceptanceVersion:'1',acceptanceText:'Synthetic QA acceptance only - no real order.'};
+ const snapshot={data:{id:'00000000-0000-4000-8000-000000000001',order_number:'SYNTHETIC-MOBILE-QA',client_name:'Mobile Tester',total_price:120,vat_applicable:true,notes:'SYNTHETIC QA ONLY - NO REAL ORDER',quotation_snapshot:{selected_activities:[{activity_name:'Synthetic QA activity',quantity:2,price_per_person:60,line_total:120}]}},text:frozenText,renderVersion:RENDER_VERSION,acceptanceVersion:'1',acceptanceText:'Synthetic QA acceptance only - no real order.'};
  const bytes=await renderUnsigned(snapshot,`${origin}/order-sign#${token}`);
  let signed=false;
  return {pdf:bytes, async api(body) {

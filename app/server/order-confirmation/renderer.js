@@ -24,7 +24,7 @@ function shell(body) {
 function validateSnapshot(snapshot) {
  const t=snapshot?.text;
  const required=['ORDER_TERMS_INTRO','MOBILE_CONTACT','SAFETY_TITLE','SAFETY_GROUP_FIELD','SAFETY_SIGNATURE','SAFETY_MINORS_HEADER','SAFETY_MINORS_TEXT','SAFETY_CONTACT'];
- if(!snapshot?.data || snapshot.renderVersion !== '1' || !t || required.some(key=>typeof t[key]!=='string'||!t[key].trim()) || ['ORDER_TERMS','SAFETY_RULES','SAFETY_DECLARATION'].some(key=>!Array.isArray(t[key])||!t[key].length||t[key].some(value=>typeof value!=='string'||!value.trim())) || !Array.isArray(t.SIGNATURE_BLOCK?.closing) || !snapshot.acceptanceText || !snapshot.acceptanceVersion)throw new Error('invalid_confirmation_snapshot');
+ if(!snapshot?.data || !['1','2'].includes(snapshot.renderVersion) || !t || required.some(key=>typeof t[key]!=='string'||!t[key].trim()) || ['ORDER_TERMS','SAFETY_RULES','SAFETY_DECLARATION'].some(key=>!Array.isArray(t[key])||!t[key].length||t[key].some(value=>typeof value!=='string'||!value.trim())) || !Array.isArray(t.SIGNATURE_BLOCK?.closing) || !snapshot.acceptanceText || !snapshot.acceptanceVersion)throw new Error('invalid_confirmation_snapshot');
  return t;
 }
 

@@ -1,10 +1,19 @@
 ﻿import {describe,it,expect,vi} from 'vitest';
 import {createSignatureHandler} from '../../server/order-confirmation/handler.js';
-import {sha256} from '../../server/order-confirmation/contract.js';
+import {confirmationHtml} from '../../server/order-confirmation/renderer.js';
+import {sha256,RENDER_VERSION} from '../../server/order-confirmation/contract.js';
 const token='a'.repeat(43), id='98000000-0000-4000-8000-000000000001';
 const request=(body,headers={})=>new Request('https://example.invalid/api/order-confirmation',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
 function deps(){return {authorize:vi.fn(async()=>id),rateLimit:vi.fn(async()=>true),action:vi.fn(async()=>({id,revision_number:1,status:'pending',snapshot:{data:{},text:{}},unsigned_path:id+'/unsigned.pdf',unsigned_hash:'hash'})),readPdf:vi.fn(async()=>Buffer.from('%PDF-test')),writePdf:vi.fn(),renderUnsigned:vi.fn(async()=>Buffer.from('%PDF-test')),renderSigned:vi.fn(async()=>Buffer.from('%PDF-signed')),origin:'https://example.invalid',days:7};}
 describe('order signature HTTP boundary',()=>{
+ it('renders a created snapshot using the current server render version',async()=>{
+  const d=deps();
+  d.action.mockImplementation(async(action,input)=>action==='create'?{id,status:'preparing',snapshot:{data:{order_number:'QA-CURRENT'},text:input.text,renderVersion:input.renderVersion,acceptanceText:input.acceptanceText,acceptanceVersion:input.acceptanceVersion}}:{id,status:'pending'});
+  d.renderUnsigned.mockImplementation(async(snapshot,url)=>Buffer.from(confirmationHtml(snapshot,url)));
+  const response=await createSignatureHandler(d)(request({action:'create',orderId:id}));
+  expect(response.status).toBe(200);expect(d.renderUnsigned.mock.calls[0][0].renderVersion).toBe(RENDER_VERSION);
+  expect(d.action.mock.calls.some(([action])=>action==='ready')).toBe(true);
+ });
  it('rejects invalid optional legacy ID before claiming and never echoes it',async()=>{
   const d=deps(),handler=createSignatureHandler(d);
   for(const signerId of ['','012345675',123456782]) {
