@@ -32,3 +32,16 @@ Reconcile against current `dpl_AZDsa7wHok7P5ttYhWA5R3d17cHZ` and its exact 197-f
 Never roll back by deleting evidence or dropping the new column. Earlier frontend clients cannot submit without ID after the migration; refresh them. Preserve the previous deployment for application rollback, but retain required-ID enforcement; old application signing would fail safely until the compatible app is restored.
 
 After read-only smoke checks, stop before creating revision 2. User prepares a NEW revision of ORD-1044, checks invalid/valid ID, finger capture/clear/redraw/acceptance, signed admin identity, and signed PDF ink/name/ID/time in both the phone viewer and Windows Edge. Separate safety/minor lines must remain blank. Final production verification is pending that retest.
+
+## Executed release receipt
+
+- Candidate commit: `5d22c2faa3e079584ac83f81a8fd38e03650a11f`; no push/merge.
+- Final focused regression: **98 tests / 13 files passed**, 20.88 seconds, bounded at 300 seconds. Final build passed with only the existing Browserslist age warning. Exact signer field label verified: `תעודת זהות של החותם`.
+- Live source reconciled against all 197 files of the preceding deployment. Seven runtime replacements and one addition; 190 unrelated files preserved byte-for-byte. All 198 staged source hashes verified.
+- New live deployment: `dpl_52EaC8ywLTt2CcqQDeXS9peVSk5G`, promoted `2026-10-11T12:47:43.703Z`; Node 24.x. Predecessor retained for rollback.
+- Only migration `202610110002_order_confirmation_signer_id.sql` applied, verified `2026-10-11T12:47:08.765Z`; SHA256 `6761793c814b37c9d4de610a6146c255a289943f8db7d3919c8c5175283647dd`. Existing no-internal-ledger convention preserved. Do not replay.
+- Final read-only checks at `2026-10-11T12:48:18.334Z`: historical row values unchanged (excluding the new null column), storage metadata/artifacts unchanged, 35 business-table fingerprints unchanged, all other public functions unchanged. Exactly one signed revision and zero in-flight revisions; no new revision created.
+- Authorized history reports legacy/pre-ID revision 1; instructor denied. Anonymous direct table/RPC access denied (401 / SQL 42501), unauthenticated staff denied (401), invalid link generic 404, public page 200 with no-store/no-referrer, client bundle service-credential scan passed.
+- Authenticated live admin dialog shows the legacy label, signed status, preserved revision-1 download and prepare control, with no history error and no revision 2.
+- No Edge deployment, environment/secret change, Meta/WABA change, external message, provider operation or unrelated business change. Git auto-deployment remains blocked and policy unchanged.
+- Physical retest: **PENDING**. Production status remains **NOT VERIFIED**.

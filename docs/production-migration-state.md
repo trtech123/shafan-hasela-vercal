@@ -1,5 +1,9 @@
 # Production migration state
 
+## Order signature signer ID — 2026-10-11
+
+Installed and verified at `2026-10-11T12:47:08.765Z`: `202610110002_order_confirmation_signer_id.sql`; SHA256 `6761793c814b37c9d4de610a6146c255a289943f8db7d3919c8c5175283647dd`. Do not replay. Adds private `signer_id` evidence, checksum validation and future-signing requirement; legacy signed evidence/PDFs unchanged and not backfilled. Service-only action RPC replaced narrowly. Existing no-internal-ledger convention unchanged. See `docs/releases/order-signature-id-ink-20261011.md`. Physical retest remains pending.
+
 ## Order confirmation signatures — 2026-10-11
 
 Installed and verified: `202610110001_order_confirmation_signatures.sql`; SHA256 `e2cc7f144677114d318bf3ea87edcc78cd730fe45dbecd50e4eaff47ab7b47fe`. Do not replay. Live markers: four signature tables, service-only `order_signature_action`, `order_signature_delivery`, `order_signature_rate_limit`, and private `order-signatures-private` bucket. No internal migration ledger introduced. See `docs/releases/order-confirmation-signature-20261011.md`. Release is awaiting the user's physical-phone test; preserve all evidence on rollback.
