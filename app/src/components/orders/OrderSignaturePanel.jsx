@@ -21,7 +21,7 @@ export default function OrderSignaturePanel({orderId,email='',onBusyChange,onCus
  useEffect(()=>{refresh().catch(()=>setMessage('לא ניתן לטעון את היסטוריית האישורים כרגע.'));},[refresh]);
  const perform=async operation=>{
   if(locked.current)return;locked.current=true;setBusy(true);onBusyChange?.(true);setMessage('');
-  try{await operation();}catch(error){if(error.message==='billing_customer_incomplete'){await refresh();setMessage('יש להשלים את פרטי הלקוח לפני הכנת האישור.');return;}setMessage('הפעולה לא הושלמה או שמצבה עדיין אינו ידוע. רעננו מצב לפני ניסיון נוסף.');}finally{locked.current=false;setBusy(false);onBusyChange?.(false);}
+  try{await operation();}catch(error){if(error.message==='billing_customer_incomplete'){setLoaded(false);try{await refresh();setMessage('יש להשלים את פרטי הלקוח לפני הכנת האישור.');}catch{setLoaded(false);setMessage('יש להשלים את פרטי הלקוח לפני הכנת האישור. לא ניתן לרענן כרגע; נסו לרענן חתימות ושליחות שוב.');}return;}setMessage('הפעולה לא הושלמה או שמצבה עדיין אינו ידוע. רעננו מצב לפני ניסיון נוסף.');}finally{locked.current=false;setBusy(false);onBusyChange?.(false);}
  };
  const create=()=>perform(async()=>{setLink('');const result=await signatureRequest({action:'create',orderId},{staff:true});setLink(result.signingUrl);await refresh();});
  const download=(revision,signed)=>perform(async()=>{const pdf=await signatureRequest({action:'pdf',revisionId:revision.id,signed},{staff:true});downloadConfirmation(pdf,`order-confirmation-v${revision.revision_number}${signed?'-signed':''}.pdf`);});

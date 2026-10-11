@@ -54,3 +54,18 @@ it('blocks preparation with actionable billing readiness details',async()=>{
  expect(screen.getByRole('button',{name:'הכנת אישור לחתימה'}).disabled).toBe(true);
  expect(screen.getByRole('button',{name:'השלמת פרטי לקוח ועדכון ההזמנה'})).toBeTruthy();
 });
+
+it('keeps actionable guidance and disables preparation when readiness recovery fails',async()=>{
+ let histories=0;
+ signatureRequest.mockImplementation(async body=>{
+  if(body.action==='create')throw Error('billing_customer_incomplete');
+  if(++histories>1)throw Error('offline');
+  return {readiness:[],revisions:[],deliveries:[]};
+ });
+ render(<OrderSignaturePanel orderId="order"/>);
+ await screen.findByText('טרם הוכנה גרסת אישור לחתימה.');
+ fireEvent.click(screen.getByRole('button',{name:'הכנת אישור לחתימה'}));
+ await screen.findByText('יש להשלים את פרטי הלקוח לפני הכנת האישור. לא ניתן לרענן כרגע; נסו לרענן חתימות ושליחות שוב.');
+ expect(screen.getByRole('button',{name:'הכנת אישור לחתימה'}).disabled).toBe(true);
+ expect(screen.getByRole('button',{name:'רענון חתימות ושליחות'}).disabled).toBe(false);
+});
