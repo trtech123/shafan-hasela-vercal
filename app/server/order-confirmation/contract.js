@@ -2,7 +2,7 @@ import {normalizeIsraeliId} from '../../src/lib/israeliId.js';
 import {createHash, randomBytes} from 'node:crypto';
 
 export const ACCEPTANCE_VERSION = '1';
-export const RENDER_VERSION = '2';
+export const RENDER_VERSION = '3';
 export const ACCEPTANCE_TEXT = 'קראתי את אישור ההזמנה המצורף ואני מאשר/ת את פרטי ההזמנה ואת תנאי ההתקשרות המופיעים בו. חתימה זו מאשרת את ההזמנה בלבד ואינה מחליפה חתימות על הצהרות בטיחות, בריאות או אישור הורים.';
 export const BUCKET = 'order-signatures-private';
 export const sha256 = value => createHash('sha256').update(value).digest('hex');

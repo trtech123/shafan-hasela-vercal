@@ -2,8 +2,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-import { PDFDocument, PDFName } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFDict, PDFNumber } from 'pdf-lib';
 import { orderConfirmationModel } from '../../src/lib/orderConfirmation.js';
+import { canonicalJson, sha256 } from './contract.js';
 
 const font = readFileSync(new URL('./assets/Heebo.ttf', import.meta.url)).toString('base64');
 const logo = readFileSync(new URL('../../public/shafan-logo.jpg', import.meta.url)).toString('base64');
@@ -24,13 +25,18 @@ function shell(body) {
 function validateSnapshot(snapshot) {
  const t=snapshot?.text;
  const required=['ORDER_TERMS_INTRO','MOBILE_CONTACT','SAFETY_TITLE','SAFETY_GROUP_FIELD','SAFETY_SIGNATURE','SAFETY_MINORS_HEADER','SAFETY_MINORS_TEXT','SAFETY_CONTACT'];
- if(!snapshot?.data || !['1','2'].includes(snapshot.renderVersion) || !t || required.some(key=>typeof t[key]!=='string'||!t[key].trim()) || ['ORDER_TERMS','SAFETY_RULES','SAFETY_DECLARATION'].some(key=>!Array.isArray(t[key])||!t[key].length||t[key].some(value=>typeof value!=='string'||!value.trim())) || !Array.isArray(t.SIGNATURE_BLOCK?.closing) || !snapshot.acceptanceText || !snapshot.acceptanceVersion)throw new Error('invalid_confirmation_snapshot');
+ if(!snapshot?.data || !['1','2','3'].includes(snapshot.renderVersion) || !t || required.some(key=>typeof t[key]!=='string'||!t[key].trim()) || ['ORDER_TERMS','SAFETY_RULES','SAFETY_DECLARATION'].some(key=>!Array.isArray(t[key])||!t[key].length||t[key].some(value=>typeof value!=='string'||!value.trim())) || !Array.isArray(t.SIGNATURE_BLOCK?.closing) || !snapshot.acceptanceText || !snapshot.acceptanceVersion)throw new Error('invalid_confirmation_snapshot');
  return t;
 }
 
 export function confirmationHtml(snapshot, signingUrl) {
- const t=validateSnapshot(snapshot),url=new URL(signingUrl);
+ const url=new URL(signingUrl);
  if(url.protocol!=='https:' || url.username || url.password)throw new Error('invalid_signing_url');
+ return confirmationDocument(snapshot,`<a class="sign-link" href="${escape(url.href)}">לצפייה באישור ההזמנה ולחתימה דיגיטלית</a>`);
+}
+
+function confirmationDocument(snapshot, acceptanceDetails) {
+ const t=validateSnapshot(snapshot);
  const m=orderConfirmationModel(snapshot.data),c=m.customer;
  return shell(`<header><div><h1>אישור הזמנה</h1>${paragraph(m.orderNumber)}${paragraph(`תאריך ההזמנה: ${date(snapshot.data.created_at)}`)}${snapshot.revisionNumber?paragraph(`גרסה: ${snapshot.revisionNumber}`):''}</div><img src="data:image/jpeg;base64,${logo}" alt="${escape(t.BRAND?.name)}"></header>
  <div class="grid"><section><h2>פרטי לקוח</h2>${paragraphs([c.client_name,c.organization,c.client_phone,c.client_email])}</section><section><h2>פרטי האירוע</h2>${paragraphs([date(m.date),[m.start?.slice(0,5),m.end?.slice(0,5)].filter(Boolean).join('–'),m.site,m.participants===null?'':`${m.participants} משתתפים`])}</section></div>
@@ -39,7 +45,7 @@ export function confirmationHtml(snapshot, signingUrl) {
  <section>${paragraph(`סטטוס תשלום: ${m.paymentStatus}`)}${m.subtotal!==null?paragraph(`סכום הפריטים השמור בהצעה: ${money(m.subtotal)}`):''}${m.discount>0?paragraph(`הנחה שמורה בהצעה: ${money(m.discount)}`):''}<p class="total">סה״כ ההזמנה: ${escape(money(m.total))}</p>${paragraph(m.vatLabel)}</section>
  ${[['הערות להזמנה',m.notes],['הערות שמורות מהצעת המחיר',m.quotationNotes]].filter(([,value])=>value).map(([title,value])=>`<section><h2>${title}</h2>${paragraph(value)}</section>`).join('')}
  <section><h2>${escape(t.ORDER_TERMS_INTRO)}</h2>${numbered(t.ORDER_TERMS)}</section>
- <section class="acceptance"><h2>אישור וחתימה דיגיטלית</h2>${paragraph(snapshot.acceptanceText)}<a class="sign-link" href="${escape(url.href)}">לצפייה באישור ההזמנה ולחתימה דיגיטלית</a><p class="muted">החתימה מתייחסת לגרסה זו ולתנאיה הכלליים בלבד. הצהרות הבטיחות והקטינים להלן דורשות אישורים נפרדים; החתימה הדיגיטלית אינה ממלאת אותן.</p></section>
+ <section class="acceptance"><h2>אישור וחתימה דיגיטלית</h2>${paragraph(snapshot.acceptanceText)}${acceptanceDetails}<p class="muted">החתימה מתייחסת לגרסה זו ולתנאיה הכלליים בלבד. הצהרות הבטיחות והקטינים להלן דורשות אישורים נפרדים; החתימה הדיגיטלית אינה ממלאת אותן.</p></section>
  ${paragraphs(t.SIGNATURE_BLOCK.closing || [])}${paragraph(t.MOBILE_CONTACT)}
  <section class="safety"><h2>${escape(t.SAFETY_TITLE)}</h2>${paragraph(t.SAFETY_GROUP_FIELD)}${numbered(t.SAFETY_RULES)}${paragraphs(t.SAFETY_DECLARATION)}${paragraph(t.SAFETY_SIGNATURE)}<h3>${escape(t.SAFETY_MINORS_HEADER)}</h3>${paragraph(t.SAFETY_MINORS_TEXT)}${paragraph(t.SAFETY_SIGNATURE)}</section><footer>${escape(t.SAFETY_CONTACT)}<p>גרסת מסמך: ${escape(snapshot.renderVersion)} · גרסת הסכמה: ${escape(snapshot.acceptanceVersion)}</p></footer>`);
 }
@@ -58,9 +64,13 @@ function signatureSvg(strokes) {
 }
 
 export function evidenceHtml(evidence) {
+ validateSnapshot(evidence.snapshot);
+ if(sha256(canonicalJson(evidence.snapshot))!==evidence.revisionHash)throw new Error('snapshot_hash_mismatch');
+ if(!evidence.revisionId||evidence.snapshot.revisionId!==evidence.revisionId)throw new Error('snapshot_revision_mismatch');
+ if(evidence.snapshot.acceptanceText!==evidence.acceptanceText||evidence.snapshot.acceptanceVersion!==evidence.acceptanceVersion)throw new Error('snapshot_acceptance_mismatch');
  const signedAt=new Date(evidence.signedAt);
  if(!Number.isFinite(signedAt.getTime())||typeof evidence.fullName!=='string'||evidence.fullName.trim().length<2||evidence.fullName.length>120||!evidence.acceptanceText)throw new Error('invalid_signature_evidence');
- return shell(`<h1>אישור וחתימה דיגיטלית</h1><p>המסמך המקורי מופיע בעמודים הקודמים. חתימה זו קשורה רק לגרסה המזוהה להלן.</p><section class="acceptance">${paragraph(evidence.acceptanceText)}${paragraph(`שם החותם: ${evidence.fullName}`)}${evidence.signerId?paragraph(`תעודת זהות: ${evidence.signerId}`):''}${paragraph(`תאריך ושעת חתימה (שעון ישראל): ${signedAt.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'})}`)}<p>חתימה — אישור הלקוח להזמנה ולתנאים הכלליים:</p>${signatureSvg(evidence.strokes)}</section><p>אישור מפורש של ההזמנה והתנאים הכלליים. אין בכך חתימה על הצהרות בטיחות או קטינים נפרדות.</p><p>מזהה גרסת האישור:</p><p class="hash">${escape(evidence.revisionId)}</p><p>טביעת גרסת האישור (SHA-256):</p><p class="hash">${escape(evidence.revisionHash)}</p><p>טביעת המסמך המקורי (SHA-256):</p><p class="hash">${escape(evidence.unsignedHash)}</p><p>גרסת הסכמה: ${escape(evidence.acceptanceVersion)}</p>`);
+ return confirmationDocument(evidence.snapshot,`${paragraph(`שם החותם: ${evidence.fullName}`)}${evidence.signerId?paragraph(`תעודת זהות: ${evidence.signerId}`):''}${paragraph('חתימה:')}${signatureSvg(evidence.strokes)}${paragraph(`נחתם בתאריך: ${signedAt.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'})} (שעון ישראל)`)}`);
 }
 
 async function launch() {
@@ -80,37 +90,60 @@ async function render(html) {
   await page.setRequestInterception(true);
   page.on('request',request=>{if(request.url().startsWith('data:')||request.url()==='about:blank')void request.continue();else void request.abort();});
   await page.setContent(html,{waitUntil:'load',timeout:15000});
+  let signatureDimensions;
   const signature=await page.$('svg.signature');
   if(signature){
    // Flatten only the trusted, bounded signature drawing into high-resolution
    // PNG ink. Reader-specific vector clipping/printing behavior must not control
-   // visibility of acceptance evidence. Original confirmation pages stay intact.
+   // visibility of acceptance evidence.
    const ink=await signature.screenshot({type:'png',omitBackground:false});
+   const png=Buffer.from(ink);
+   signatureDimensions={width:png.readUInt32BE(16),height:png.readUInt32BE(20)};
    const image=`<img class="signature" alt="חתימת הלקוח" src="data:image/png;base64,${Buffer.from(ink).toString('base64')}">`;
    await page.setContent(html.replace(/<svg class="signature"[\s\S]*?<\/svg>/,image),{waitUntil:'load',timeout:15000});
   }
   const bytes=Buffer.from(await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,waitForFonts:true,timeout:20000}));
   const pdf=await PDFDocument.load(bytes);
   if(pdf.getPageCount()>100||bytes.length>10*1024*1024)throw new Error('confirmation_too_large');
-  return bytes;
+  return {bytes,signatureDimensions};
  }finally{await browser.close();}
 }
 
-export function renderUnsigned(snapshot, signingUrl) { return render(confirmationHtml(snapshot,signingUrl)); }
+export async function renderUnsigned(snapshot, signingUrl) { return (await render(confirmationHtml(snapshot,signingUrl))).bytes; }
+
+function signaturePage(pdf, dimensions) {
+ if(!dimensions)throw new Error('signature_image_missing');
+ const matches=[];
+ for(const page of pdf.getPages()){
+  const visited=new Set();
+  const scan=resources=>{
+   const objects=resources?.lookupMaybe(PDFName.of('XObject'),PDFDict);
+   for(const ref of objects?.values()||[]){
+    const object=pdf.context.lookup(ref);
+    if(!object?.dict||visited.has(object))continue;
+    visited.add(object);
+    const subtype=object.dict.get(PDFName.of('Subtype'))?.toString();
+    if(subtype==='/Image'&&object.dict.lookupMaybe(PDFName.of('Width'),PDFNumber)?.asNumber()===dimensions.width&&object.dict.lookupMaybe(PDFName.of('Height'),PDFNumber)?.asNumber()===dimensions.height)matches.push(page);
+    if(subtype==='/Form')scan(object.dict.lookupMaybe(PDFName.of('Resources'),PDFDict));
+   }
+  };
+  scan(page.node.Resources());
+ }
+ if(matches.length!==1)throw new Error('signature_image_ambiguous_or_missing');
+ return matches[0];
+}
 
 export async function renderSigned(unsignedBytes, evidence) {
  if(createHash('sha256').update(unsignedBytes).digest('hex')!==evidence.unsignedHash)throw new Error('unsigned_artifact_hash_mismatch');
- const original=await PDFDocument.load(unsignedBytes);
- const appendix=await PDFDocument.load(await render(evidenceHtml(evidence)));
- const pages=await original.copyPages(appendix,appendix.getPageIndices());
- for(const page of pages)original.addPage(page);
- // Preserve the byte-for-byte unsigned original, not only its visual pages.
- await original.attach(unsignedBytes,'original-confirmation.pdf',{mimeType:'application/pdf',description:'Original frozen confirmation; SHA-256 '+evidence.unsignedHash});
- // Preserve frozen pages, but open new signed artifacts at the actual ink.
- // This is a standard PDF destination, not a script or external viewer link.
- original.catalog.set(PDFName.of('OpenAction'),original.context.obj([pages[0].ref,PDFName.of('Fit')]));
- original.setTitle('אישור הזמנה חתום');
- const signed=Buffer.from(await original.save());
+ // Rebuild solely from the hash-bound frozen revision. The unsigned archive is
+ // immutable; its signing CTA is replaced only in this new signed artifact.
+ const rendered=await render(evidenceHtml(evidence));
+ const signedPdf=await PDFDocument.load(rendered.bytes);
+ const inkPage=signaturePage(signedPdf,rendered.signatureDimensions);
+ await signedPdf.attach(unsignedBytes,'original-confirmation.pdf',{mimeType:'application/pdf',description:'Original frozen confirmation; SHA-256 '+evidence.unsignedHash});
+ signedPdf.catalog.set(PDFName.of('OpenAction'),signedPdf.context.obj([inkPage.ref,PDFName.of('Fit')]));
+ signedPdf.setTitle('אישור הזמנה חתום');
+ const signed=Buffer.from(await signedPdf.save());
  if(signed.length>10*1024*1024)throw new Error('confirmation_too_large');
  return signed;
 }

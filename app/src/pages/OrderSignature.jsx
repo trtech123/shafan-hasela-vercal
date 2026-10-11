@@ -26,7 +26,12 @@ export default function OrderSignature() {
  },[]);
  const submit=async event=>{
   event.preventDefault();if(locked.current||!revision||!pdfUrl)return;
-  if(!submission.current && (!validSignerName(name)||!validSignature(signature)||!accepted)){setError('יש להזין שם מלא, לצייר חתימה ולאשר את תנאי ההזמנה.');return;}
+  if(!submission.current){
+   if(!name.trim()){setError('יש להזין שם מלא: שם פרטי ושם משפחה.');return;}
+   if(!validSignerName(name)){setError('יש להזין שם פרטי ושם משפחה תקינים, באותיות.');return;}
+   if(!validSignature(signature)){setError('יש לצייר חתימה באצבע או בעכבר לפני האישור.');return;}
+   if(!accepted){setError('יש לסמן שקראתם ואישרתם את ההזמנה והתנאים הכלליים.');return;}
+  }
   locked.current=true;setBusy(true);setError('');
   if(!requestId.current)requestId.current=crypto.randomUUID();
   if(!submission.current)submission.current={action:'sign',token:token.current,requestId:requestId.current,fullName:name.trim(),strokes:signature.strokes,accepted:true};
@@ -41,12 +46,12 @@ export default function OrderSignature() {
    {revision&&pdfUrl&&<><p>גרסה {revision.revision_number} · הקישור בתוקף עד {new Date(revision.expires_at).toLocaleDateString('he-IL')}</p><p>יש לעיין במסמך המלא לפני החתימה.</p>
     <a className="block font-semibold text-blue-700 underline" href={pdfUrl} target="_blank" rel="noopener noreferrer">פתיחת האישור המלא / הורדת PDF</a>
     <object aria-label="גרסת אישור ההזמנה לחתימה" data={pdfUrl} type="application/pdf" className="h-[65vh] w-full rounded border"><p>אם המסמך אינו מוצג במכשיר, פתחו אותו באמצעות הקישור מעל.</p></object>
-    <form onSubmit={submit} className="space-y-4">
+    <form noValidate onSubmit={submit} className="space-y-4">
      <label className="block">שם מלא<input autoComplete="name" maxLength={120} required disabled={busy||uncertain} value={name} onChange={event=>setName(event.target.value)} className="mt-1 block w-full rounded border p-3"/></label>
      <SignaturePad value={signature} onChange={setSignature} disabled={busy||uncertain} helpText="חתמו באצבע או בעכבר. אפשר לנקות ולחתום מחדש לפני האישור."/>
-     <label className="flex items-start gap-3"><input type="checkbox" checked={accepted} disabled={busy||uncertain} onChange={event=>setAccepted(event.target.checked)} className="mt-1 h-5 w-5"/><span>{revision.snapshot?.acceptanceText}</span></label>
+     <label className="flex min-h-12 cursor-pointer items-start gap-3 rounded border p-3"><input type="checkbox" aria-label="אישור ההזמנה והתנאים הכלליים" checked={accepted} disabled={busy||uncertain} onChange={event=>setAccepted(event.target.checked)} className="mt-1 h-6 w-6 shrink-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"/><span>{revision.snapshot?.acceptanceText}</span></label>
      <p className="text-sm text-slate-600">החתימה מאשרת את ההזמנה ואת התנאים הכלליים שהוצגו. היא אינה מחליפה חתימות נפרדות על הצהרות בטיחות או קטינים.</p>
-     <Button type="submit" disabled={busy||(!uncertain&&(!accepted||!validSignature(signature)||!validSignerName(name)))}>{busy?'שומר חתימה...':uncertain?'בדיקת ושמירת אותה חתימה':'אישור וחתימה'}</Button>
+     <Button type="submit" disabled={busy}>{busy?'שומר חתימה...':uncertain?'בדיקת ושמירת אותה חתימה':'אישור וחתימה'}</Button>
     </form></>}
   </>}
   {error&&<p role="alert" className="text-red-700">{error}</p>}

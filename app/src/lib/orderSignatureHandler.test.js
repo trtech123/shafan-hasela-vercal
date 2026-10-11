@@ -39,6 +39,7 @@ describe('order signature HTTP boundary',()=>{
   d.action.mockResolvedValueOnce(row).mockResolvedValueOnce({...row,status:'signed'});d.writePdf.mockResolvedValue(signed);
   const r=await createSignatureHandler(d)(request({action:'sign',token,requestId:id,signerId:'012345674',fullName:row.full_name,strokes:row.strokes,accepted:true}));
   expect(r.status).toBe(200);expect(d.renderSigned.mock.calls[0][0]).toEqual(unsigned);expect(d.renderSigned.mock.calls[0][1].acceptanceText).toBe('Frozen text');
+  expect(d.renderSigned.mock.calls[0][1].snapshot).toBe(row.snapshot);
   expect(d.renderSigned.mock.calls[0][1].signerId).toBe('012345674');expect(d.action.mock.calls[0][1].signerId).toBe('012345674');expect(d.writePdf.mock.calls[0][0]).toBe(id+'/'+id+'-signed.pdf');expect(d.action.mock.calls[1]).toEqual(['finish',expect.objectContaining({signedHash:sha256(signed)})]);
  });
  it('a failed upload never finalizes and a committed replay never renders again',async()=>{

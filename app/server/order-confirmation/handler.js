@@ -58,7 +58,7 @@ export function createSignatureHandler(deps) {
         if(r.status==='signed') return json(signedResult(r));
         const unsigned=await deps.readPdf(r.unsigned_path);
         if(sha256(unsigned)!==r.unsigned_hash) throw new SignatureError('artifact_unavailable',503);
-        const evidence={fullName:r.full_name,signerId:r.signer_id,strokes:r.strokes,signedAt:r.signed_at,revisionHash:r.revision_hash,unsignedHash:r.unsigned_hash,acceptanceText:r.snapshot.acceptanceText,acceptanceVersion:r.snapshot.acceptanceVersion,revisionId:r.id};
+        const evidence={snapshot:r.snapshot,fullName:r.full_name,signerId:r.signer_id,strokes:r.strokes,signedAt:r.signed_at,revisionHash:r.revision_hash,unsignedHash:r.unsigned_hash,acceptanceText:r.snapshot.acceptanceText,acceptanceVersion:r.snapshot.acceptanceVersion,revisionId:r.id};
         // An immutable deterministic object key makes crash retries and competing
         // identical requests converge on exactly the same stored evidence PDF.
         const signed=await deps.writePdf(r.id+'/'+body.requestId+'-signed.pdf',await deps.renderSigned(unsigned,evidence));
