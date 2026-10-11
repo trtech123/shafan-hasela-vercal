@@ -35,6 +35,7 @@ import AccountingOperations from './pages/AccountingOperations';
 import PelecardTransactions from './pages/PelecardTransactions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import DataDeletion from './pages/DataDeletion';
+import OrderSignature from './pages/OrderSignature';
 
 const PaymentReturnRoute = () => {
   const location = useLocation();
@@ -105,6 +106,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/data-deletion" element={<DataDeletion />} />
+            <Route path="/order-sign" element={<OrderSignature />} />
             <Route path="/*" element={<AuthenticatedApp />} />
           </Routes>
         </Router>

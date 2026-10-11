@@ -26,4 +26,4 @@ export function orderConfirmationModel(order) {
   if (legacy) items.push({name:'פירוט פעילות/מוצר היסטורי לא נשמר',quantity:numeric(order.num_participants),unit:numeric(order.price_per_person),total:numeric(order.total_price),description:'מוצגים רק נתונים שנשמרו בהזמנה. פרטים לא הושלמו מהקטלוג הנוכחי.'});
   return {orderNumber:order.order_number || '—',customer,vat,vatLabel,items,legacy,total:numeric(order.total_price),discount:numeric(quote.discount),subtotal:numeric(quote.total_price),paymentStatus:order.payment_status || 'לא תועד',date:order.activity_date,start:order.start_time,end:order.end_time,site:order.site,participants:numeric(order.num_participants),savedAt:order.updated_at || order.created_at,notes:order.notes,quotationNotes:quote.notes && quote.notes !== order.notes ? quote.notes : null};
 }
-export { deliveryStateText as orderDeliveryStateText } from './deliveryStatus';
+export { deliveryStateText as orderDeliveryStateText } from './deliveryStatus.js';

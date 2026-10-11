@@ -1,260 +1,37 @@
 // @vitest-environment jsdom
-
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import "@testing-library/jest-dom/vitest";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import OrderConfirmationPDF from "./OrderConfirmationPDF";
-
-const invokeMock = vi.fn();
-const toastErrorMock = vi.fn();
-const toastSuccessMock = vi.fn();
-
-vi.mock("@/api/supabaseClient", () => ({
-  supabase: {
-    functions: {
-      invoke: (...args) => invokeMock(...args),
-    },
-  },
-}));
-
-vi.mock("sonner", () => ({
-  toast: {
-    error: (...args) => toastErrorMock(...args),
-    success: (...args) => toastSuccessMock(...args),
-  },
-}));
-
-vi.mock("html2canvas", () => ({
-  default: vi.fn(async () => ({
-    width: 100,
-    height: 100,
-    toDataURL: () => "data:image/jpeg;base64,cGRm",
-  })),
-}));
-
-vi.mock("jspdf", () => ({
-  default: vi.fn(function MockJsPdf() {
-    return {
-      internal: {
-        pageSize: {
-          getWidth: () => 210,
-          getHeight: () => 297,
-        },
-      },
-      addImage: vi.fn(),
-      addPage: vi.fn(),
-      output: () => "data:application/pdf;base64,cGRm",
-      save: vi.fn(),
-    };
-  }),
-}));
-
-const order = {
-  id: "order-1",
-  order_number: "ORD-1",
-  client_name: "לקוח בדיקה",
-  client_phone: "0501234567",
-  client_email: "original@example.com",
-  activity_date: "2026-08-01",
-  num_participants: 4,
-  total_price: 400,
-};
-
-const activity = {
-  name: "פעילות בדיקה",
-};
-
-beforeEach(() => {
-  invokeMock.mockReset();
-  invokeMock.mockResolvedValue({ data: { ok: true }, error: null });
-  toastErrorMock.mockReset();
-  toastSuccessMock.mockReset();
-
-  class ReadyImage {
-    decode() {
-      return Promise.resolve();
-    }
-
-    set src(_value) {
-      queueMicrotask(() => this.onload?.());
-    }
-  }
-
-  vi.stubGlobal("Image", ReadyImage);
-});
-
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-});
-
-describe("OrderConfirmationPDF recipient email", () => {
-  test("shows a valid recipient in compact mode by default", () => {
-    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    expect(screen.getAllByText("original@example.com")).toHaveLength(2);
-    expect(screen.queryByLabelText("כתובת אימייל לשליחה")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "עריכת כתובת אימייל" })).toBeInTheDocument();
-  });
-
-  test("opens from the pencil and Done saves a valid trimmed recipient", () => {
-    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "עריכת כתובת אימייל" }));
-    const input = screen.getByLabelText("כתובת אימייל לשליחה");
-    expect(input).toHaveValue("original@example.com");
-
-    fireEvent.change(input, { target: { value: "  new@example.com  " } });
-    fireEvent.click(screen.getByRole("button", { name: "סיום" }));
-
-    expect(screen.queryByLabelText("כתובת אימייל לשליחה")).not.toBeInTheDocument();
-    expect(screen.getByText("new@example.com")).toBeInTheDocument();
-  });
-
-  test("keeps the editor open when Done receives an invalid recipient", async () => {
-    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "עריכת כתובת אימייל" }));
-    const input = screen.getByLabelText("כתובת אימייל לשליחה");
-    fireEvent.change(input, { target: { value: "new@example.com" } });
-    fireEvent.change(input, { target: { value: "invalid-email" } });
-    fireEvent.click(screen.getByRole("button", { name: "סיום" }));
-
-    expect(screen.getByLabelText("כתובת אימייל לשליחה")).toHaveValue("invalid-email");
-    expect(await screen.findByRole("alert")).toHaveTextContent("כתובת האימייל אינה תקינה");
-  });
-
-  test("opens the editor with the required message for an empty initial recipient", async () => {
-    render(
-      <OrderConfirmationPDF
-        order={{ ...order, client_email: "" }}
-        activity={activity}
-        onClose={() => {}}
-      />
-    );
-
-    expect(screen.getByLabelText("כתובת אימייל לשליחה")).toHaveValue("");
-    expect(await screen.findByRole("alert")).toHaveTextContent("יש להזין כתובת אימייל");
-  });
-
-  test("opens the editor with the format message for an invalid initial recipient", async () => {
-    render(
-      <OrderConfirmationPDF
-        order={{ ...order, client_email: "invalid-email" }}
-        activity={activity}
-        onClose={() => {}}
-      />
-    );
-
-    expect(screen.getByLabelText("כתובת אימייל לשליחה")).toHaveValue("invalid-email");
-    expect(await screen.findByRole("alert")).toHaveTextContent("כתובת האימייל אינה תקינה");
-  });
-
-  test("blocks Send and keeps the editor open for an invalid edit", async () => {
-    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "עריכת כתובת אימייל" }));
-    fireEvent.change(screen.getByLabelText("כתובת אימייל לשליחה"), {
-      target: { value: "invalid-email" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "שלח במייל" }));
-
-    expect(screen.getByLabelText("כתובת אימייל לשליחה")).toHaveValue("invalid-email");
-    expect(await screen.findByRole("alert")).toHaveTextContent("כתובת האימייל אינה תקינה");
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  test("sends to a valid recipient saved from edit mode", async () => {
-    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "עריכת כתובת אימייל" }));
-    fireEvent.change(screen.getByLabelText("כתובת אימייל לשליחה"), {
-      target: { value: "  new@example.com  " },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "סיום" }));
-    fireEvent.click(screen.getByRole("button", { name: "שלח במייל" }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith(
-        "send-order-doc",
-        expect.objectContaining({
-          body: expect.objectContaining({ to: "new@example.com" }),
-        })
-      );
-    });
-  });
-});
-
-describe("OrderConfirmationPDF WhatsApp Utility template", () => {
-  test("exposes one clearly named WhatsApp order action", () => {
-    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    expect(screen.getAllByRole("button", { name: /וואטסאפ|WA PDF/i })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /וואטסאפ/i })).not.toBeInTheDocument();
-  });
-
-  test("the single WhatsApp action sends the approved template contract with the order PDF", async () => {
-    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith("send-whatsapp", expect.objectContaining({
-        body: {
-          mode: "template",
-          phone: order.client_phone,
-          pdfBase64: "cGRm",
-          fileName: "אישור_הזמנה_ORD-1.pdf",
-          template: {
-            name: "order_confirmation_pdf",
-            language: "he",
-            bodyParameters: [order.client_name, order.order_number, "01/08/2026"],
-          },
-        },
-        signal: expect.any(AbortSignal),
-      }));
-    });
-
-    expect(await screen.findByRole("status")).toHaveTextContent("אישור ההזמנה נשלח בוואטסאפ");
-    expect(screen.getByRole("button", { name: "נשלח בוואטסאפ ✓" })).toBeInTheDocument();
-  });
-
-  test("shows a clear Hebrew status when Meta approval is pending", async () => {
-    invokeMock.mockResolvedValueOnce({
-      data: null,
-      error: {
-        context: new Response(JSON.stringify({
-          ok: false,
-          code: "template_pending",
-          error: "WhatsApp template is pending approval",
-        }), { status: 409, headers: { "Content-Type": "application/json" } }),
-      },
-    });
-    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" }));
-
-    await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith("תבנית WhatsApp עדיין ממתינה לאישור Meta");
-    });
-    expect(screen.getByRole("alert")).toHaveTextContent("תבנית WhatsApp עדיין ממתינה לאישור Meta");
-  });
-
-  test("leaves the sending state with a Hebrew error when the provider invocation times out", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    invokeMock.mockImplementationOnce(() => new Promise(() => {}));
-    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" }));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
-    });
-
-    expect(screen.getByRole("alert")).toHaveTextContent("WhatsApp לא הגיב בזמן");
-    expect(screen.getByRole("button", { name: "נסה לשלוח שוב בוואטסאפ" })).toBeEnabled();
-  });
+import {render,screen,cleanup} from '@testing-library/react';
+import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
+import OrderConfirmationPDF from './OrderConfirmationPDF';
+const mocks=vi.hoisted(()=>({rpc:vi.fn(),panel:vi.fn(),user:{role:'admin'}}));
+vi.mock('@/api/supabaseClient',()=>({supabase:{rpc:mocks.rpc}}));
+vi.mock('@/lib/AuthContext',()=>({useAuth:()=>({user:mocks.user})}));
+vi.mock('./OrderSignaturePanel',()=>({default:props=>{mocks.panel(props);return <section aria-label="revision management">Revision management</section>;}}));
+vi.mock('../quotes/quotePdf',()=>({buildQuotePdf:vi.fn()}));
+const order={id:'00000000-0000-4000-8000-000000000001',order_number:'UNTRUSTED-PROP',client_email:'mutable@example.invalid'};
+const document={version:'a'.repeat(32),can_send:true,data:{id:order.id,order_number:'FROZEN-1',client_name:'לקוח שמור',client_email:'saved@example.invalid',total_price:100,quotation_snapshot:{},notes:'הערה ללקוח'}};
+beforeEach(()=>{vi.clearAllMocks();mocks.user={role:'admin'};mocks.rpc.mockResolvedValue({data:document,error:null});});
+afterEach(cleanup);
+describe('order confirmation revision management integration',()=>{
+ it('loads canonical server document and exposes staff revision management',async()=>{
+  render(<OrderConfirmationPDF order={order} onClose={()=>{}}/>);
+  await screen.findByRole('region',{name:'revision management'});
+  expect(mocks.rpc).toHaveBeenCalledWith('order_confirmation_document',{p_order_id:order.id});
+  expect(mocks.panel.mock.calls[0][0]).toMatchObject({orderId:order.id,email:'saved@example.invalid'});
+  expect(screen.queryByText('UNTRUSTED-PROP')).toBeNull();expect(screen.getByText('FROZEN-1')).toBeTruthy();
+ });
+ it('keeps read-only access independent of managing invitations',async()=>{
+  mocks.user={role:'מדריך'};mocks.rpc.mockResolvedValue({data:{...document,can_send:false},error:null});
+  render(<OrderConfirmationPDF order={order} onClose={()=>{}}/>);
+  await screen.findByText('FROZEN-1');expect(mocks.panel).not.toHaveBeenCalled();
+  expect(screen.getByText(/האישור זמין לצפייה ולהורדה בלבד/)).toBeTruthy();
+ });
+ it('does not show management or use mutable props when the authoritative read fails',async()=>{
+  mocks.rpc.mockResolvedValue({data:null,error:{message:'denied'}});render(<OrderConfirmationPDF order={order} onClose={()=>{}}/>);
+  await screen.findByRole('alert');expect(mocks.panel).not.toHaveBeenCalled();expect(screen.queryByText('UNTRUSTED-PROP')).toBeNull();
+ });
+ it('clearly separates the live preview from archived signed revisions',async()=>{
+  render(<OrderConfirmationPDF order={order} onClose={()=>{}}/>);await screen.findByText('FROZEN-1');
+  expect(screen.getByText(/התצוגה להלן היא ההזמנה הנוכחית/)).toBeTruthy();
+  expect(mocks.rpc.mock.calls.map(([name])=>name)).toEqual(['order_confirmation_document']);
+ });
 });

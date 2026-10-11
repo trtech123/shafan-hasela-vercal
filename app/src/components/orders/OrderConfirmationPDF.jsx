@@ -7,7 +7,7 @@ import { boundedQuotationOperation } from '@/lib/quotations';
 import { canSendOrderConfirmation } from '@/lib/orderConfirmation';
 import { buildQuotePdf } from '../quotes/quotePdf';
 import OrderConfirmationDocument from './OrderConfirmationDocument';
-import OrderDeliveryPanel from './OrderDeliveryPanel';
+import OrderSignaturePanel from './OrderSignaturePanel';
 export default function OrderConfirmationPDF({order,onClose}) {
  const {user}=useAuth();const [document,setDocument]=useState(null),[loadError,setLoadError]=useState(''),[error,setError]=useState(''),[downloading,setDownloading]=useState(false),[sending,setSending]=useState(false);
  const docRef=useRef(null),inFlight=useRef(false);
@@ -23,7 +23,8 @@ export default function OrderConfirmationPDF({order,onClose}) {
   {!document&&!loadError&&<p role="status">טוען את פרטי ההזמנה השמורים...</p>}
   {(loadError||error)&&<p role="alert">{loadError||error}</p>}
   {document && <>
-   {document.can_send&&canSendOrderConfirmation(user?.role)?<OrderDeliveryPanel key={order.id+document.version} orderId={order.id} document={document} createPdf={createPdf} onBusyChange={setSending}/>:<p>האישור זמין לצפייה ולהורדה בלבד בהתאם להרשאות שלך.</p>}
+   {document.can_send&&canSendOrderConfirmation(user?.role)?<OrderSignaturePanel key={order.id+document.version} orderId={order.id} email={document.data.client_email} onBusyChange={setSending}/>:<p>האישור זמין לצפייה ולהורדה בלבד בהתאם להרשאות שלך.</p>}
+   <p className="text-sm text-slate-600">התצוגה להלן היא ההזמנה הנוכחית. המסמכים הקבועים והחתומים זמינים בהיסטוריית הגרסאות למעלה.</p>
    <div className="overflow-x-auto rounded-lg border bg-slate-100"><div ref={docRef}><OrderConfirmationDocument data={document.data}/></div></div>
   </>}
  </DialogContent></Dialog>;
