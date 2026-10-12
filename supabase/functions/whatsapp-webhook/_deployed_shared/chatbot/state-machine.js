@@ -20,7 +20,6 @@ const orderConfirmationPatterns = [
   "שלחו לי את אישור ההזמנה",
   "אני רוצה את אישור ההזמנה שלי",
 ];
-const greetings = new Set(["", "שלום", "היי", "אהלן", "בוקר טוב", "ערב טוב"]);
 
 function normalize(value) {
   return String(value ?? "")
@@ -206,16 +205,11 @@ export function advance({ content, session, input }) {
 
   if (session.currentState === "start") {
     const mainSession = enterMenu(session, "main", null);
-    if (!input.optionId && greetings.has(normalize(input.text))) {
-      return {
-        session: mainSession,
-        actions: [send("policy.welcome"), send("menu.main")],
-      };
-    }
     const firstResult = advance({ content, session: mainSession, input });
     return {
       session: firstResult.session,
-      actions: [send("policy.welcome"), ...firstResult.actions],
+      actions: firstResult.actions[0]?.responseId === "policy.welcome"
+        ? firstResult.actions : [send("policy.welcome"), ...firstResult.actions],
     };
   }
 
@@ -251,5 +245,12 @@ export function advance({ content, session, input }) {
     if (safety.pattern.test(text)) return { session, actions: [send(safety.responseId)] };
   }
 
-  return beginHandoff(session, input, "unknown_question");
+  // An invalid choice is not a request for a human or a new package selection.
+  if (menu && menu.id !== "main") {
+    return { session, actions: [send("policy.invalid_selection"), send(`menu.${menu.id}`)] };
+  }
+  return {
+    session: enterMenu(session, "main", null),
+    actions: [send("policy.welcome"), send("menu.main")],
+  };
 }

@@ -24,7 +24,7 @@
   "guardrails": {
     "specific_prices": "handoff_only",
     "missing_information": "handoff_only",
-    "unknown_question": "handoff_only",
+    "unknown_question": "state_based_navigation",
     "generative_factual_answers": false,
     "operational_data_access": false,
     "clubs_payments_accounting_access": false
@@ -32,6 +32,6 @@
   "global_commands": {
     "main_menu": ["תפריט"],
     "back": ["חזרה"],
-    "human": ["נציג", "נציג אנושי", "בן אדם"]
+    "human": ["נציג", "נציג אנושי", "בן אדם", "דברו איתי"]
   }
 }

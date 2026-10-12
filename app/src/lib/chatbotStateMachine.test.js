@@ -152,7 +152,6 @@ describe("deterministic chatbot state machine", () => {
     ["תבנו לנו אירוע בהתאמה אישית", "complex_or_custom_package", "normal"],
     ["אירוע ל-65 משתתפים", "event_over_50", "normal"],
     ["נציג אנושי", "explicit_human_request", "normal"],
-    ["שאלה שאין לה תשובה", "unknown_question", "normal"],
   ])("hands off explicit guarded input '%s'", (text, reason, priority) => {
     const result = advance({ content, session: automated(), input: { text } });
     expect(result.session.status).toBe("awaiting_human");

@@ -7,7 +7,6 @@
     "complaint_or_problem",
     "event_over_50",
     "complex_or_custom_package",
-    "unknown_question",
     "handoff_only_content",
     "explicit_human_request"
   ],
@@ -25,8 +24,9 @@
   "transfer_response": "הבקשה שלך הועברה לנציג. נשמח לעזור! הנושא הזה הכי טוב בידיים אנושיות 😄 📞 050-3504478 💬 וואטסאפ: wa.me/972503504478 📧 Info.shafan@gmail.com 📠 פקס: 04-681-7738 נחזור אליך תוך יום עסקים ✅",
   "stale_reset_response": "לא התקיימה פעילות בשיחה בזמן האחרון, לכן החזרתי אותך לתפריט הראשי.",
   "unknown_behavior": {
-    "action": "handoff",
-    "response": "transfer_response"
+    "action": "state_based_navigation",
+    "entry_response": "welcome_and_main_menu",
+    "active_menu_response": "clarify_and_repeat_current_menu"
   },
   "automation_lock": {
     "statuses": ["awaiting_human", "human_active"],

@@ -85,6 +85,52 @@ async function post(handler, bodyObject) {
   }));
 }
 
+test("signed natural entry and invalid choices preserve flow; replay never repeats sends or handoffs", async () => {
+  const repository = createMemoryRepository();
+  const sender = {
+    sendText: vi.fn(async () => ({ providerMessageId: "text-test" })),
+    sendAttachment: vi.fn(async () => ({ providerMessageId: "attachment-test" })),
+  };
+  const handler = createWhatsAppWebhookHandler({ appSecret, verifyToken: "test-token",
+    processEvent: (event) => processVerifiedEvent({ event, repository, sender }) });
+  const from = "972500000099";
+  const steps = [
+    ["הי", "menu.main", 0, 0],
+    ["טקסט חופשי", "menu.main", 0, 0],
+    ["🙂", "menu.main", 0, 0],
+    ["2", "menu.corporate_topics", 0, 0],
+    ["99", "menu.corporate_topics", 0, 0],
+    ["בחירה לא מובנת", "menu.corporate_topics", 0, 0],
+    ["8", "menu.corporate_group_size", 1, 0],
+    ["8", "menu.corporate_group_size", 1, 0],
+    ["טעות", "menu.corporate_group_size", 1, 0],
+    ["1", "menu.corporate_group_size", 1, 1],
+  ];
+  for (const [index, [text, state, attachments, handoffs]] of steps.entries()) {
+    const body = payload(`natural-${index}`, from, text);
+    expect((await post(handler, body)).status).toBe(200);
+    expect(repository.state.conversations.get(from).currentState).toBe(state);
+    expect(sender.sendAttachment).toHaveBeenCalledTimes(attachments);
+    expect(repository.state.handoffs).toHaveLength(handoffs);
+    const sends = sender.sendText.mock.calls.length;
+    const messages = repository.state.messages.length;
+    expect((await post(handler, body)).status).toBe(200);
+    expect(sender.sendText).toHaveBeenCalledTimes(sends);
+    expect(sender.sendAttachment).toHaveBeenCalledTimes(attachments);
+    expect(repository.state.messages).toHaveLength(messages);
+    expect(repository.state.handoffs).toHaveLength(handoffs);
+  }
+  expect(sender.sendAttachment).toHaveBeenCalledWith(expect.objectContaining({ assetId: "berko_treasure" }));
+  expect(repository.state.handoffs[0]).toMatchObject({ reason: "quote_request", capture: {
+    requested_activity: "berko_treasure", requested_site: "berko_360_tiberias", group_size_bucket: "small",
+  } });
+  expect(repository.state.conversations.get(from).status).toBe("awaiting_human");
+  const sends = sender.sendText.mock.calls.length;
+  await post(handler, payload("locked-natural", from, "הי"));
+  expect(sender.sendText).toHaveBeenCalledTimes(sends);
+  expect(repository.state.handoffs).toHaveLength(1);
+});
+
 describe("signed WhatsApp chatbot integration", () => {
   test.each(assetManifest.map((a, i) => [a.id, String(i + 1)]))("signed selection delivers only %s, concurrent replay has no second media send", async (assetId, choice) => {
     const repository = createMemoryRepository();

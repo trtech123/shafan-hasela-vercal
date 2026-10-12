@@ -37,6 +37,7 @@ export function resolveResponse(content, responseId) {
   let response = null;
 
   if (responseId === "policy.welcome") response = content.policies.welcome;
+  if (responseId === "policy.invalid_selection") response = content.policies.invalid_selection;
   if (responseId === "policy.corporate.overview") response = content.policies.corporate.overview;
   if (responseId === "policy.corporate.offerings") response = content.policies.corporate.offerings;
   if (responseId === "policy.corporate.after_group_selection") response = content.policies.corporate.after_group_selection;
