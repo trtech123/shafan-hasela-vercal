@@ -22,7 +22,8 @@
     { "id": "preferred_date", "required": false },
     { "id": "summary", "required": true, "fallback": "original_customer_message" }
   ],
-  "transfer_response": "נשמח לעזור! הנושא הזה הכי טוב בידיים אנושיות 😄 📞 050-3504478 💬 וואטסאפ: wa.me/972503504478 📧 Info.shafan@gmail.com 📠 פקס: 04-681-7738 נחזור אליך תוך יום עסקים ✅",
+  "transfer_response": "הבקשה שלך הועברה לנציג. נשמח לעזור! הנושא הזה הכי טוב בידיים אנושיות 😄 📞 050-3504478 💬 וואטסאפ: wa.me/972503504478 📧 Info.shafan@gmail.com 📠 פקס: 04-681-7738 נחזור אליך תוך יום עסקים ✅",
+  "stale_reset_response": "לא התקיימה פעילות בשיחה בזמן האחרון, לכן החזרתי אותך לתפריט הראשי.",
   "unknown_behavior": {
     "action": "handoff",
     "response": "transfer_response"
@@ -31,6 +32,8 @@
     "statuses": ["awaiting_human", "human_active"],
     "allowed_automatic_responses": [],
     "resume_requires_staff_action": true,
+    "unclaimed_timeout_minutes": 10,
+    "unclaimed_timeout_on_next_inbound": true,
     "close_requires_staff_action": true
   },
   "contacts": {

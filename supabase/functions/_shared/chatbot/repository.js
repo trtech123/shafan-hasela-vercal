@@ -43,6 +43,15 @@ export function createChatbotRepository(supabase) {
   }
 
   return {
+    async releaseStaleHandoff(conversationId, eventId, resetBody) {
+      const rows = ensure(await supabase.rpc("release_stale_bot_handoff", {
+        p_conversation_id: conversationId,
+        p_event_id: eventId,
+        p_reset_body: resetBody,
+      }), "release_stale_handoff");
+      return rows?.[0] ? mapOutbound(rows[0]) : null;
+    },
+
     async claimEvent(event) {
       const data = ensure(await supabase.rpc("claim_bot_channel_event", {
         p_channel: event.channel,

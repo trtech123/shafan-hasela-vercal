@@ -97,6 +97,24 @@ export async function processVerifiedEvent({
   });
 
   if (AUTOMATION_LOCKS.has(conversation.status)) {
+    if (event.channel === "whatsapp") {
+      const reset = await repository.releaseStaleHandoff(conversation.id, claim.eventId,
+        `${content.handoff.stale_reset_response}\n\n${resolveResponse(content, "menu.main")}`);
+      if (reset) {
+        // One reset send per claimed event. Uncertain sends are never replayed automatically.
+        try {
+          await repository.updateOutboundDelivery(reset.id, { status: "sending" });
+          const delivery = await sender.sendText({ channel: event.channel, to: event.externalContactId, text: reset.body });
+          await repository.updateOutboundDelivery(reset.id, { status: "accepted", providerMessageId: delivery.providerMessageId });
+        } catch {
+          const error = Object.assign(new Error("chatbot_handoff_reset_uncertain"), { chatbotFailureCode: "handoff_reset_uncertain" });
+          try { await repository.updateOutboundDelivery(reset.id, { status: "uncertain" }); } catch { /* Preserve terminal failure classification. */ }
+          throw error;
+        }
+        await repository.completeEvent(claim.eventId);
+        return { status: "handoff_released", eventId: claim.eventId, conversationId: conversation.id };
+      }
+    }
     await repository.completeEvent(claim.eventId);
     return { status: "locked", eventId: claim.eventId, conversationId: conversation.id };
   }

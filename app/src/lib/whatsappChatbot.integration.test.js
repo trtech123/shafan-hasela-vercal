@@ -30,6 +30,7 @@ function createMemoryRepository() {
   const messages = [];
   const handoffs = [];
   return {
+    releaseStaleHandoff: async () => null,
     state: { conversations, messages, handoffs },
     async claimEvent(event) {
       if (claimed.has(event.providerEventId)) return { eventId: claimed.get(event.providerEventId), claimed: false, resumed: false };

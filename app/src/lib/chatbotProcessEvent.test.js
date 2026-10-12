@@ -21,6 +21,7 @@ const baseEvent = {
 function makeRepo(overrides = {}) {
   let outboundId = 0;
   return {
+    releaseStaleHandoff: vi.fn().mockResolvedValue(null),
     claimEvent: vi.fn().mockResolvedValue({ eventId: "event-1", claimed: true, resumed: false }),
     upsertVerifiedContact: vi.fn().mockResolvedValue({ id: "contact-1", externalContactId: baseEvent.externalContactId }),
     getOrCreateConversation: vi.fn().mockResolvedValue({

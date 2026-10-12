@@ -7,6 +7,7 @@ function harness() {
   const messages = [];
   const attempts = new Set();
   const repository = {
+    releaseStaleHandoff: async () => null,
     claimEvent: vi.fn(async () => { const fresh = !claimed; claimed = true; return { eventId: "e1", claimed: fresh }; }),
     upsertVerifiedContact: vi.fn(async () => ({ id: "contact" })),
     getOrCreateConversation: vi.fn(async () => ({ id: "conversation", status: "automated", currentState: "menu.corporate_topics", collectedFields: {} })),
