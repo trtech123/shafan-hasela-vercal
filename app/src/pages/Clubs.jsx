@@ -4,7 +4,6 @@ import {
   Banknote,
   CalendarDays,
   CircleAlert,
-  CreditCard,
   MapPin,
   Pencil,
   Plus,
@@ -28,11 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { attendancePaymentState, buildCancellationPreview } from "@/lib/clubDomain";
-
-// Historical provider data/code remain available for maintenance only.
-// Enrollment, provider cancellation and provider-linked attendance are not product UI.
-const showLegacyIcreditUi = false;
+import { buildCancellationPreview } from "@/lib/clubDomain";
 
 const weekdays = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
@@ -72,7 +67,6 @@ export default function Clubs() {
   const [instructors, setInstructors] = useState([]);
   const [rules, setRules] = useState([]);
   const [memberships, setMemberships] = useState([]);
-  const [attendanceRows, setAttendanceRows] = useState([]);
   const [followUps, setFollowUps] = useState([]);
   const [selectedClubId, setSelectedClubId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -86,16 +80,15 @@ export default function Clubs() {
   const loadData = useCallback(async () => {
     setLoading(true);
     setLoadError("");
-    const [clubsResult, instructorsResult, rulesResult, membershipsResult, attendanceResult, followUpsResult] = await Promise.all([
+    const [clubsResult, instructorsResult, rulesResult, membershipsResult, followUpsResult] = await Promise.all([
       supabase.from("clubs").select("*, instructor:instructors(id, full_name)").order("created_at", { ascending: false }),
       supabase.from("instructors").select("id, full_name, status").order("full_name"),
       supabase.from("club_schedule_rules").select("*").order("weekday"),
-      supabase.from("club_memberships").select("*, participant:club_participants(*), agreement:recurring_agreements(id, status, provider_recurring_id, last_charge_number)").order("created_at", { ascending: false }),
-      supabase.from("club_attendance_operations").select("*").order("session_date", { ascending: false }),
+      supabase.from("club_memberships").select("*, participant:club_participants(*)").order("created_at", { ascending: false }),
       supabase.from("club_payment_follow_ups").select("*").order("created_at", { ascending: false }),
     ]);
 
-    const failure = [clubsResult, instructorsResult, rulesResult, membershipsResult, attendanceResult, followUpsResult].find((result) => result.error);
+    const failure = [clubsResult, instructorsResult, rulesResult, membershipsResult, followUpsResult].find((result) => result.error);
     if (failure) {
       toast.error("שגיאה בטעינת החוגים");
       setLoadError("לא ניתן לטעון את נתוני החוגים. ייתכן שמסד הנתונים טרם עודכן.");
@@ -108,7 +101,6 @@ export default function Clubs() {
     setInstructors(instructorsResult.data ?? []);
     setRules(rulesResult.data ?? []);
     setMemberships(membershipsResult.data ?? []);
-    setAttendanceRows(attendanceResult.data ?? []);
     setFollowUps(followUpsResult.data ?? []);
     setSelectedClubId((current) => loadedClubs.some((club) => club.id === current)
       ? current
@@ -125,29 +117,7 @@ export default function Clubs() {
   const selectedMemberships = memberships.filter((membership) => membership.club_id === selectedClubId);
   const activeCount = selectedMemberships.filter((membership) => membership.status === "active").length;
   const debtTotal = selectedMemberships.reduce((sum, membership) => sum + Number(membership.debt_amount || 0), 0);
-  const selectedAttendance = attendanceRows.filter((row) => row.club_id === selectedClubId);
   const selectedFollowUps = followUps.filter((followUp) => selectedMemberships.some((membership) => membership.id === followUp.membership_id));
-
-  const startEnrollment = async (membership) => {
-    setBusyId(membership.id);
-    try {
-      const { data, error } = await supabase.functions.invoke("club-recurring-enroll", {
-        body: { membershipId: membership.id },
-      });
-      if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || "יצירת קישור התשלום נכשלה");
-      const enrollmentUrl = new URL(data.url);
-      if (enrollmentUrl.protocol !== "https:" || enrollmentUrl.hostname !== "testicredit.rivhit.co.il") {
-        throw new Error("כתובת התשלום שהתקבלה אינה כתובת iCredit TEST מאושרת");
-      }
-      window.open(enrollmentUrl.toString(), "_blank", "noopener,noreferrer");
-      toast.success("עמוד ההרשמה המאובטח נפתח בחלון חדש");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "יצירת קישור התשלום נכשלה");
-    } finally {
-      setBusyId(null);
-    }
-  };
 
   const cancelMembership = async () => {
     const membership = cancellingMembership;
@@ -160,27 +130,12 @@ export default function Clubs() {
         p_requested_on: requestedOn,
       });
       if (error) throw error;
-      toast.success(`הביטול נקלט וייכנס לתוקף ב־${data.effective_on}`);
+      toast.success(`בקשת הביטול נשמרה למועד ${data.effective_on}. לא בוצעה פעולה אצל ספק תשלומים.`);
       setCancellingMembership(null);
       await loadData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "שמירת בקשת הביטול נכשלה");
       setCancellingMembership(null);
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const finalizeDueCancellation = async (membership) => {
-    setBusyId(membership.id);
-    try {
-      const { data, error } = await supabase.functions.invoke("club-recurring-cancel", { body: { membershipId: membership.id } });
-      if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || "ביטול iCredit נכשל");
-      toast.success("iCredit אישר את הביטול והחברות נסגרה");
-      await loadData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "ביטול iCredit נכשל");
     } finally {
       setBusyId(null);
     }
@@ -203,7 +158,7 @@ export default function Clubs() {
           <button type="button" className="mt-3 block w-full text-sm font-semibold underline" onClick={() => {
             const demo = demoClubsData();
             setClubs(demo.clubs); setInstructors(demo.instructors); setRules(demo.rules);
-            setMemberships(demo.memberships); setAttendanceRows(demo.attendance); setFollowUps(demo.followUps);
+            setMemberships(demo.memberships); setFollowUps(demo.followUps);
             setSelectedClubId("demo-club"); setLoadError("");
           }}>פתיחת תצוגת הדגמה ללא מסד נתונים</button>
         </div>
@@ -218,7 +173,7 @@ export default function Clubs() {
         <div className="absolute bottom-0 left-16 h-20 w-20 rounded-t-full bg-white/5" />
         <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="mb-2 text-xs font-semibold tracking-[0.22em] text-amber-200">מועדון · קהילה · תשלום חודשי</p>
+            <p className="mb-2 text-xs font-semibold tracking-[0.22em] text-amber-200">מועדון · קהילה · מפגשים</p>
             <h1 className="text-3xl font-black tracking-tight md:text-4xl">חוגים ומנויים</h1>
             <a href="/club-attendance" className="mt-3 inline-flex items-center gap-2 rounded-lg bg-white/15 px-4 py-2 font-semibold hover:bg-white/25"><CalendarDays className="h-4 w-4" />מפגשים ונוכחות</a>
             <p className="mt-2 max-w-xl text-sm text-emerald-50/80">ניהול מערכת שבועית, משתתפים ומפגשי חוגים.</p>
@@ -228,6 +183,8 @@ export default function Clubs() {
           </Button>
         </div>
       </header>
+
+      <p className="rounded-xl border bg-muted/30 p-4 text-sm">גבייה אוטומטית אינה נתמכת במערכת החוגים. רישום משתתף אינו מפעיל חיוב. נתוני תשלום ובקשות ביטול קודמים נשמרים לעיון.</p>
 
       <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="space-y-3">
@@ -270,7 +227,6 @@ export default function Clubs() {
                     <span className="flex items-center gap-1.5"><BadgeCheck className="h-4 w-4 text-emerald-600" />{relationOne(selectedClub.instructor)?.full_name || "ללא מדריך"}</span>
                     {selectedClub.site && <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-amber-600" />{selectedClub.site}</span>}
                     <span className="flex items-center gap-1.5"><Banknote className="h-4 w-4 text-emerald-600" />₪{formatMoney(selectedClub.monthly_price)} לחודש</span>
-                    <span className="flex items-center gap-1.5 font-semibold text-amber-700"><CalendarDays className="h-4 w-4" />חיוב קבוע ב־15 עבור החודש הנוכחי</span>
                   </div>
                 </div>
                 <Button variant="outline" className="gap-2" onClick={() => setClubDialog({ open: true, club: selectedClub })}>
@@ -307,7 +263,6 @@ export default function Clubs() {
               <div className="divide-y">
                 {selectedMemberships.map((membership) => {
                   const participant = relationOne(membership.participant) || {};
-                  const agreement = relationOne(membership.agreement);
                   const name = participantName(membership);
                   const debt = Number(membership.debt_amount || 0);
                   return (
@@ -323,8 +278,7 @@ export default function Clubs() {
                       </div>
                       <div className="text-sm">
                         <p className="font-semibold">{membershipLabels[membership.status] || membership.status}</p>
-                        <p className="text-xs text-muted-foreground">₪{formatMoney(membership.monthly_price)} · חיוב ב־15 עבור אותו חודש</p>
-                        {showLegacyIcreditUi && <p className="text-xs text-muted-foreground">הוראת קבע מתחילה: {membership.recurring_starts_on || "בחודש הבא"}</p>}
+                        <p className="text-xs text-muted-foreground">מחיר חברות שמור: ₪{formatMoney(membership.monthly_price)}</p>
                         {membership.current_month_settlement_status === "manual_required" && <p className="mt-1 text-xs font-semibold text-amber-700">החודש הנוכחי: הסדרה ידנית בקופה · ללא חיוב יחסי</p>}
                         {membership.cancellation_effective_on && <p className="mt-1 text-xs font-semibold text-red-700">בקשת ביטול: {String(membership.cancellation_requested_at || "").slice(0, 10)} · סיום אפקטיבי: {membership.cancellation_effective_on}</p>}
                       </div>
@@ -333,14 +287,6 @@ export default function Clubs() {
                         {debt > 0 ? <p className="text-xs font-bold text-red-700">חוב ₪{formatMoney(debt)}</p> : <p className="text-xs text-muted-foreground">אין חוב פתוח</p>}
                       </div>
                       <div className="flex flex-wrap gap-2 xl:justify-end">
-                        {showLegacyIcreditUi && membership.status === "cancellation_scheduled" && membership.cancellation_effective_on <= currentIsraelDate() && (
-                          <Button size="sm" variant="destructive" disabled={busyId === membership.id} onClick={() => finalizeDueCancellation(membership)}>השלמת ביטול ב־iCredit</Button>
-                        )}
-                        {showLegacyIcreditUi && !agreement?.provider_recurring_id && !["cancelled", "cancellation_scheduled"].includes(membership.status) && (
-                          <Button size="sm" className="gap-1.5 bg-amber-400 text-emerald-950 hover:bg-amber-300" disabled={busyId === membership.id} onClick={() => startEnrollment(membership)} aria-label={`התחלת הוראת קבע עבור ${name}`}>
-                            <CreditCard className="h-4 w-4" /> הוראת קבע
-                          </Button>
-                        )}
                         {!["cancelled", "cancellation_scheduled"].includes(membership.status) && (
                           <Button size="sm" variant="outline" disabled={busyId === membership.id} onClick={() => setCancellingMembership(membership)} aria-label={`ביטול חברות עבור ${name}`}>ביטול</Button>
                         )}
@@ -352,23 +298,8 @@ export default function Clubs() {
               </div>
             </section>
 
-            {showLegacyIcreditUi && <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-              <div className="border-b p-5"><h2 className="text-lg font-bold">נוכחות וסטטוס תשלום iCredit</h2><p className="text-sm text-muted-foreground">הסימון הכספי נגזר מנתוני הספק ואינו ניתן לעריכה ידנית.</p></div>
-              <div className="divide-y">
-                {selectedAttendance.map((row) => {
-                  const payment = attendancePaymentState(row.provider_charge_status);
-                  return <div key={`${row.session_id}-${row.membership_id}`} className="grid gap-2 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
-                    <div><p className="font-semibold">{row.participant_name}</p><p className="text-xs text-muted-foreground">{row.session_date} · {time(row.start_time)}</p></div>
-                    <p className="text-sm">נוכחות: {row.attendance_status === "present" ? "נוכח/ת" : row.attendance_status === "absent" ? "נעדר/ת" : "טרם סומן"}</p>
-                    <span className={cn("rounded-full px-3 py-1 text-sm font-bold", payment.state === "settled" ? "bg-emerald-100 text-emerald-800" : payment.state === "failed" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-700")}>{payment.symbol} {payment.label}</span>
-                  </div>;
-                })}
-                {!selectedAttendance.length && <p className="p-6 text-sm text-muted-foreground">אין עדיין מפגשים להצגת נוכחות.</p>}
-              </div>
-            </section>}
-
             <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-              <div className="border-b p-5"><h2 className="text-lg font-bold">מעקב תשלומים שנכשלו</h2><p className="text-sm text-muted-foreground">נוצר אוטומטית פעם אחת לכל חיוב שנכשל. לא נשלחת הודעה אוטומטית.</p></div>
+              <div className="border-b p-5"><h2 className="text-lg font-bold">היסטוריית מעקב תשלומים</h2><p className="text-sm text-muted-foreground">רשומות קודמות לעיון בלבד. מסך זה אינו מפעיל גבייה או שולח הודעות.</p></div>
               <div className="divide-y">
                 {selectedFollowUps.map((item) => <div key={item.id} className="p-4"><div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">הורה / משלם: {item.payer_name || "לא ידוע"}</p><span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">{item.status === "resolved" ? "טופל" : item.status === "contacted" ? "נוצר קשר" : "ממתין לטיפול"} · לא נשלח</span></div><p className="mt-2 text-sm text-muted-foreground">{item.payer_phone} {item.payer_email}</p><p className="mt-2 text-sm">{item.message}</p></div>)}
                 {!selectedFollowUps.length && <p className="p-6 text-sm text-muted-foreground">אין תשלומים שנכשלו הממתינים לטיפול.</p>}
@@ -394,7 +325,7 @@ export default function Clubs() {
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>תזמון ביטול חברות</AlertDialogTitle>
-            <AlertDialogDescription>{cancellingMembership ? `בקשה היום תסיים את החברות החל מ־${buildCancellationPreview(currentIsraelDate()).effectiveOn}. עד יום 10: החודש הבא; אחרי יום 10: החודש שאחריו. ביטול הספק יבוצע provider-first במועד האפקטיבי, ללא החזר אוטומטי.` : ""}</AlertDialogDescription>
+            <AlertDialogDescription>{cancellingMembership ? `בקשה היום תתעד מועד ביטול מתוכנן החל מ־${buildCancellationPreview(currentIsraelDate()).effectiveOn}. עד יום 10: החודש הבא; אחרי יום 10: החודש שאחריו. הבקשה נשמרת במערכת בלבד ואינה מבטלת חיוב אצל ספק תשלומים. אין כאן ביטול ספק או החזר אוטומטי.` : ""}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-row-reverse gap-2">
             <AlertDialogCancel>חזרה</AlertDialogCancel>

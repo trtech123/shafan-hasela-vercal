@@ -4,7 +4,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Clubs from "./Clubs";
@@ -120,6 +120,40 @@ afterEach(() => {
 });
 
 describe("Clubs admin workspace", () => {
+  test("supported application sources contain no retired provider invocation or payment URL", () => {
+    const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
+      entry.isDirectory() ? walk(resolve(dir, entry.name)) : [resolve(dir, entry.name)]);
+    const sources = walk(sourceRoot).filter(path => /\.(jsx?|tsx?)$/.test(path) && !path.includes(".test."));
+    for (const path of sources) {
+      expect(readFileSync(path, "utf8"), path).not.toMatch(/club-recurring-(?:enroll|cancel|ipn)|testicredit\.rivhit\.co\.il|showLegacyIcreditUi/);
+    }
+  });
+
+  test("explains that membership registration does not initiate recurring payments", async () => {
+    render(<Clubs />);
+    expect(await screen.findByText(/גבייה אוטומטית אינה נתמכת/)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("חיוב קבוע ב־15");
+    fireEvent.click(screen.getByRole("button", { name: "ביטול חברות עבור נועה לוי" }));
+    expect(screen.getByText(/אינה מבטלת חיוב אצל ספק תשלומים/)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("provider-first");
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(window.open).not.toHaveBeenCalled();
+  });
+
+  test("a historical due cancellation cannot expose provider finalization", async () => {
+    const original = fromMock.getMockImplementation();
+    fromMock.mockImplementation(table => table === "club_memberships"
+      ? query([{ ...memberships[1], status: "cancellation_scheduled", cancellation_effective_on: "2020-01-01" }])
+      : original(table));
+    render(<Clubs />);
+    expect(await screen.findByText(/סיום אפקטיבי: 2020-01-01/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /התחלת הוראת קבע|השלמת ביטול|ביטול חברות/ })).not.toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(window.open).not.toHaveBeenCalled();
+  });
+
   test("shows an in-page Hebrew error when Clubs data cannot load", async () => {
     fromMock.mockImplementation(() => failedQuery());
 
@@ -155,7 +189,7 @@ describe("Clubs admin workspace", () => {
     render(<Clubs />);
 
     fireEvent.click(await screen.findByRole("button", { name: "ביטול חברות עבור נועה לוי" }));
-    expect(screen.getByText(/תסיים את החברות החל מ־/)).toBeInTheDocument();
+    expect(screen.getByText(/תתעד מועד ביטול מתוכנן החל מ־/)).toBeInTheDocument();
   });
 
   test("schedules cancellation through the deterministic database boundary", async () => {
@@ -168,6 +202,8 @@ describe("Clubs admin workspace", () => {
 
     await waitFor(() => expect(rpcMock).toHaveBeenCalledWith("request_club_membership_cancellation", expect.objectContaining({ p_membership_id: "membership-debt" })));
     await waitFor(() => expect(fromMock.mock.calls.length).toBeGreaterThan(initialCalls));
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(window.open).not.toHaveBeenCalled();
   });
 
   test("schedules a pending hosted enrollment without calling a provider early", async () => {

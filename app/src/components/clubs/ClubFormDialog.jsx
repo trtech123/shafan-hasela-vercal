@@ -150,6 +150,7 @@ export default function ClubFormDialog({
             <div>
               <Label htmlFor="club-billing-day">יום חיוב</Label>
               <Input id="club-billing-day" value="15 בכל חודש (עבור אותו חודש)" readOnly className="bg-muted font-semibold" />
+              <p className="mt-1 text-xs text-muted-foreground">שדה היסטורי לשמירת תאימות הנתונים בלבד. שמירת החוג אינה מפעילה גבייה אוטומטית.</p>
             </div>
             <div>
               <Label htmlFor="club-status">סטטוס</Label>
