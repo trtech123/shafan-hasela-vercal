@@ -2,6 +2,8 @@ import { describe, expect, test, vi } from "vitest";
 import { createWhatsAppWebhookHandler } from "../../../supabase/functions/whatsapp-webhook/handler.js";
 import { processVerifiedEvent } from "../../../supabase/functions/_shared/chatbot/process-event.js";
 import { approvedContent, resolveResponse } from "../../../supabase/functions/_shared/chatbot/content.js";
+import { createWhatsAppSender } from "../../../supabase/functions/whatsapp-webhook/sender.js";
+import { assetManifest } from "../../../supabase/functions/_shared/chatbot/assets.js";
 
 const appSecret = "integration-secret";
 
@@ -48,7 +50,11 @@ function createMemoryRepository() {
       const key = [...conversations.entries()].find(([, value]) => value.id === id)?.[0];
       conversations.set(key, { id, ...session });
     },
-    async createHandoff(handoff) { handoffs.push(handoff); return { handoffId: `handoff-${handoffs.length}`, leadId: `lead-${handoffs.length}` }; },
+    async createHandoff(handoff) {
+      handoffs.push(handoff);
+      for (const conversation of conversations.values()) if (conversation.id === handoff.conversationId) conversation.status = "awaiting_human";
+      return { handoffId: `handoff-${handoffs.length}`, leadId: `lead-${handoffs.length}` };
+    },
     async recordAction() {},
     async insertOutboundMessage(message) {
       const row = { id: `message-${messages.length + 1}`, ...message, direction: "outbound" };
@@ -56,6 +62,12 @@ function createMemoryRepository() {
       return row;
     },
     async updateOutboundDelivery() {},
+    async claimAttachment(id) {
+      const message = messages.find((row) => row.id === id);
+      if (!message || message.attempted) return "unavailable";
+      message.attempted = true;
+      return "claimed";
+    },
     async listRetryableOutbound() { return []; },
     async updateDeliveryStatus() {},
     async completeEvent() {},
@@ -73,6 +85,45 @@ async function post(handler, bodyObject) {
 }
 
 describe("signed WhatsApp chatbot integration", () => {
+  test.each(assetManifest.map((a, i) => [a.id, String(i + 1)]))("signed selection delivers only %s, concurrent replay has no second media send", async (assetId, choice) => {
+    const repository = createMemoryRepository();
+    const loadAsset = vi.fn(async (id) => ({ asset: assetManifest.find((a) => a.id === id), blob: new Blob(["fixture"]) }));
+    const fetchImpl = vi.fn(async (url) => new Response(JSON.stringify(url.endsWith("/media") ? { id: "media-1" } : { messages: [{ id: `out-${fetchImpl.mock.calls.length}` }] })));
+    const sender = createWhatsAppSender({ token: "test-only", phoneNumberId: "phone-1", fetchImpl, loadAsset });
+    const handler = createWhatsAppWebhookHandler({ appSecret, verifyToken: "verify", processEvent: (event) => processVerifiedEvent({ event, repository, sender }) });
+    await post(handler, payload("d1", "972501111111", "שלום"));
+    await post(handler, payload("d2", "972501111111", "2"));
+    expect(loadAsset).not.toHaveBeenCalled();
+    const selection = payload("d3", "972501111111", choice);
+    expect((await Promise.all([post(handler, selection), post(handler, selection)])).map((r) => r.status)).toEqual([200, 200]);
+    expect(loadAsset).toHaveBeenCalledExactlyOnceWith(assetId, assetManifest.find((a) => a.id === assetId).sha256);
+    const attachments = fetchImpl.mock.calls.filter(([url, init]) => url.endsWith("/messages") && JSON.parse(init.body).type !== "text");
+    expect(attachments).toHaveLength(1);
+    const body = JSON.parse(attachments[0][1].body);
+    expect(body[body.type].id).toBe("media-1");
+    expect(body[body.type].link).toBeUndefined();
+    await post(handler, payload("d4", "972501111111", "1"));
+    expect(repository.state.handoffs[0].capture.requested_activity).toBe(assetId);
+    await post(handler, payload("d5", "972501111111", "תפריט"));
+    expect(loadAsset).toHaveBeenCalledOnce();
+  });
+  test("missing private object locks conversation for staff and invalid signatures never reach assets", async () => {
+    const repository = createMemoryRepository();
+    const loadAsset = vi.fn().mockRejectedValue(new Error("chatbot_asset_unavailable"));
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ messages: [{ id: "text" }] })));
+    const sender = createWhatsAppSender({ token: "test-only", phoneNumberId: "phone-1", fetchImpl, loadAsset });
+    const handler = createWhatsAppWebhookHandler({ appSecret, verifyToken: "verify", processEvent: (event) => processVerifiedEvent({ event, repository, sender }) });
+    const invalid = await handler(new Request("https://example.test", { method: "POST", body: JSON.stringify(payload("bad", "972501111111", "1")) }));
+    expect(invalid.status).toBe(401);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    await post(handler, payload("d1", "972501111111", "2"));
+    const selection = payload("d2", "972501111111", "1");
+    expect((await post(handler, selection)).status).toBe(500);
+    expect(repository.state.conversations.get("972501111111").status).toBe("awaiting_human");
+    expect(repository.state.handoffs[0].reason).toBe("document_unavailable");
+    expect((await post(handler, selection)).status).toBe(200);
+    expect(loadAsset).toHaveBeenCalledOnce();
+  });
   test("runs activity navigation end to end and deduplicates a replay", async () => {
     const repository = createMemoryRepository();
     const sender = { sendText: vi.fn().mockImplementation(async () => ({ providerMessageId: `out-${sender.sendText.mock.calls.length}` })) };

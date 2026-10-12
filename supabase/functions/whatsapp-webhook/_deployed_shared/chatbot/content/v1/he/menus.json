@@ -20,7 +20,7 @@
       "prompt": "איזה מהאתרים שלנו מעניין אותך?",
       "options": [
         { "id": "acre", "number": 1, "label": "פארק אקסטרים עכו", "next_state": "menu.acre" },
-        { "id": "berko", "number": 2, "label": "ברקו כנרת-טבריה", "next_state": "answer.site.berko_overview" },
+        { "id": "berko", "number": 2, "label": "ברקו כנרת-טבריה", "next_state": "flow.berko" },
         { "id": "field", "number": 3, "label": "פעילויות שטח (ג׳יפים, שייט, ויה פרטה)", "next_state": "answer.site.field_overview" },
         { "id": "nof_hagalil", "number": 4, "label": "נוף הגליל - אומגה", "next_state": "handoff.missing_content" }
       ]
@@ -34,7 +34,7 @@
         { "id": "bungee_drop", "number": 3, "label": "באנג׳י דרופ", "next_state": "answer.activity.acre_bungee_drop" },
         { "id": "zipline", "number": 4, "label": "אומגה", "next_state": "answer.activity.acre_zipline" },
         { "id": "kids", "number": 5, "label": "פעילות לילדים (אקסטרים קידס)", "next_state": "answer.activity.acre_kids" },
-        { "id": "events", "number": 6, "label": "אירועים וקבוצות", "next_state": "flow.corporate" }
+        { "id": "events", "number": 6, "label": "אירועים וקבוצות", "next_state": "menu.acre_groups" }
       ]
     },
     {
@@ -77,6 +77,39 @@
         { "id": "cancellation", "number": 5, "label": "מה מדיניות הביטול?", "next_state": "answer.faq.cancellation" },
         { "id": "ticket", "number": 6, "label": "מה כולל הכרטיס?", "next_state": "answer.faq.ticket" },
         { "id": "food", "number": 7, "label": "האם ניתן לאכול במקום?", "next_state": "answer.faq.food" }
+      ]
+    },
+    {
+      "id": "corporate_topics",
+      "prompt": "איזו פעילות מעניינת אותך? בחירה תשלח את העלון המתאים. זמינות ותיאום מול נציג.",
+      "options": [
+        { "id": "carmel", "number": 1, "label": "יום גיבוש בכרמל", "next_state": "asset.carmel" },
+        { "id": "berko_day", "number": 2, "label": "יום גיבוש בכנרת כולל חוף וארוחה", "next_state": "asset.berko_day" },
+        { "id": "student_resilience", "number": 3, "label": "חוסן אישי וקבוצתי לתלמידים", "next_state": "asset.student_resilience" },
+        { "id": "elah", "number": 4, "label": "יום גיבוש בעמק האלה", "next_state": "asset.elah" },
+        { "id": "wheels_acre", "number": 5, "label": "רייזרים בנחל ציפורי ואקסטרים עכו", "next_state": "asset.wheels_acre" },
+        { "id": "springs", "number": 6, "label": "יום כיף בעמק המעיינות", "next_state": "asset.springs" },
+        { "id": "heritage", "number": 7, "label": "יום תרבות ומורשת בכפר מסריק ועכו", "next_state": "asset.heritage" },
+        { "id": "berko_treasure", "number": 8, "label": "המרוץ למטמון בברקו", "next_state": "asset.berko_treasure" },
+        { "id": "organizational_resilience", "number": 9, "label": "סדנת חוסן ארגוני", "next_state": "asset.organizational_resilience" },
+        { "id": "general_group", "number": 10, "label": "התאמת פעילות עם נציג", "next_state": "menu.corporate_group_size" }
+      ]
+    },
+    {
+      "id": "berko_topics",
+      "prompt": "איזו פעילות קבוצתית בברקו מעניינת אותך? בחירה תשלח את העלון המתאים.",
+      "options": [
+        { "id": "berko_day", "number": 1, "label": "יום גיבוש בכנרת כולל חוף וארוחה", "next_state": "asset.berko_day" },
+        { "id": "berko_treasure", "number": 2, "label": "המרוץ למטמון בברקו", "next_state": "asset.berko_treasure" },
+        { "id": "general_group", "number": 3, "label": "התאמת פעילות עם נציג", "next_state": "menu.corporate_group_size" }
+      ]
+    },
+    {
+      "id": "acre_groups",
+      "prompt": "אירועים וקבוצות בעכו: בחירת החבילה תשלח את העלון המתאים.",
+      "options": [
+        { "id": "wheels_acre", "number": 1, "label": "רייזרים בנחל ציפורי ואקסטרים עכו", "next_state": "asset.wheels_acre" },
+        { "id": "general_group", "number": 2, "label": "התאמת אירוע בעכו עם נציג", "next_state": "menu.corporate_group_size" }
       ]
     }
   ]

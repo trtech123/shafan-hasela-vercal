@@ -19,6 +19,15 @@ function mapContact(row) {
   return { id: row.id, externalContactId: row.external_contact_id };
 }
 
+function mapOutbound(row) {
+  return {
+    id: row.id, body: row.body, responseId: row.response_id,
+    messageKind: row.message_kind,
+    assetId: row.asset_id, assetChecksum: row.asset_checksum,
+    conversationId: row.conversation_id,
+  };
+}
+
 export function createChatbotRepository(supabase) {
   async function findActiveConversation(channel, threadId) {
     const result = await supabase
@@ -157,13 +166,19 @@ export function createChatbotRepository(supabase) {
           message_kind: message.messageKind,
           body: message.body,
           response_id: message.responseId,
+          asset_id: message.assetId ?? null,
+          asset_checksum: message.assetChecksum ?? null,
           delivery_status: "pending",
           occurred_at: message.occurredAt,
         })
-        .select("id,body,response_id")
+        .select("id,body,response_id,message_kind,asset_id,asset_checksum,conversation_id")
         .single();
       const row = ensure(result, "insert_outbound");
-      return { id: row.id, body: row.body, responseId: row.response_id };
+      return mapOutbound(row);
+    },
+
+    async claimAttachment(messageId) {
+      return ensure(await supabase.rpc("claim_bot_attachment", { p_message_id: messageId }), "claim_attachment");
     },
 
     async updateOutboundDelivery(messageId, delivery) {
@@ -175,16 +190,14 @@ export function createChatbotRepository(supabase) {
     async listRetryableOutbound(eventId) {
       const result = await supabase
         .from("bot_messages")
-        .select("id,body,response_id")
+        .select("id,body,response_id,message_kind,asset_id,asset_checksum,conversation_id,delivery_status")
         .eq("trigger_event_id", eventId)
         .eq("direction", "outbound")
         .in("delivery_status", ["pending", "failed"])
         .order("created_at", { ascending: true });
-      return (ensure(result, "list_retryable") ?? []).map((row) => ({
-        id: row.id,
-        body: row.body,
-        responseId: row.response_id,
-      }));
+      return (ensure(result, "list_retryable") ?? [])
+        .filter((row) => row.message_kind !== "attachment" || row.delivery_status === "pending")
+        .map(mapOutbound);
     },
 
     async updateDeliveryStatus(channel, providerMessageId, status, occurredAt) {

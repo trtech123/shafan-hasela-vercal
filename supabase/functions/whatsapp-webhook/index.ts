@@ -7,6 +7,7 @@ import { createChatbotRepository } from "./_deployed_shared/chatbot/repository.j
 import { processVerifiedEvent } from "./_deployed_shared/chatbot/process-event.js";
 import { createWhatsAppWebhookHandler } from "./handler.js";
 import { createWhatsAppSender } from "./sender.js";
+import { createAssetLoader } from "./_deployed_shared/chatbot/assets.js";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -21,12 +22,13 @@ const sender = createWhatsAppSender({
   token: Deno.env.get("META_WHATSAPP_TOKEN"),
   phoneNumberId: Deno.env.get("META_PHONE_NUMBER_ID"),
   fetchImpl: fetch,
+  loadAsset: createAssetLoader(client),
 });
 
 const handler = createWhatsAppWebhookHandler({
   appSecret: Deno.env.get("META_APP_SECRET"),
   verifyToken: Deno.env.get("META_WEBHOOK_VERIFY_TOKEN"),
-  processEvent: async (event) => {
+  processEvent: async (event: unknown) => {
     if (!repository) throw new Error("chatbot_repository_not_configured");
     return processVerifiedEvent({ event, repository, sender });
   },

@@ -1,3 +1,5 @@
+import assets from "./assets.json" with { type: "json" };
+
 const REQUIRED_SECTIONS = [
   "profile",
   "menus",
@@ -43,6 +45,8 @@ export function validateContentBundle(bundle) {
   }
 
   const registeredTargets = new Set([
+    "flow.berko",
+    ...assets.map((asset) => `asset.${asset.id}`),
     "flow.corporate",
     "flow.pricing",
     "flow.clubs_handoff",

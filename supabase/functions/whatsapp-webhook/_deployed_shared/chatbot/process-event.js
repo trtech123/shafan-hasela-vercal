@@ -1,10 +1,16 @@
 import { approvedContent, resolveResponse } from "./content.js";
 import { advance } from "./state-machine.js";
+import { getAsset } from "./assets.js";
+import { deliverAttachment } from "./deliver-attachment.js";
 
 const AUTOMATION_LOCKS = new Set(["awaiting_human", "human_active"]);
 
 async function deliverMessages({ event, eventId, messages, repository, sender }) {
   for (const message of messages) {
+    if (message.messageKind === "attachment") {
+      if (!await deliverAttachment({ event, message, repository, sender })) return;
+      continue;
+    }
     try {
       const delivery = await sender.sendText({
         channel: event.channel,
@@ -100,6 +106,14 @@ export async function processVerifiedEvent({
     session: sessionFromConversation(conversation),
     input: event.input ?? {},
   });
+  if (result.actions.some((action) => action.type === "send_attachment"
+    && (event.channel !== "whatsapp" || !getAsset(action.assetId)))) {
+    result.session.status = "awaiting_human";
+    result.actions = [
+      { type: "send", responseId: "handoff.transfer" },
+      { type: "handoff", reason: "document_unavailable", priority: "normal", summary: "document_unavailable" },
+    ];
+  }
   await repository.updateConversation(conversation.id, result.session, event.occurredAt);
 
   const handoff = result.actions.find((action) => action.type === "handoff");
@@ -126,15 +140,17 @@ export async function processVerifiedEvent({
   }
 
   const outboundMessages = [];
-  for (const action of result.actions.filter((item) => item.type === "send")) {
-    const body = resolveResponse(content, action.responseId);
+  for (const action of result.actions.filter((item) => item.type === "send" || item.type === "send_attachment")) {
+    const asset = action.type === "send_attachment" ? getAsset(action.assetId) : null;
+    const body = asset ? asset.title : resolveResponse(content, action.responseId);
     outboundMessages.push(await repository.insertOutboundMessage({
       conversationId: conversation.id,
       triggerEventId: claim.eventId,
       channel: event.channel,
-      messageKind: "text",
+      messageKind: asset ? "attachment" : "text",
+      ...(asset ? { assetId: asset.id, assetChecksum: asset.sha256 } : {}),
       body,
-      responseId: action.responseId,
+      responseId: asset ? `asset.${asset.id}` : action.responseId,
       occurredAt: new Date().toISOString(),
     }));
   }

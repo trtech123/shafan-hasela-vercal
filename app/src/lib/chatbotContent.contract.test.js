@@ -38,7 +38,7 @@ describe("approved chatbot content contract", () => {
   test("validates versions, identifiers, and every menu transition", () => {
     expect(validateContentBundle(loadBundle(runtimeRoot))).toMatchObject({
       contentVersion: "client-doc-1.0-2026-07-he",
-      menuCount: 7,
+      menuCount: 10,
       responseCount: expect.any(Number),
     });
   });
@@ -51,7 +51,7 @@ describe("approved chatbot content contract", () => {
     expect(content.policies.cancellation.response)
       .toBe("עד 72 שעות — ללא חיוב. אחרי → חיוב 100%");
     expect(content.policies.pricing_and_booking.approved_non_price_facts).toEqual([
-      "מחירים כוללים מע\"מ",
+      "אופן חישוב המע״מ הוא לפי העלון או ההצעה של הפעילות שנבחרה",
       "מינימום משתתפים לקבוצה: 30 משתתפים (אלא אם צוין אחרת)",
       "יש מחירים מיוחדים לתושבי טבריה",
       "יש לעדכן מספר סופי עד 48 שעות לפני הפעילות",

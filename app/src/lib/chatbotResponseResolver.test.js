@@ -38,7 +38,7 @@ describe("approved response resolver", () => {
 
   test("pricing response contains approved policy facts but no specific amount", () => {
     const response = resolveResponse(approvedContent, "policy.pricing");
-    expect(response).toContain("מחירים כוללים מע\"מ");
+    expect(response).toContain("אופן חישוב המע״מ הוא לפי העלון או ההצעה של הפעילות שנבחרה");
     expect(response).toContain("30 משתתפים");
     expect(response).toContain("48 שעות");
     expect(response).not.toMatch(/₪|ש"ח|\d[\d.,]*\s*שקל(?:ים)?/u);

@@ -1,3 +1,5 @@
+import assets from "./assets.json" with { type: "json" };
+
 const LOCKED_STATUSES = new Set(["awaiting_human", "human_active"]);
 
 const guardedPatterns = [
@@ -42,10 +44,19 @@ function menuFor(content, state) {
 }
 
 function enterMenu(session, menuId, parentState = session.currentState) {
+  const siteMenus = { acre: "acre_extreme_park", acre_groups: "acre_extreme_park", berko_topics: "berko_360_tiberias" };
+  const resetsTopic = ["main", "activities_sites", "corporate_topics"].includes(menuId) || Object.hasOwn(siteMenus, menuId);
+  const collectedFields = { ...session.collectedFields };
+  if (resetsTopic) {
+    delete collectedFields.requested_activity;
+    delete collectedFields.requested_site;
+    if (siteMenus[menuId]) collectedFields.requested_site = siteMenus[menuId];
+  }
   return {
     ...session,
     currentState: `menu.${menuId}`,
     parentState,
+    ...(resetsTopic ? { selectedSite: siteMenus[menuId] ?? null, selectedActivity: null, collectedFields } : {}),
   };
 }
 
@@ -77,9 +88,9 @@ function renderMenu(content, session, menuId, parentState) {
 function resolveMenuOption(menu, input) {
   const optionId = normalize(input.optionId);
   const text = normalize(input.text);
+  if (optionId) return menu.options.find((option) => option.id === optionId) ?? null;
   return menu.options.find((option) => (
-    (optionId && option.id === optionId)
-    || text === String(option.number)
+    text === String(option.number)
     || text === normalize(option.label)
     || text === option.id
   )) ?? null;
@@ -104,6 +115,25 @@ function responseForAnswer(target) {
 
 function followTransition(content, session, input, option) {
   const target = option.next_state;
+  if (target.startsWith("asset.")) {
+    const asset = assets.find((item) => item.id === target.slice(6) && item.enabled);
+    if (!asset) return beginHandoff(session, input, "document_unavailable");
+    return {
+      session: {
+        ...enterMenu(session, "corporate_group_size", session.currentState),
+        selectedSite: asset.site,
+        selectedActivity: asset.topic,
+        collectedFields: { ...session.collectedFields, requested_site: asset.site, requested_activity: asset.topic },
+      },
+      actions: [{ type: "send_attachment", assetId: asset.id }, send("menu.corporate_group_size")],
+    };
+  }
+  if (target === "flow.berko") {
+    return {
+      session: enterMenu(session, "berko_topics", session.currentState),
+      actions: [send("site.berko_360_tiberias.overview"), send("menu.berko_topics")],
+    };
+  }
   if (target.startsWith("menu.")) {
     return renderMenu(content, session, target.slice(5), session.currentState);
   }
@@ -120,8 +150,8 @@ function followTransition(content, session, input, option) {
 
   if (target === "flow.corporate") {
     return {
-      session: enterMenu(session, "corporate_group_size", session.currentState),
-      actions: [send("policy.corporate.overview"), send("policy.corporate.offerings"), send("menu.corporate_group_size")],
+      session: enterMenu(session, "corporate_topics", session.currentState),
+      actions: [send("policy.corporate.overview"), send("policy.corporate.offerings"), send("menu.corporate_topics")],
     };
   }
 

@@ -31,7 +31,7 @@ describe("deterministic chatbot state machine", () => {
 
   test.each([
     ["1", "menu.activities_sites", ["menu.activities_sites"]],
-    ["2", "menu.corporate_group_size", ["policy.corporate.overview", "policy.corporate.offerings", "menu.corporate_group_size"]],
+    ["2", "menu.corporate_topics", ["policy.corporate.overview", "policy.corporate.offerings", "menu.corporate_topics"]],
     ["3", "menu.main", ["policy.pricing", "handoff.transfer"]],
     ["4", "menu.directions", ["menu.directions"]],
     ["5", "menu.safety", ["menu.safety"]],
@@ -46,7 +46,7 @@ describe("deterministic chatbot state machine", () => {
 
   test.each([
     ["1", "menu.acre", ["menu.acre"]],
-    ["2", "menu.activities_sites", ["site.berko_360_tiberias.overview"]],
+    ["2", "menu.berko_topics", ["site.berko_360_tiberias.overview", "menu.berko_topics"]],
     ["3", "menu.activities_sites", ["site.field_activities.overview"]],
   ])("navigates an approved activity site option %s", (text, expectedState, expectedResponses) => {
     const result = advance({ content, session: automated("menu.activities_sites", "menu.main"), input: { text } });
@@ -76,11 +76,11 @@ describe("deterministic chatbot state machine", () => {
     expect(result.session.status).toBe("automated");
   });
 
-  test("routes Acre events into the corporate flow", () => {
+  test("routes Acre events into the Acre group flow", () => {
     const result = advance({ content, session: automated("menu.acre", "menu.activities_sites"), input: { text: "6" } });
 
-    expect(responseIds(result)).toEqual(["policy.corporate.overview", "policy.corporate.offerings", "menu.corporate_group_size"]);
-    expect(result.session.currentState).toBe("menu.corporate_group_size");
+    expect(responseIds(result)).toEqual(["menu.acre_groups"]);
+    expect(result.session.currentState).toBe("menu.acre_groups");
   });
 
   test.each([

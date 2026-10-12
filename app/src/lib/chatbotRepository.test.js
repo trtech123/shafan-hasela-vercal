@@ -8,6 +8,26 @@ import {
 } from "../../../supabase/functions/_shared/chatbot/repository.js";
 
 describe("chatbot Supabase repository", () => {
+  test("uses the service-only atomic claim and preserves denial reasons", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: "expired", error: null });
+    const repository = createChatbotRepository({ rpc });
+    expect(await repository.claimAttachment("message-1")).toBe("expired");
+    expect(rpc).toHaveBeenCalledWith("claim_bot_attachment", { p_message_id: "message-1" });
+  });
+  test("retry list preserves attachment identity but excludes previously failed attachments", async () => {
+    const rows = [
+      { id: "a", message_kind: "attachment", delivery_status: "pending", asset_id: "carmel", asset_checksum: "a".repeat(64), conversation_id: "c", response_id: "asset.carmel" },
+      { id: "b", message_kind: "attachment", delivery_status: "failed" },
+      { id: "t", message_kind: "text", delivery_status: "failed", body: "reply" },
+    ];
+    const query = { select: vi.fn(), eq: vi.fn(), in: vi.fn(), order: vi.fn().mockResolvedValue({ data: rows }) };
+    for (const method of ["select", "eq", "in"]) query[method].mockReturnValue(query);
+    const repo = createChatbotRepository({ from: vi.fn().mockReturnValue(query) });
+    const result = await repo.listRetryableOutbound("event-1");
+    expect(result.map((m) => m.id)).toEqual(["a", "t"]);
+    expect(result[0]).toMatchObject({ messageKind: "attachment", assetId: "carmel", assetChecksum: "a".repeat(64), conversationId: "c" });
+    expect(query.in).toHaveBeenCalledWith("delivery_status", ["pending", "failed"]);
+  });
   test("maps persisted state without exposing arbitrary database fields", () => {
     expect(mapConversation({
       id: "conversation-1",
