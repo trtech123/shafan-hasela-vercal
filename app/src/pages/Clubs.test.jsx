@@ -27,6 +27,9 @@ vi.mock("sonner", () => ({
   toast: { error: (...args) => toastError(...args), success: (...args) => toastSuccess(...args) },
 }));
 
+vi.mock("@/lib/AuthContext", () => ({ useAuth: () => ({ user: { id: "admin-1", role: "admin" } }) }));
+vi.mock("@/components/clubs/ChatbotRegistrationLink", () => ({ default: () => null }));
+
 const clubs = [{
   id: "club-1",
   name: "חוג טיפוס נוער",

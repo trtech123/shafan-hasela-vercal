@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { supabase } from "@/api/supabaseClient";
 import ClubFormDialog from "@/components/clubs/ClubFormDialog";
 import MemberRegistrationDialog from "@/components/clubs/MemberRegistrationDialog";
+import ChatbotRegistrationLink from "@/components/clubs/ChatbotRegistrationLink";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -224,6 +225,7 @@ export default function Clubs() {
         </div>
       </header>
 
+      <ChatbotRegistrationLink />
       <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="space-y-3">
           <div className="relative">
