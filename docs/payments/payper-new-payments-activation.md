@@ -1,0 +1,30 @@
+# Payper activation: new verified payments only
+
+This is a local release checklist. It authorizes no production change or document request.
+
+## Ownership boundary
+
+- The disabled ledger migration installs `activation_cutoff_utc = NULL` and an independently constrained `enabled = false` dispatch switch. In this state it captures no payments and does not redirect historical Rivhit work.
+- A later, separately reviewed activation transaction must set `activation_cutoff_utc` once using the database clock (`statement_timestamp()`). The trigger rejects a cutoff before that statement and any later change. PostgreSQL compares `timestamptz` values as instants; operators should display and audit the value in UTC.
+- Payper ownership requires a successful, verified Pelecard payment with **both** persisted `payment_transactions.created_at >= activation_cutoff_utc` and `verified_at >= activation_cutoff_utc`. Equality is included. An attempt started before the cutoff remains historical even if its callback, retry, or verification arrives afterward. There is no backfill query.
+- `verified_at` is the application's verified finalization time, not a documented provider timestamp. The created-at requirement makes the rule conservative: an already initiated hosted transaction cannot enter automatic Payper issuance. Pelecard's documented transaction times lack a confirmed timezone and are not used as UTC cutoff evidence.
+- The payment success finalizer remains unchanged. Rivhit payment-success event, document claim, expired lease claim, and immediate-issuance fences apply to new Pelecard attempts from the cutoff; older attempts retain their legacy path. A Payper reservation checks for existing order, sale, or payment accounting documents and immediate dispatch.
+
+## Controlled release order
+
+1. With read-only production access, inspect migration history and actual columns, constraints, triggers, existing accounting documents, pending and in-flight workers. Resolve any schema drift. Confirm the terminal/account and its VAT/exemption behavior with the accountant and provider. Confirm a usable authoritative manual document lookup for uncertain outcomes; do not assume the reporting portal provides it.
+2. Review and deploy the disabled ledger migration with a null cutoff and `enabled = false`. Verify these values and that old events/documents were not changed. Keep document dispatch off.
+3. Install the activation-controls migration, then `202610300001_pelecard_admin_cashier_payment_access.sql`; all leave the cutoff NULL and dispatch off. Deploy the tested Payper source-freeze, adapter, `payper-issuance-worker`, updated `pelecard-order-payment` Edge function, and admin-assisted billing page with `PAYPER_DISPATCH_ENABLED` absent or `false`. Set a server-only `PAYPER_WORKER_TOKEN`; every worker POST requires exactly one server-authorized `x-payper-target-payment-id` header. This release has no automatic oldest-payment mode and no recurring schedule.
+4. After separate release authorization, drain or inspect relevant in-flight accounting claims and call `activate_payper_new_payments(admin_id)` from a trusted service-role session. This stores the DB statement instant as an immutable `timestamptz`, enables the database gate, and permits **one** reservation. Verify the displayed UTC instant and that no historical payment became eligible. Do not backdate or update the cutoff.
+5. For one new payment created after the cutoff, verify its successful Pelecard transaction, order/sale link, immutable checkout and customer snapshots, explicit uniform VAT treatment, ILS and amount reconciliation. Check all Rivhit/Payper order, sale, and payment document records and the provider's authoritative lookup before supervised dispatch. Set `PAYPER_DISPATCH_ENABLED=true` only after authorization and with the one-document quota verified; invoke the trusted worker once with that payment's UUID in the server-only target header.
+6. On a definitive success, persist the Payper document number and URL. On timeout or any uncertain result, leave the ledger in `reconciliation_required`, use provider evidence to resolve it manually, and never automatically retry creation. Stop after one document and review it with the accountant.
+
+## Remaining release gates
+
+- Production schema and migration compatibility have only been inspected read-only in earlier work; both migrations and the one-document reservation have been rehearsed on disposable local PostgreSQL, not production.
+- Payper account settings show an ILS-capable invoice account and VAT reporting cadence, but they do not prove the taxable/exempt decision for an individual order. The decision must come from a verified immutable billing snapshot. Unknown or mixed treatment is rejected by the adapter.
+- Pelecard support verbally confirmed `CreatePayperInvoice` is enabled for the terminal. Confirm exact production credential mapping and provider behavior through a controlled, authorized test; do not expose credentials.
+- Establish an authoritative way to find a document after timeout, and determine provider duplicate protection. Until confirmed, uncertain dispatch is a manual reconciliation stop.
+- Do not activate dispatch or create a real payment/document under this checklist alone.
+
+The existing order payment reservation creates an immutable one-line checkout snapshot from the stored order amount and number. The admin-assisted billing step stores a separate private, immutable payment-attempt snapshot before hosted checkout. It copies VAT only from the linked order customer snapshot and never accepts a client VAT choice. Incomplete identity, email, or VAT does not reject payment; after verified success it creates a `source_blocked` Payper ledger row with a safe manual-review reason. The worker polls only `eligible`/`source_frozen` rows. Its application switch, database switch, one-document quota, and one-shot reservation must all agree before a provider POST. The exact disabled release and one-payment procedure is `docs/payments/payper-minimal-e2e-release-2026-10-29.md`.

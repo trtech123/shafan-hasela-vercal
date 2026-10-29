@@ -22,6 +22,12 @@ vi.mock("@/api/supabaseClient", () => ({
     functions: { invoke: (...args) => invokeMock(...args) },
   },
 }));
+vi.mock("@/lib/AuthContext", () => ({
+  useAuth: () => ({ user: { role: "admin" } }),
+}));
+vi.mock("@/components/accounting/PayperManualReview", () => ({
+  default: () => null,
+}));
 vi.mock("sonner", () => ({
   toast: {
     error: (...args) => toastError(...args),

@@ -24,6 +24,7 @@ describe("CashRegister hosted Pelecard wiring", () => {
 
   test("registers the return page under authenticated application routes", () => {
     expect(app).toContain("import PaymentReturn from './pages/PaymentReturn'");
-    expect(app).toContain('<Route path="/payment/return" element={<PaymentReturn />} />');
+    expect(app).toContain('<Route path="/payment/return" element={<PaymentReturnRoute />} />');
+    expect(app).toContain('<PaymentReturn />');
   });
 });

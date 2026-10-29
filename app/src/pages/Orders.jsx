@@ -10,12 +10,15 @@ import OrderConfirmationPDF from "../components/orders/OrderConfirmationPDF";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
 import PaymentBadge from "../components/orders/PaymentBadge";
 import OrderFormDialog from "../components/orders/OrderFormDialog";
+import OrderCustomerLink from "@/components/customers/OrderCustomerLink";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import moment from "moment";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/AuthContext";
+import { orderPaymentPath } from "@/payments/orderPayments";
 import { toast } from "sonner";
 
 const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
@@ -37,6 +40,7 @@ export default function Orders() {
   const [quotes, setQuotes] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
+  const [billingOrder, setBillingOrder] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [emailOrder, setEmailOrder] = useState(null);
   const [dailyOrder, setDailyOrder] = useState(null); // triggers the daily-summary dialog
@@ -313,6 +317,8 @@ export default function Orders() {
               <div className="flex items-center justify-between pt-1">
                 <PaymentBadge status={order.payment_status} />
                 <div className="flex gap-0.5">
+                  {(user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
+                  {(user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
                   <button onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     <Pencil className="w-4 h-4 text-muted-foreground" />
                   </button>
@@ -400,6 +406,8 @@ export default function Orders() {
                     <td className="px-4 py-3 hidden lg:table-cell font-medium">₪{(order.total_price || 0).toLocaleString()}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
+                        {(user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
+                        {(user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
                         <button onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                           <Pencil className="w-4 h-4 text-muted-foreground" />
                         </button>
@@ -435,6 +443,13 @@ export default function Orders() {
       </div>
 
       <OrderFormDialog open={dialogOpen} onClose={() => setDialogOpen(false)} order={editingOrder} activities={activities} onSaved={loadData} />
+
+      <Dialog open={!!billingOrder} onOpenChange={() => setBillingOrder(null)}>
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto">
+          <DialogTitle>פרטי חיוב להזמנה</DialogTitle>
+          {billingOrder && <OrderCustomerLink order={billingOrder} onLinked={() => { setBillingOrder(null); loadData(); }} />}
+        </DialogContent>
+      </Dialog>
 
       <InstructorEmailDialog
         open={!!emailOrder}

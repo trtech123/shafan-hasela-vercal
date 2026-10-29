@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
+import PayperManualReview from "@/components/accounting/PayperManualReview";
 
 const OPERATION_COLUMNS = [
   "event_id", "source_type", "source_id", "purpose", "accounting_provider",
@@ -128,6 +130,7 @@ function SummaryCard({ icon: Icon, label, value, tone = "slate" }) {
 }
 
 export default function AccountingOperations() {
+  const { user } = useAuth();
   const [operations, setOperations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -231,6 +234,8 @@ export default function AccountingOperations() {
           </Button>
         </div>
       </header>
+
+      {user?.role === 'admin' && <PayperManualReview />}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="סיכום הנהלת חשבונות">
         <SummaryCard icon={CheckCircle2} label="תשלומים שהצליחו" value={counts.payments} tone="green" />
