@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import CustomerFormDialog from './CustomerFormDialog';
 import useCustomerSearch from './useCustomerSearch';
 
-export default function CustomerSelector({ value, onSelect, onClear, initialValues = {} }) {
+export default function CustomerSelector({ value, onSelect, onClear = null, initialValues = {} }) {
   const { user } = useAuth();
   const allowed = canManageCustomers(user?.role);
   const [search, setSearch] = useState('');

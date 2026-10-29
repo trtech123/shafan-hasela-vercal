@@ -14,15 +14,17 @@ export default function PayperManualReview() {
   const [unavailable, setUnavailable] = useState(false);
   useEffect(() => {
     let active = true;
-    supabase.from('payper_document_ledger')
-      .select('payment_id,order_id,state,reconciliation_code,created_at')
-      .in('state', ['source_blocked', 'reconciliation_required'])
-      .order('created_at', { ascending: false }).limit(100)
-      .then(({ data, error }) => {
+    (async () => {
+      try {
+        const { data, error } = await supabase.from('payper_document_ledger')
+          .select('payment_id,order_id,state,reconciliation_code,created_at')
+          .in('state', ['source_blocked', 'reconciliation_required'])
+          .order('created_at', { ascending: false }).limit(100);
         if (!active) return;
         if (error) setUnavailable(true);
         else setRows(data ?? []);
-      }).catch(() => { if (active) setUnavailable(true); });
+      } catch { if (active) setUnavailable(true); }
+    })();
     return () => { active = false; };
   }, []);
   if (unavailable) return <section dir="rtl" role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-900">
