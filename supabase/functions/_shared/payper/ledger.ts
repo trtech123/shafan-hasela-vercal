@@ -16,10 +16,12 @@ export function createPayperLedger(client: RpcClient, dispatchEnabled = false) {
       if (!paymentId) throw new Error("payper_payment_id_required");
       return result(await client.rpc("freeze_payper_source", { p_payment_id: paymentId }), "freeze_source");
     },
-    async reserveDispatch(paymentId: string): Promise<string> {
+    async reserveDispatch(paymentId: string, recordId: string): Promise<string> {
       if (!dispatchEnabled) throw new Error("payper_dispatch_disabled");
-      if (!paymentId) throw new Error("payper_payment_id_required");
-      const response = await client.rpc("reserve_payper_dispatch", { p_payment_id: paymentId });
+      if (!paymentId || !/^[1-9][0-9]{0,19}$/.test(recordId)) throw new Error("payper_transaction_record_required");
+      const response = await client.rpc("reserve_payper_dispatch", {
+        p_payment_id: paymentId, p_trx_record_id: recordId,
+      });
       if (response.error && typeof response.error === "object" && "message" in response.error
         && response.error.message === "payper_dispatch_limit_reached")
         throw new Error("payper_dispatch_limit_reached");

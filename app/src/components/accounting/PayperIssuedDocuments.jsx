@@ -23,7 +23,7 @@ export default function PayperIssuedDocuments() {
     (async () => {
       try {
         const { data, error } = await supabase.from('payper_document_ledger')
-          .select('order_id,document_number,document_url,updated_at')
+          .select('order_id,document_number,document_url,provider_trx_record_id,updated_at')
           .eq('state', 'succeeded').order('updated_at', { ascending: false }).limit(100);
         if (!active) return;
         if (error) setUnavailable(true);
@@ -42,6 +42,7 @@ export default function PayperIssuedDocuments() {
         const url = safePayperLink(row.document_url, row.document_number);
         return <li key={row.order_id} className="rounded-lg border p-3 text-sm">
           <span className="block">הזמנה: {row.order_id} · מסמך: {row.document_number}</span>
+          <span className="block">מזהה עסקת פלאקארד: {row.provider_trx_record_id}</span>
           {url ? <a href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
             className="text-primary underline">פתיחת מסמך Payper</a>
             : <span role="alert">קישור המסמך אינו תקין; נדרשת בדיקה ידנית.</span>}

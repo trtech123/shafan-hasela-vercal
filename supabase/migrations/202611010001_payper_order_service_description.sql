@@ -68,4 +68,35 @@ CREATE TRIGGER trg_z_hold_payper_missing_service_description
   AFTER INSERT OR UPDATE OF status ON public.payment_transactions FOR EACH ROW
   EXECUTE FUNCTION public.hold_payper_missing_service_description();
 
+-- Persist the verified Pelecard record ID in the same transaction that reserves
+-- the one-shot dispatch. The pre-existing one-argument RPC cannot reserve a
+-- document without it; a unique index also fences cross-payment reuse.
+ALTER TABLE public.payper_document_ledger
+  ADD COLUMN provider_trx_record_id text,
+  ADD CONSTRAINT payper_trx_record_format CHECK
+    (provider_trx_record_id IS NULL OR provider_trx_record_id ~ '^[1-9][0-9]{0,19}$'),
+  ADD CONSTRAINT payper_reserved_requires_trx_record CHECK
+    (state NOT IN ('dispatch_reserved','reconciliation_required','succeeded')
+      OR provider_trx_record_id IS NOT NULL);
+CREATE UNIQUE INDEX payper_document_ledger_trx_record_unique
+  ON public.payper_document_ledger(provider_trx_record_id)
+  WHERE provider_trx_record_id IS NOT NULL;
+
+CREATE FUNCTION public.reserve_payper_dispatch(p_payment_id uuid, p_trx_record_id text)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  IF coalesce(auth.role(), '') <> 'service_role'
+    OR p_trx_record_id IS NULL OR p_trx_record_id !~ '^[1-9][0-9]{0,19}$'
+  THEN RAISE EXCEPTION 'payper_transaction_record_required' USING ERRCODE = '42501'; END IF;
+  UPDATE public.payper_document_ledger SET provider_trx_record_id = p_trx_record_id
+  WHERE payment_id = p_payment_id AND state = 'source_frozen'
+    AND provider_trx_record_id IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'payper_dispatch_fence' USING ERRCODE = '42501'; END IF;
+  RETURN public.reserve_payper_dispatch(p_payment_id);
+END $$;
+REVOKE ALL ON FUNCTION public.reserve_payper_dispatch(uuid,text)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.reserve_payper_dispatch(uuid,text) TO service_role;
+REVOKE EXECUTE ON FUNCTION public.reserve_payper_dispatch(uuid) FROM service_role;
+
 COMMIT;

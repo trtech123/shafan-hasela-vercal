@@ -13,12 +13,23 @@ const snapshot = (name) => JSON.stringify({ schema_version: 1,
   linked_order_info: { order_number: 'ORD-1' } });
 try {
   await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
+    CREATE SCHEMA auth;
+    CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql AS
+      $$ SELECT current_setting('request.jwt.claim.role', true) $$;
     CREATE TABLE public.activities(id uuid PRIMARY KEY,name text);
     CREATE TABLE public.orders(id uuid PRIMARY KEY,order_number text,activity_id uuid);
     CREATE TABLE public.payment_transactions(id uuid PRIMARY KEY,provider text,operation text,
       status text,order_id uuid,checkout_snapshot jsonb);
-    CREATE TABLE public.payper_document_ledger(payment_id uuid PRIMARY KEY,order_id uuid,
+    CREATE TABLE public.payper_document_ledger(id uuid DEFAULT gen_random_uuid(),payment_id uuid PRIMARY KEY,order_id uuid,
       state text,reconciliation_code text,updated_at timestamptz);
+    CREATE FUNCTION public.reserve_payper_dispatch(p_payment_id uuid) RETURNS uuid LANGUAGE plpgsql AS $$
+    DECLARE reservation uuid;
+    BEGIN
+      UPDATE public.payper_document_ledger SET state='dispatch_reserved'
+      WHERE payment_id=p_payment_id AND state='source_frozen' RETURNING id INTO reservation;
+      IF reservation IS NULL THEN RAISE EXCEPTION 'dispatch_fence'; END IF;
+      RETURN reservation;
+    END $$;
     CREATE FUNCTION public.capture_payper_eligible_payment() RETURNS trigger LANGUAGE plpgsql AS $$
     BEGIN
       IF NEW.status='succeeded' THEN
@@ -61,7 +72,23 @@ try {
   await db.query(`INSERT INTO public.payment_transactions VALUES($1,'pelecard','payment','initiated',$2,'{}'::jsonb)`,
     ['30000000-0000-4000-8000-000000000004', order]);
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.payment_transactions`)).rows[0].n, 4);
-  console.log('PASS historical unchanged, activity description frozen, missing description holds accounting without blocking payment');
+  await db.exec(`SELECT set_config('request.jwt.claim.role','service_role',false);
+    UPDATE public.payper_document_ledger SET state='source_frozen'
+    WHERE payment_id='30000000-0000-4000-8000-000000000002';
+    SELECT public.reserve_payper_dispatch('30000000-0000-4000-8000-000000000002','103059585');`);
+  assert.deepEqual((await db.query(`SELECT state,provider_trx_record_id FROM public.payper_document_ledger
+    WHERE payment_id='30000000-0000-4000-8000-000000000002'`)).rows[0],
+    { state: 'dispatch_reserved', provider_trx_record_id: '103059585' });
+  await db.exec(`INSERT INTO public.payper_document_ledger(payment_id,order_id,state)
+    VALUES('30000000-0000-4000-8000-000000000004','${order}','source_frozen')`);
+  await assert.rejects(db.query(`SELECT public.reserve_payper_dispatch(
+    '30000000-0000-4000-8000-000000000004','103059585')`));
+  await assert.rejects(db.query(`SELECT public.reserve_payper_dispatch(
+    '30000000-0000-4000-8000-000000000004')`));
+  assert.deepEqual((await db.query(`SELECT state,provider_trx_record_id FROM public.payper_document_ledger
+    WHERE payment_id='30000000-0000-4000-8000-000000000004'`)).rows[0],
+    { state: 'source_frozen', provider_trx_record_id: null });
+  console.log('PASS historical unchanged, description review, atomic transaction reference, cross-payment duplicate fence');
 } catch (error) {
   console.error(`FAIL payper description rehearsal: ${error.message} (code ${error.code ?? 'unknown'}, position ${error.position ?? 'unknown'})`);
   process.exitCode = 1;

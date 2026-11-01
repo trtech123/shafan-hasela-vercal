@@ -12,7 +12,10 @@ SHA is recorded in the release approval response. The currently active Vercel de
   Payper migrations installed in October must never be replayed. The new trigger
   freezes the linked activity name for prospective order-payment snapshots;
   missing activity leaves checkout intact and creates an immediate durable
-  manual-document-review obligation after verified payment success.
+  manual-document-review obligation after verified payment success. It also
+  stores the verified Pelecard `trxRecordId` atomically at dispatch reservation,
+  makes it unique across payments, and removes the old one-argument reservation
+  grant. No existing ledger row is rewritten.
 - Deploy **only** `payper-issuance-worker` as a new Edge function. Do not redeploy
   `pelecard-order-payment` v10 or any other Edge function. Its source already
   exists in the approved baseline. Leave `PAYPER_DISPATCH_ENABLED` and
@@ -37,7 +40,8 @@ SHA is recorded in the release approval response. The currently active Vercel de
    an unreadable migration-history table.
 3. Confirm control row `enabled=false`, `activation_cutoff_utc IS NULL`,
    `dispatch_remaining=0`; ledger and billing snapshot counts are still zero.
-   Confirm the new trigger/function are absent and no Payper schedule exists.
+   Confirm the new trigger/functions and `provider_trx_record_id` column are
+   absent and no Payper schedule exists.
    Verify existing accounting work before applying SQL. Inspect secret **names**
    only: dispatch and worker token must be absent. Never print values.
 4. Record current app and Edge deployment IDs, schema definitions, control row,
@@ -50,8 +54,8 @@ SHA is recorded in the release approval response. The currently active Vercel de
    authenticated Supabase CLI `db query --linked --project-ref
    divzxsynczeifkpnpupl --file
    supabase/migrations/202611010001_payper_order_service_description.sql`.
-   It is transaction-wrapped. If output is uncertain, inspect actual function,
-   trigger, and row state before any retry. Verify historical payment counts and
+   It is transaction-wrapped. If output is uncertain, inspect actual functions,
+   triggers, column, grant and row state before any retry. Verify historical payment counts and
    disabled control values are unchanged.
 2. Deploy `payper-issuance-worker` only, with `verify_jwt=false` as in
    `supabase/config.toml`; its own bearer-token check remains mandatory.

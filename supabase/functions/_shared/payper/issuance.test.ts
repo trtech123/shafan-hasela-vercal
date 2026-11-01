@@ -36,6 +36,7 @@ describe("Payper ledger to provider issuance bridge", () => {
     const outcome = await issueFrozenPayperDocument(source().paymentId, { ledger, provider, credentials: auth });
     expect(calls).toEqual(["freeze", "lookup", "reserve", "create", "record"]);
     expect(provider.lookupTransaction).toHaveBeenCalledWith("hosted-session-123", 11800);
+    expect(ledger.reserveDispatch).toHaveBeenCalledWith(source().paymentId, "103059585");
     expect(provider.createInvoice).toHaveBeenCalledWith(expect.objectContaining({ trxRecordId: "103059585" }), "reservation-1");
     expect(ledger.recordOutcome).toHaveBeenCalledWith(source().paymentId, outcome);
   });

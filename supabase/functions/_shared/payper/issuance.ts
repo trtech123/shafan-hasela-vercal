@@ -5,7 +5,7 @@ import { isPostActivationPayment } from "./cutoff.ts";
 
 interface IssuanceLedger {
   freezeSource(paymentId: string): Promise<unknown>;
-  reserveDispatch(paymentId: string): Promise<string>;
+  reserveDispatch(paymentId: string, recordId: string): Promise<string>;
   recordOutcome(paymentId: string, outcome: PayperDispatchOutcome): Promise<void>;
 }
 interface IssuanceProvider {
@@ -28,9 +28,9 @@ export async function issueFrozenPayperDocument(paymentId: string, options: {
   const recordId = await options.provider.lookupTransaction(facts.pelecardTransactionId, amountMinor);
   const request = buildCreatePayperInvoice(facts, recordId, options.credentials,
     { sendByMail: options.sendByMail === true });
-  // A future activation migration must enable this database RPC. Until then the
-  // existing disabled ledger rejects here, before the document POST.
-  const reservationId = await options.ledger.reserveDispatch(paymentId);
+  // The database cutoff and one-document allowance independently gate this
+  // one-shot reservation before any document POST.
+  const reservationId = await options.ledger.reserveDispatch(paymentId, recordId);
   let outcome: PayperDispatchOutcome;
   try {
     outcome = await options.provider.createInvoice(request, reservationId);

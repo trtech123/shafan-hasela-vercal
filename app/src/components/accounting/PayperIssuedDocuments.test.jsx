@@ -13,13 +13,14 @@ function withRows(rows, error = null) {
 }
 
 test('shows only a validated provider document link without exposing billing identity', async () => {
-  withRows([{ order_id: 'order-1', document_number: '595166',
+  withRows([{ order_id: 'order-1', document_number: '595166', provider_trx_record_id: '103059585',
     document_url: 'https://app.payper.co.il/public/invoice_show/595166?ak=opaque' }]);
   render(<PayperIssuedDocuments />);
   const link = await screen.findByRole('link', { name: 'פתיחת מסמך Payper' });
   expect(link).toHaveAttribute('href', 'https://app.payper.co.il/public/invoice_show/595166?ak=opaque');
   expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   expect(link).toHaveAttribute('referrerpolicy', 'no-referrer');
+  expect(screen.getByRole('region')).toHaveTextContent('103059585');
   expect(screen.getByRole('region')).toHaveTextContent('הצלחת ההפקה אינה אישור שהאימייל נמסר');
   expect(screen.getByRole('region').textContent).not.toContain('000000018');
   expect(query).toHaveBeenCalledWith('payper_document_ledger');

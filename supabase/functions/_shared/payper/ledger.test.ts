@@ -56,6 +56,16 @@ describe("disabled Payper ledger application gate", () => {
   });
   test("preserves only the safe quota code so valid payments stay eligible", async () => {
     const ledger = createPayperLedger({ rpc: vi.fn().mockResolvedValue({ error: { message: "payper_dispatch_limit_reached" } }) }, true);
-    await expect(ledger.reserveDispatch("payment-1")).rejects.toThrow("payper_dispatch_limit_reached");
+    await expect(ledger.reserveDispatch("payment-1", "103059585")).rejects.toThrow("payper_dispatch_limit_reached");
+  });
+  test("reserves with the verified transaction record, never the hosted session ID alone", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: "reservation-1", error: null });
+    const ledger = createPayperLedger({ rpc }, true);
+    await expect(ledger.reserveDispatch("payment-1", "103059585")).resolves.toBe("reservation-1");
+    expect(rpc).toHaveBeenCalledWith("reserve_payper_dispatch", {
+      p_payment_id: "payment-1", p_trx_record_id: "103059585",
+    });
+    await expect(ledger.reserveDispatch("payment-1", "hosted-session-123"))
+      .rejects.toThrow("payper_transaction_record_required");
   });
 });
