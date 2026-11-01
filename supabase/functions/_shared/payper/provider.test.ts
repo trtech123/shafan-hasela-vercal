@@ -78,6 +78,13 @@ describe("documented Pelecard Payper contract", () => {
     expect(data.document_rounded).toBe("false");
   });
 
+  test("does not issue an invoice whose only service description is an order number", () => {
+    const incomplete = facts();
+    incomplete.checkoutSnapshot.items[0].name = incomplete.orderNumber;
+    expect(() => buildCreatePayperInvoice(incomplete, "103059585", gateway()))
+      .toThrow("payper_description_required");
+  });
+
   test("read-only lookup uses documented method and credentials; creation stays disabled", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({ StatusCode: "000", ResultData: {
       TransactionId: "hosted-session-123", TransactionPelecardId: 103059585,

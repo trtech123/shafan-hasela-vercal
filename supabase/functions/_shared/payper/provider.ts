@@ -92,6 +92,9 @@ export function buildCreatePayperInvoice(
   const invoiceLines = items.map(item => {
     if (!safeText(item.name) || !safeText(item.id, 100) || !Number.isSafeInteger(item.qty) || item.qty <= 0)
       throw new Error("payper_items_invalid");
+    // The legacy order reservation used only ORD-... as its item name.
+    // An order reference alone is not a product or service description.
+    if (item.name === facts.orderNumber) throw new Error("payper_description_required");
     const unitMinor = minor(item.customPrice);
     totalMinor += unitMinor * item.qty;
     if (!Number.isSafeInteger(totalMinor)) throw new Error("payper_amount_mismatch");
