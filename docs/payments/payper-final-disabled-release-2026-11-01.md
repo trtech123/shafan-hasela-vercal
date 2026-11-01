@@ -16,7 +16,7 @@ SHA is recorded in the release approval response. The currently active Vercel de
 - Deploy **only** `payper-issuance-worker` as a new Edge function. Do not redeploy
   `pelecard-order-payment` v10 or any other Edge function. Its source already
   exists in the approved baseline. Leave `PAYPER_DISPATCH_ENABLED` and
-  `PAYPER_WORKER_TOKEN` absent. The worker then responds unavailable before any
+  `PAYPER_WORKER_TOKEN` absent. Leave `PAYPER_SEND_BY_MAIL` absent too. The worker then responds unavailable before any
   database or provider call. Do not invoke it with a valid token and do not
   schedule it.
 - Deploy the exact candidate Vercel app first with `--prod --skip-domain`, then
@@ -96,5 +96,24 @@ SHA is recorded in the release approval response. The currently active Vercel de
 No activation cutoff, one-document allowance, gateway POST, card charge,
 customer delivery, recurring schedule, or Payper provider reconciliation is
 authorized. A future supervised test still requires authoritative document
-lookup after timeout, invoice date/VAT and delivery confirmation, and explicit
+lookup after timeout, VAT and delivery confirmation, and explicit
 owner approval of one new order's exact payment amount and document consequence.
+
+Payper assigns the actual invoice issue date; the adapter sends no date override.
+For the first real document, open the returned `InvoiceLink` and verify the
+displayed issue date, legal customer, gross amount, service description, VAT,
+Invoice-Receipt type, and transaction linkage. `InvoiceNumber` and `InvoiceLink`
+prove document issuance only after strict success validation; they do not prove
+the email reached the customer. The documented `send_by_mail` request flag is
+sent only when `PAYPER_SEND_BY_MAIL=true` is separately configured and the
+frozen billing email is valid. Otherwise it remains absent (provider default
+false). Verify account-specific mail settings before setting this flag.
+
+Any source hold or uncertain provider response remains visible as a durable
+admin accounting-page alert with order/payment references. No response code
+currently establishes authoritative *absence* of a document. Thus every
+post-dispatch rejection, timeout, or lost response stays in
+`reconciliation_required`; there is no automatic or in-app retry. A future
+controlled retry requires provider-confirmed noncreation, recorded evidence,
+and a separately reviewed retry authorization and attempt ledger. A failed
+invoice never reverses or repeats the successful card charge.

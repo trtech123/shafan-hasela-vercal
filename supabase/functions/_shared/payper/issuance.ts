@@ -16,7 +16,7 @@ interface IssuanceProvider {
 /** The only local path from frozen payment facts to the creation adapter. */
 export async function issueFrozenPayperDocument(paymentId: string, options: {
   ledger: IssuanceLedger; provider: IssuanceProvider;
-  credentials: GatewayCredentials;
+  credentials: GatewayCredentials; sendByMail?: boolean;
 }): Promise<PayperDispatchOutcome> {
   if (!paymentId) throw new Error("payper_payment_id_required");
   const facts = await options.ledger.freezeSource(paymentId) as FrozenPayperFacts;
@@ -26,7 +26,8 @@ export async function issueFrozenPayperDocument(paymentId: string, options: {
     throw new Error("payper_activation_fence");
   const amountMinor = Math.round(facts.amount * 100);
   const recordId = await options.provider.lookupTransaction(facts.pelecardTransactionId, amountMinor);
-  const request = buildCreatePayperInvoice(facts, recordId, options.credentials);
+  const request = buildCreatePayperInvoice(facts, recordId, options.credentials,
+    { sendByMail: options.sendByMail === true });
   // A future activation migration must enable this database RPC. Until then the
   // existing disabled ledger rejects here, before the document POST.
   const reservationId = await options.ledger.reserveDispatch(paymentId);

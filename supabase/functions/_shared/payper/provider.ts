@@ -16,6 +16,7 @@ export interface CreatePayperInvoiceRequest {
   terminalNumber: string; user: string; password: string; trxRecordId: string; Uid: "";
   PayperParameters: { typeDocument: "Invoice-Receipt"; DataPayper: {
     document_lang: "hb"; customer_unique_id: string; customer_mail: string; customer_name: string;
+    send_by_mail?: "true";
     document_subject: string; document_no_vat: "true" | "false"; document_rounded: "false";
     invoice_lines: Array<{ description: string; quantity: string; price_per_unit: string;
       include_vat: "true" | "false"; no_vat?: "true"; catalog_id: string }>;
@@ -70,6 +71,7 @@ export function decodeTransactionRecord(body: unknown, hostedId: string, amountM
 /** Builds only the transaction-linked form: Pelecard supplies the card receipt. */
 export function buildCreatePayperInvoice(
   facts: FrozenPayperFacts, recordId: string, auth: GatewayCredentials,
+  options: { sendByMail?: boolean } = {},
 ): CreatePayperInvoiceRequest {
   credentials(auth);
   if (!/^[1-9][0-9]{0,19}$/.test(recordId) || !safeText(facts.pelecardTransactionId))
@@ -82,9 +84,11 @@ export function buildCreatePayperInvoice(
   const name = facts.billing.billing_institution_name ?? facts.billing.organization ?? facts.billing.client_name;
   const companyId = facts.billing.billing_company_id;
   const email = facts.billing.billing_accounting_email ?? facts.billing.client_email;
+  if (options.sendByMail === true && (!safeText(email, 320) || !/^\S+@\S+\.\S+$/.test(email)))
+    throw new Error("payper_email_required");
   if (!safeText(name) ||
     (typeof companyId !== "string" || !/^[0-9]{9}$/.test(companyId)) ||
-    (facts.customerKind === "person" && (!validPersonIdentity(companyId) || !safeText(email) || !/^\S+@\S+\.\S+$/.test(email))))
+    (facts.customerKind === "person" && (!validPersonIdentity(companyId) || !safeText(email, 320) || !/^\S+@\S+\.\S+$/.test(email))))
     throw new Error("payper_billing_incomplete");
   const items = facts.checkoutSnapshot?.items;
   if (!Array.isArray(items) || items.length === 0 || items.length > 1000) throw new Error("payper_items_required");
@@ -106,7 +110,8 @@ export function buildCreatePayperInvoice(
   return { terminalNumber: auth.terminalNumber, user: auth.user, password: auth.password,
     trxRecordId: recordId, Uid: "", PayperParameters: { typeDocument: "Invoice-Receipt", DataPayper: {
       document_lang: "hb", customer_unique_id: companyId as string,
-      customer_mail: safeText(email) ? email : "", customer_name: name,
+      customer_mail: safeText(email, 320) ? email : "", customer_name: name,
+      ...(options.sendByMail === true ? { send_by_mail: "true" as const } : {}),
       document_subject: facts.orderNumber, document_no_vat: vat ? "false" : "true",
       document_rounded: "false", invoice_lines: invoiceLines,
     } } };

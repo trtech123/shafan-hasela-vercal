@@ -85,6 +85,23 @@ describe("documented Pelecard Payper contract", () => {
       .toThrow("payper_description_required");
   });
 
+  test("requests documented Payper mail only when explicitly configured and a frozen email is valid", () => {
+    const source = facts();
+    const defaultRequest = buildCreatePayperInvoice(source, "103059585", gateway());
+    expect(defaultRequest.PayperParameters.DataPayper).not.toHaveProperty("send_by_mail");
+    const mailRequest = buildCreatePayperInvoice(source, "103059585", gateway(), { sendByMail: true });
+    expect(mailRequest.PayperParameters.DataPayper).toMatchObject({
+      customer_mail: "billing@example.test", send_by_mail: "true",
+    });
+    const longEmail = `billing@${["a", "b", "c", "d"].map(letter => letter.repeat(50)).join(".")}.example.test`;
+    source.billing.billing_accounting_email = longEmail;
+    expect(buildCreatePayperInvoice(source, "103059585", gateway(), { sendByMail: true })
+      .PayperParameters.DataPayper.customer_mail).toBe(longEmail);
+    source.billing.billing_accounting_email = "invalid";
+    expect(() => buildCreatePayperInvoice(source, "103059585", gateway(), { sendByMail: true }))
+      .toThrow("payper_email_required");
+  });
+
   test("read-only lookup uses documented method and credentials; creation stays disabled", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({ StatusCode: "000", ResultData: {
       TransactionId: "hosted-session-123", TransactionPelecardId: 103059585,

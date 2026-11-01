@@ -35,7 +35,7 @@ export default function PayperIssuedDocuments() {
 
   return <section dir="rtl" aria-label="מסמכי Payper שהופקו" className="rounded-2xl border bg-card p-5 space-y-3">
     <h2 className="text-lg font-bold">מסמכי Payper שהופקו</h2>
-    <p className="text-xs text-muted-foreground">קישור המסמך נגיש למנהל מורשה בלבד. יש לבדוק את המסמך לפני מסירה ללקוח.</p>
+    <p className="text-xs text-muted-foreground">קישור המסמך נגיש למנהל מורשה בלבד. יש לבדוק את תאריך ההפקה, הסכום והמע״מ לפני מסירה ללקוח. הצלחת ההפקה אינה אישור שהאימייל נמסר.</p>
     {unavailable ? <p role="alert">לא ניתן לטעון את מסמכי Payper.</p> : rows.length === 0
       ? <p>אין מסמכי Payper שהופקו.</p>
       : <ul className="space-y-2">{rows.map(row => {

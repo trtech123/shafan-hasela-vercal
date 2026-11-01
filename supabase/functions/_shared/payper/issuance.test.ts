@@ -7,7 +7,7 @@ const source = (): FrozenPayperFacts => ({
   paymentCreatedAt: "2026-11-01T10:00:00Z", verifiedAt: "2026-11-01T10:00:01Z",
   activationCutoffUtc: "2026-11-01T10:00:00Z",
   amount: 118, currency: "ILS", orderId: "44444444-4444-4444-8444-444444444444", orderNumber: "ORD-1",
-  customerKind: "organization", billing: { vat_applicable: true, billing_institution_name: "Example Ltd", billing_company_id: "512783333" },
+  customerKind: "organization", billing: { vat_applicable: true, billing_institution_name: "Example Ltd", billing_company_id: "512783333", billing_accounting_email: "billing@example.test" },
   checkoutSnapshot: { items: [{ id: "activity", name: "Climbing", qty: 1, customPrice: 118 }], discount: null },
 });
 const auth = { terminalNumber: "1234567", user: "gateway-user", password: "gateway-secret" };
@@ -38,6 +38,23 @@ describe("Payper ledger to provider issuance bridge", () => {
     expect(provider.lookupTransaction).toHaveBeenCalledWith("hosted-session-123", 11800);
     expect(provider.createInvoice).toHaveBeenCalledWith(expect.objectContaining({ trxRecordId: "103059585" }), "reservation-1");
     expect(ledger.recordOutcome).toHaveBeenCalledWith(source().paymentId, outcome);
+  });
+
+  test("passes explicit mail request from frozen billing without treating invoice success as delivery proof", async () => {
+    const ledger = { freezeSource: vi.fn(async () => source()), reserveDispatch: vi.fn(async () => "reservation-1"),
+      recordOutcome: vi.fn(async () => undefined) };
+    const provider = { lookupTransaction: vi.fn(async () => "103059585"),
+      createInvoice: vi.fn(async () => ({ state: "succeeded" as const, documentNumber: "595170",
+        documentUrl: "https://app.payper.co.il/public/invoice_show/595170?ak=opaque",
+        automaticRetryAllowed: false as const })) };
+    const outcome = await issueFrozenPayperDocument(source().paymentId,
+      { ledger, provider, credentials: auth, sendByMail: true });
+    expect(provider.createInvoice).toHaveBeenCalledWith(expect.objectContaining({
+      PayperParameters: expect.objectContaining({ DataPayper: expect.objectContaining({
+        customer_mail: "billing@example.test", send_by_mail: "true",
+      }) }),
+    }), "reservation-1");
+    expect(outcome).not.toHaveProperty("emailDelivered");
   });
 
   test("duplicate or existing-document reservation failure prevents a provider request", async () => {

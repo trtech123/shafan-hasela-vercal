@@ -8,6 +8,7 @@ interface ServiceClient {
 export interface PayperRuntimeEnv {
   PELECARD_TERMINAL?: string; PELECARD_USER?: string; PELECARD_PASSWORD?: string;
   PAYPER_DISPATCH_ENABLED?: string;
+  PAYPER_SEND_BY_MAIL?: string;
 }
 
 /** Explicit application switch plus independent database activation gate. */
@@ -27,7 +28,8 @@ export function createPayperIssuanceRuntime(options: {
       // Constructor checks credentials before any database or provider action.
       const provider = createPelecardPayperProvider({ credentials, fetcher: options.fetcher,
         dispatchEnabled: enabled });
-      return issueFrozenPayperDocument(paymentId, { ledger, provider, credentials });
+      return issueFrozenPayperDocument(paymentId, { ledger, provider, credentials,
+        sendByMail: options.env.PAYPER_SEND_BY_MAIL === "true" });
     },
   };
 }

@@ -34,6 +34,7 @@ export default function PayperManualReview() {
   return <section dir="rtl" aria-label="בדיקה ידנית למסמכי Payper" className="rounded-2xl border bg-card p-5 space-y-3">
     <h2 className="text-lg font-bold">בדיקה ידנית למסמכי Payper</h2>
     <p className="text-xs text-muted-foreground">מוצגות עד 100 הרשומות האחרונות. הרשימה המלאה שמורה ביומן Payper.</p>
+    {rows.length > 0 && <p role="alert" className="rounded-lg bg-amber-100 p-3 text-sm text-amber-950">הודעה למנהל: יש תשלומים שמחייבים טיפול במסמך החשבונאי. מזהי ההזמנה והתשלום מופיעים למטה. לאחר תוצאה לא ודאית אין לנסות הפקה חוזרת; ניסיון חדש מחייב אישור מוסמך שלא נוצר מסמך קודם.</p>}
     {rows.length === 0 ? <p className="text-sm text-muted-foreground">אין תשלומים שממתינים לבדיקה ידנית.</p>
       : <ul className="space-y-2">{rows.map(row => <li key={row.payment_id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
         <strong>{reasons[row.reconciliation_code] ?? 'נדרשת התאמה ידנית'}</strong>

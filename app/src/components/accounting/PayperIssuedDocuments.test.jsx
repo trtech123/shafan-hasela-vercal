@@ -20,6 +20,7 @@ test('shows only a validated provider document link without exposing billing ide
   expect(link).toHaveAttribute('href', 'https://app.payper.co.il/public/invoice_show/595166?ak=opaque');
   expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   expect(link).toHaveAttribute('referrerpolicy', 'no-referrer');
+  expect(screen.getByRole('region')).toHaveTextContent('הצלחת ההפקה אינה אישור שהאימייל נמסר');
   expect(screen.getByRole('region').textContent).not.toContain('000000018');
   expect(query).toHaveBeenCalledWith('payper_document_ledger');
 });

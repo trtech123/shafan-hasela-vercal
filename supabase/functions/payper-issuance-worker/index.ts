@@ -35,6 +35,7 @@ Deno.serve(async (request) => {
         PELECARD_USER: Deno.env.get("PELECARD_USER"),
         PELECARD_PASSWORD: Deno.env.get("PELECARD_PASSWORD"),
         PAYPER_DISPATCH_ENABLED: Deno.env.get("PAYPER_DISPATCH_ENABLED"),
+        PAYPER_SEND_BY_MAIL: Deno.env.get("PAYPER_SEND_BY_MAIL"),
       } });
       return runPayperIssuanceBatch({
         listCandidates: async () => data.map(row => row.payment_id),
