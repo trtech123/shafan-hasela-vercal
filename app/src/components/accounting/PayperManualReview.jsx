@@ -8,6 +8,13 @@ const reasons = {
   service_description_required: 'נדרש בירור תיאור השירות בחשבונית',
   vat_treatment_required: 'נדרש בירור סיווג מע״מ',
   pre_dispatch_review_required: 'נדרשת בדיקה לפני הפקת מסמך',
+  provider_credentials_rejected: 'הספק דחה את פרטי הגישה להפקת המסמך; יש לבדוק אם נוצר מסמך',
+  provider_ip_rejected: 'הספק דחה את בקשת ההפקה; יש לבדוק אם נוצר מסמך',
+  provider_document_rejected: 'הספק לא אישר את הפקת המסמך; יש לבדוק אם נוצר מסמך',
+  provider_http_error: 'בקשת ההפקה נכשלה; מצב המסמך אינו ודאי',
+  provider_transport_uncertain: 'לא התקבלה תשובה ודאית מהספק; אין לנסות שוב אוטומטית',
+  provider_response_uncertain: 'תשובת הספק אינה ודאית; אין לנסות שוב אוטומטית',
+  uncertain_provider_outcome: 'תוצאת הפקת המסמך אינה ודאית; אין לנסות שוב אוטומטית',
 };
 
 export default function PayperManualReview() {

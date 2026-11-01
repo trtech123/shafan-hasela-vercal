@@ -34,3 +34,13 @@ test('shows the durable missing-service-description review reason', async () => 
   render(<PayperManualReview />);
   expect(await screen.findByText('נדרש בירור תיאור השירות בחשבונית')).toBeInTheDocument();
 });
+
+test('warns the administrator that a provider timeout cannot be retried automatically', async () => {
+  query.mockReturnValue({ select: () => ({ in: () => ({ order: () => ({ limit: () => Promise.resolve({
+    data: [{ payment_id: 'payment-3', order_id: 'order-3', state: 'reconciliation_required',
+      reconciliation_code: 'provider_transport_uncertain' }], error: null,
+  }) }) }) }) });
+  render(<PayperManualReview />);
+  expect(await screen.findByText('לא התקבלה תשובה ודאית מהספק; אין לנסות שוב אוטומטית')).toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('אישור מוסמך שלא נוצר מסמך קודם');
+});
