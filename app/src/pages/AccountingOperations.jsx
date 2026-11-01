@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 import PayperManualReview from "@/components/accounting/PayperManualReview";
+import PayperIssuedDocuments from "@/components/accounting/PayperIssuedDocuments";
 
 const OPERATION_COLUMNS = [
   "event_id", "source_type", "source_id", "purpose", "accounting_provider",
@@ -236,6 +237,7 @@ export default function AccountingOperations() {
       </header>
 
       {user?.role === 'admin' && <PayperManualReview />}
+      {user?.role === 'admin' && <PayperIssuedDocuments />}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="סיכום הנהלת חשבונות">
         <SummaryCard icon={CheckCircle2} label="תשלומים שהצליחו" value={counts.payments} tone="green" />

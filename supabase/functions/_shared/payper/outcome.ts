@@ -12,12 +12,15 @@ function record(value: unknown): Record<string, unknown> | null {
     ? value as Record<string, unknown> : null;
 }
 
-function documentedDocumentUrl(value: unknown): value is string {
+function documentedDocumentUrl(value: unknown, documentNumber: string): value is string {
   if (typeof value !== "string") return false;
   try {
     const url = new URL(value);
     return url.protocol === "https:" && !url.username && !url.password && !url.port
-      && (url.hostname === "payper.co.il" || url.hostname === "app.payper.co.il");
+      && (url.hostname === "payper.co.il" || url.hostname === "app.payper.co.il")
+      && (url.pathname === `/public/invoice_show/${documentNumber}`
+        || url.pathname === `/app/public/invoice_show/${documentNumber}`)
+      && !url.hash;
   } catch {
     return false;
   }
@@ -29,7 +32,7 @@ export function classifyDispatchedPayperOutcome(result: PayperDispatchResult): P
   const data = record(body?.PayperData);
   if (body?.StatusCode === "000" && data?.InvoiceStatus === "Success"
     && typeof data.InvoiceNumber === "string" && /^[0-9]+$/.test(data.InvoiceNumber)
-    && documentedDocumentUrl(data.InvoiceLink)) {
+    && documentedDocumentUrl(data.InvoiceLink, data.InvoiceNumber)) {
     return {
       state: "succeeded", documentNumber: data.InvoiceNumber,
       documentUrl: data.InvoiceLink, automaticRetryAllowed: false,
