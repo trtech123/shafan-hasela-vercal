@@ -24,3 +24,12 @@ test('warns when the review ledger cannot be read', async () => {
   render(<PayperManualReview />);
   expect(await screen.findByRole('alert')).toHaveTextContent('יש לבדוק את מצב המסמכים');
 });
+
+test('shows the durable missing-service-description review reason', async () => {
+  query.mockReturnValue({ select: () => ({ in: () => ({ order: () => ({ limit: () => Promise.resolve({
+    data: [{ payment_id: 'payment-2', order_id: 'order-2', state: 'source_blocked',
+      reconciliation_code: 'service_description_required' }], error: null,
+  }) }) }) }) });
+  render(<PayperManualReview />);
+  expect(await screen.findByText('נדרש בירור תיאור השירות בחשבונית')).toBeInTheDocument();
+});

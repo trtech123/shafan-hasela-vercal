@@ -41,4 +41,31 @@ CREATE TRIGGER trg_freeze_pelecard_order_service_description
   BEFORE INSERT ON public.payment_transactions FOR EACH ROW
   EXECUTE FUNCTION public.freeze_pelecard_order_service_description();
 
+-- Runs after trg_payper_eligible_payment (alphabetical trigger order). An
+-- order-number-only line is a durable manual obligation immediately after
+-- verified success, even if the worker has not been deployed or scheduled.
+CREATE FUNCTION public.hold_payper_missing_service_description() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  IF NEW.provider = 'pelecard' AND NEW.operation = 'payment'
+    AND NEW.status = 'succeeded' AND NEW.order_id IS NOT NULL
+  THEN
+    UPDATE public.payper_document_ledger l
+      SET state = 'source_blocked',
+          reconciliation_code = 'service_description_required',
+          updated_at = pg_catalog.clock_timestamp()
+    FROM public.orders o
+    WHERE l.payment_id = NEW.id AND l.order_id = o.id
+      AND o.id = NEW.order_id AND l.state = 'eligible'
+      AND NEW.checkout_snapshot->'items'->0->>'name' = o.order_number;
+  END IF;
+  RETURN NEW;
+END $$;
+
+REVOKE ALL ON FUNCTION public.hold_payper_missing_service_description()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER trg_z_hold_payper_missing_service_description
+  AFTER INSERT OR UPDATE OF status ON public.payment_transactions FOR EACH ROW
+  EXECUTE FUNCTION public.hold_payper_missing_service_description();
+
 COMMIT;

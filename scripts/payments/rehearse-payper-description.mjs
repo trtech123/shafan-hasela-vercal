@@ -17,6 +17,19 @@ try {
     CREATE TABLE public.orders(id uuid PRIMARY KEY,order_number text,activity_id uuid);
     CREATE TABLE public.payment_transactions(id uuid PRIMARY KEY,provider text,operation text,
       status text,order_id uuid,checkout_snapshot jsonb);
+    CREATE TABLE public.payper_document_ledger(payment_id uuid PRIMARY KEY,order_id uuid,
+      state text,reconciliation_code text,updated_at timestamptz);
+    CREATE FUNCTION public.capture_payper_eligible_payment() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.status='succeeded' THEN
+        INSERT INTO public.payper_document_ledger(payment_id,order_id,state)
+        VALUES(NEW.id,NEW.order_id,'eligible') ON CONFLICT DO NOTHING;
+      END IF;
+      RETURN NEW;
+    END $$;
+    CREATE TRIGGER trg_payper_eligible_payment AFTER INSERT OR UPDATE OF status
+      ON public.payment_transactions FOR EACH ROW
+      EXECUTE FUNCTION public.capture_payper_eligible_payment();
     INSERT INTO public.activities VALUES('${activity}','Climbing service');
     INSERT INTO public.orders VALUES('${order}','ORD-1','${activity}');`);
   await db.query(`INSERT INTO public.payment_transactions VALUES($1,'pelecard','payment','initiated',$2,$3::jsonb)`,
@@ -30,16 +43,25 @@ try {
   const fresh = await db.query(`SELECT checkout_snapshot->'items'->0->>'name' AS name FROM public.payment_transactions
     WHERE id='30000000-0000-4000-8000-000000000002'`);
   assert.equal(fresh.rows[0].name, 'Climbing service');
+  await db.exec(`UPDATE public.payment_transactions SET status='succeeded'
+    WHERE id='30000000-0000-4000-8000-000000000002'`);
+  assert.equal((await db.query(`SELECT state FROM public.payper_document_ledger
+    WHERE payment_id='30000000-0000-4000-8000-000000000002'`)).rows[0].state, 'eligible');
   await db.exec(`UPDATE public.orders SET activity_id=NULL WHERE id='${order}'`);
   await db.query(`INSERT INTO public.payment_transactions VALUES($1,'pelecard','payment','initiated',$2,$3::jsonb)`,
     ['30000000-0000-4000-8000-000000000003', order, snapshot('ORD-1')]);
   const missing = await db.query(`SELECT checkout_snapshot->'items'->0->>'name' AS name FROM public.payment_transactions
     WHERE id='30000000-0000-4000-8000-000000000003'`);
   assert.equal(missing.rows[0].name, 'ORD-1', 'missing description blocked payment reservation');
+  await db.exec(`UPDATE public.payment_transactions SET status='succeeded'
+    WHERE id='30000000-0000-4000-8000-000000000003'`);
+  const held = await db.query(`SELECT state,reconciliation_code FROM public.payper_document_ledger
+    WHERE payment_id='30000000-0000-4000-8000-000000000003'`);
+  assert.deepEqual(held.rows[0], { state: 'source_blocked', reconciliation_code: 'service_description_required' });
   await db.query(`INSERT INTO public.payment_transactions VALUES($1,'pelecard','payment','initiated',$2,'{}'::jsonb)`,
     ['30000000-0000-4000-8000-000000000004', order]);
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.payment_transactions`)).rows[0].n, 4);
-  console.log('PASS historical unchanged, new activity description frozen, missing or malformed description preserves payment');
+  console.log('PASS historical unchanged, activity description frozen, missing description holds accounting without blocking payment');
 } catch (error) {
   console.error(`FAIL payper description rehearsal: ${error.message} (code ${error.code ?? 'unknown'}, position ${error.position ?? 'unknown'})`);
   process.exitCode = 1;

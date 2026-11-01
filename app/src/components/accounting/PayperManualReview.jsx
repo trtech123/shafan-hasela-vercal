@@ -5,6 +5,7 @@ const reasons = {
   billing_snapshot_required: 'חסרה תמונת פרטי חיוב מאומתת',
   billing_identity_required: 'נדרש בירור זהות לחיוב',
   billing_email_required: 'נדרש בירור כתובת דוא״ל לחיוב',
+  service_description_required: 'נדרש בירור תיאור השירות בחשבונית',
   vat_treatment_required: 'נדרש בירור סיווג מע״מ',
   pre_dispatch_review_required: 'נדרשת בדיקה לפני הפקת מסמך',
 };
