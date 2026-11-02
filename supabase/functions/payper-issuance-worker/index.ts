@@ -1,6 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 import { createPayperIssuanceRuntime } from "../_shared/payper/runtime.ts";
 import { createPayperWorkerHandler, runPayperIssuanceBatch } from "../_shared/payper/worker.ts";
+import { createPelecardPayperProvider } from "../_shared/payper/provider.ts";
+import { lookupVerifiedPayment } from "../_shared/payper/diagnostic.ts";
 
 function required(name: string): string {
   const value = Deno.env.get(name)?.trim();
@@ -54,6 +56,18 @@ Deno.serve(async (request) => {
     const handler = createPayperWorkerHandler(secret, (targetPaymentId) => dispatch(targetPaymentId), {
       automaticEnabled: Deno.env.get("PAYPER_AUTO_SCAN_ENABLED") === "true",
       runAuto: () => dispatch(null),
+    }, {
+      // This path is usable only while dispatch is OFF, for credential verification.
+      enabled: Deno.env.get("PAYPER_DISPATCH_ENABLED") !== "true",
+      runLookup: async (paymentId) => {
+        const client = createClient(required("SUPABASE_URL"), required("SUPABASE_SERVICE_ROLE_KEY"),
+          { auth: { autoRefreshToken: false, persistSession: false } });
+        const provider = createPelecardPayperProvider({ credentials: {
+          terminalNumber: required("PELECARD_TERMINAL"), user: required("PELECARD_USER"),
+          password: required("PELECARD_PASSWORD"),
+        }, dispatchEnabled: false });
+        return lookupVerifiedPayment(paymentId, client, provider);
+      },
     });
     return handler(request);
   } catch {

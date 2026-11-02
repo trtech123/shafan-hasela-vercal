@@ -89,6 +89,36 @@ describe("supervised Payper worker", () => {
     expect(runAuto).toHaveBeenCalledTimes(2);
     expect(runTarget).not.toHaveBeenCalled();
   });
+  test("read-only lookup is token protected, requires a verified target, and cannot dispatch", async () => {
+    const target = "28b4786f-e722-40ae-9661-f3e805fc71bf";
+    const secret = "private-token-long-1";
+    const runTarget = vi.fn();
+    const runAuto = vi.fn();
+    const runLookup = vi.fn(async () => ({ verified: true, transactionRecordId: "3175016155" }));
+    const handler = createPayperWorkerHandler(secret, runTarget, { runAuto, automaticEnabled: false },
+      { runLookup, enabled: true });
+    const headers = { Authorization: `Bearer ${secret}`, "x-payper-mode": "lookup-diagnostic",
+      "x-payper-target-payment-id": target };
+    expect((await handler(new Request("https://local.test", { method: "POST", headers: {
+      ...headers, Authorization: "Bearer wrong" } }))).status).toBe(401);
+    expect((await handler(new Request("https://local.test", { method: "POST", headers: {
+      ...headers, "x-payper-target-payment-id": "invalid" } }))).status).toBe(400);
+    expect((await handler(new Request("https://local.test", { method: "POST", headers,
+      body: "{}" }))).status).toBe(400);
+    expect(await (await handler(new Request("https://local.test", { method: "POST", headers }))).json())
+      .toEqual({ verified: true, transactionRecordId: "3175016155" });
+    expect(runLookup).toHaveBeenCalledExactlyOnceWith(target);
+    expect(runTarget).not.toHaveBeenCalled();
+    expect(runAuto).not.toHaveBeenCalled();
+    const disabled = createPayperWorkerHandler(secret, runTarget, null, { runLookup, enabled: false });
+    expect((await disabled(new Request("https://local.test", { method: "POST", headers }))).status).toBe(403);
+    runLookup.mockRejectedValueOnce(new Error("private provider detail"));
+    expect(await (await handler(new Request("https://local.test", { method: "POST", headers }))).json())
+      .toEqual({ error: "lookup_unavailable" });
+    runLookup.mockRejectedValueOnce(new Error("provider_credentials_rejected"));
+    expect(await (await handler(new Request("https://local.test", { method: "POST", headers }))).json())
+      .toEqual({ error: "provider_credentials_rejected" });
+  });
   test("scheduled recovery issues a missed-wake candidate once and leaves an uncertain result held", async () => {
     const first = "11111111-1111-4111-8111-111111111111";
     const second = "22222222-2222-4222-8222-222222222222";

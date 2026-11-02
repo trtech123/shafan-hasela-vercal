@@ -23,7 +23,14 @@ Keep the previous Vercel deployment and Edge snapshots for recovery.
 2. Deploy the reviewed `payper-issuance-worker`, `pelecard-order-payment`, and
    `pelecard-pos-feedback` Edge bundles. The shared callback parser accepts the
    observed nested `ResultData` correlation but still requires authoritative
-   provider lookup and validation. Keep every financial Edge switch OFF.
+   provider lookup and validation. Keep every financial Edge switch OFF. While
+   dispatch is OFF, call the worker once with its existing bearer token,
+   `x-payper-mode: lookup-diagnostic`, and
+   `x-payper-target-payment-id: 28b4786f-e722-40ae-9661-f3e805fc71bf`,
+   with no body. Require `verified=true` and record ID `3175016155`.
+   This path reads the existing succeeded payment and calls only
+   `GetTransaction`; it cannot reserve or create a document. Record only the
+   sanitized response and stop the release on a mismatch or lookup error.
 3. Deploy the matching Vercel application from the repository root to an
    unaliased preview (Vercel Root Directory is `app`). Check Admin and Cashier
    non-charging Orders, Cash Register, Accounting, Clubs, and WhatsApp flows.
@@ -36,14 +43,13 @@ Keep the previous Vercel deployment and Edge snapshots for recovery.
 
 ## External prerequisite before any activation
 
-The worker's existing `PELECARD_TERMINAL`, `PELECARD_USER`, and
-`PELECARD_PASSWORD` set returned Pelecard GetTransaction code 501 (rejected
-credentials) for the already verified RCP-1020 transaction. The worker terminal
-did not match the terminal in live Pelecard reports. Correct these Supabase
-secrets through the secure provider console, then prove a **read-only**
-GetTransaction returns `StatusCode=000` with the exact hosted transaction,
-amount, and record ID. Never print credentials or change payment evidence.
-Confirm the live terminal has `CreatePayperInvoice` permission, documented
+The owner updated the worker's three Pelecard secrets from the verified merchant
+record. A single official read-only `GetTransaction` call using the same values
+returned `StatusCode=000`, ₪3.00 ILS and record ID `3175016155`; the secret
+store fingerprints matched those privately entered values. The deployed worker
+itself still needs the read-only diagnostic above after this release is deployed.
+Never print credentials or change payment evidence. Confirm the live terminal
+has `CreatePayperInvoice` permission, documented
 `send_by_mail` setting, verified billing email, worker token and Vault match,
 and cron/pg_net access. No authoritative Payper absence lookup by
 `trxRecordId` is implemented; uncertain invoice outcomes remain held for manual

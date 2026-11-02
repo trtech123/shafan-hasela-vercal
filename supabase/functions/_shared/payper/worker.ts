@@ -50,7 +50,8 @@ export async function runPayperIssuanceBatch(deps: PayperWorkerDependencies): Pr
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function createPayperWorkerHandler(secret: string, run: (targetPaymentId: string) => Promise<unknown>,
-  automatic: { runAuto: () => Promise<unknown>; automaticEnabled: boolean } | null = null) {
+  automatic: { runAuto: () => Promise<unknown>; automaticEnabled: boolean } | null = null,
+  diagnostic: { runLookup: (targetPaymentId: string) => Promise<unknown>; enabled: boolean } | null = null) {
   if (!secret || secret.length < 16) throw new Error("payper_worker_token_required");
   return async (request: Request): Promise<Response> => {
     const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -59,6 +60,20 @@ export function createPayperWorkerHandler(secret: string, run: (targetPaymentId:
       return new Response(null, { status: 401, headers });
     if (request.url.includes("?")) return new Response(null, { status: 400, headers });
     const automaticMode = request.headers.get("x-payper-mode");
+    if (automaticMode === "lookup-diagnostic") {
+      const target = request.headers.get("x-payper-target-payment-id");
+      if (request.body !== null || !target || !uuid.test(target))
+        return new Response(null, { status: 400, headers });
+      if (!diagnostic?.enabled) return new Response(null, { status: 403, headers });
+      try {
+        return new Response(JSON.stringify(await diagnostic.runLookup(target)), { status: 200, headers });
+      } catch (error) {
+        const safeCode = error instanceof Error && ["provider_credentials_rejected",
+          "payper_transaction_mismatch", "payper_lookup_failed", "diagnostic_payment_unavailable",
+          "payper_credentials_required"].includes(error.message) ? error.message : "lookup_unavailable";
+        return new Response(JSON.stringify({ error: safeCode }), { status: 503, headers });
+      }
+    }
     if (automaticMode !== null) {
       if (automaticMode !== "automatic" || request.headers.has("x-payper-target-payment-id"))
         return new Response(null, { status: 400, headers });
