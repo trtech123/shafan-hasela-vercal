@@ -46,8 +46,8 @@ function summarize(value: unknown, prefix: "body" | "result", shape: ShapeEntry[
   for (const field of knownFields) {
     if (Object.hasOwn(record, field)) shape.push({ path: `${prefix}.${field}`, type: shapeType(record[field]) });
   }
-  // Inspect one explicitly known nesting level for diagnosis only. It is not
-  // an accepted callback representation, and arbitrary keys are never visited.
+  // Inspect only the one known ResultData nesting level. Arbitrary keys are
+  // never visited or copied into diagnostics.
   const nested = prefix === "result" ? object(record.ResultData) : null;
   if (nested) for (const field of knownFields) {
     if (Object.hasOwn(nested, field)) shape.push({ path: `result.ResultData.${field}`, type: shapeType(nested[field]) });
@@ -81,11 +81,9 @@ async function boundedBody(request: Request): Promise<string> {
     return fail("body", "unreadable");
   } finally { reader.releaseLock(); }
 }
-/** Configured resultDataKeyName='result' uses a field containing transaction
- * JSON: https://gateway20.pelecard.biz/ManualIframe/Chart . JSON transport
- * retains that same envelope. No root/ResultData fallback is inferred from
- * the REST lookup schema. Lost TEST HTTP400 bodies remain undiagnosed.
- * This only checks correlation; it never establishes debit approval.
+/** The configured result field contains JSON. Live Pelecard callbacks also
+ * place correlation values in its ResultData object. Only the stored session
+ * values are accepted; the subsequent provider lookup establishes approval.
  */
 export async function parseControlledLiveCallback(request: Request, expected: {
   paymentId: string; transactionId: string; confirmationKey: string;
@@ -137,12 +135,23 @@ async function parseCallback(request: Request, expected: {
   summarize(parsed, "result", shape);
   const notice = object(parsed);
   if (!notice) fail("result_json", "malformed");
+  const nested = object(notice.ResultData);
+  const confirmation = nested ? nested.ConfirmationKey : notice.ConfirmationKey;
+  const transaction = nested ? nested.TransactionId : notice.PelecardTransactionId;
   const fields = {
-    confirmationPresent: Object.hasOwn(notice, "ConfirmationKey"),
-    confirmationIsString: typeof notice.ConfirmationKey === "string",
-    transactionPresent: Object.hasOwn(notice, "PelecardTransactionId"),
-    transactionIsString: typeof notice.PelecardTransactionId === "string",
+    confirmationPresent: confirmation !== undefined,
+    confirmationIsString: typeof confirmation === "string",
+    transactionPresent: transaction !== undefined,
+    transactionIsString: typeof transaction === "string",
   };
-  if (!expected.confirmationKey || notice.ConfirmationKey !== expected.confirmationKey) fail("correlation", "confirmation_mismatch", fields);
-  if (!expected.transactionId || notice.PelecardTransactionId !== expected.transactionId) fail("correlation", "transaction_mismatch", fields);
+  if (nested && Object.hasOwn(notice, "ConfirmationKey") &&
+      notice.ConfirmationKey !== nested.ConfirmationKey)
+    fail("correlation", "confirmation_mismatch", fields);
+  if (nested && Object.hasOwn(notice, "PelecardTransactionId") &&
+      notice.PelecardTransactionId !== nested.TransactionId)
+    fail("correlation", "transaction_mismatch", fields);
+  if (!expected.confirmationKey || confirmation !== expected.confirmationKey)
+    fail("correlation", "confirmation_mismatch", fields);
+  if (!expected.transactionId || transaction !== expected.transactionId)
+    fail("correlation", "transaction_mismatch", fields);
 }

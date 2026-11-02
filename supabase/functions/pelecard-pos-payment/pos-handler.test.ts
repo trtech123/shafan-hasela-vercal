@@ -1,5 +1,5 @@
 import {describe,expect,test,vi} from 'vitest';
-import {createPosHandler,type PosDependencies} from './pos-handler.ts';
+import {createPosHandler,createPosFeedback,type PosDependencies} from './pos-handler.ts';
 const paymentId='11111111-1111-4111-8111-111111111111';
 const requestKey='22222222-2222-4222-8222-222222222222';
 const productId='33333333-3333-4333-8333-333333333333';
@@ -24,7 +24,7 @@ function setup(role='cashier'){
   const handler=createPosHandler(deps);
   const post=(body:unknown,auth=true)=>handler(new Request('https://example.org/payment',{method:'POST',
     headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer valid'}:{})},body:JSON.stringify(body)}));
-  return {post,reserve,call,observe,finalize,onPaymentFinalized,setPending:()=>{state='pending_provider'},setPaid:()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555'}};
+  return {post,deps,reserve,call,observe,finalize,onPaymentFinalized,setPending:()=>{state='pending_provider'},setPaid:()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555'}};
 }
 const prepared={action:'prepare',requestKey,lines:[{kind:'product',id:productId,qty:1}],discount:null,
   billing:{kind:'person',name:'',identity:'',email:''}};
@@ -68,6 +68,33 @@ describe('POS Edge payment boundary',()=>{
   test('failed database finalization never wakes Payper',async()=>{
     const s=setup();s.setPending();s.finalize.mockRejectedValueOnce(new Error('database_unavailable'));
     expect((await s.post({action:'verify',paymentId})).status).toBe(502);
+    expect(s.onPaymentFinalized).not.toHaveBeenCalled();
+  });
+  test('nested hosted callback performs provider verification before finalization and wake',async()=>{
+    const s=setup();s.setPending();
+    const callback=new Request(`https://edge.test/feedback?paymentId=${paymentId}`,{
+      method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({result:JSON.stringify({ResultData:{
+        ConfirmationKey:'confirmation',TransactionId:paymentId,
+      }})}),
+    });
+    expect((await createPosFeedback(s.deps)(callback)).status).toBe(200);
+    expect(s.call).toHaveBeenCalledWith('lookup',paymentId);
+    expect(s.call).toHaveBeenCalledWith('validate',paymentId);
+    expect(s.finalize).toHaveBeenCalledTimes(1);
+    expect(s.onPaymentFinalized).toHaveBeenCalledExactlyOnceWith(paymentId);
+  });
+  test('nested callback with wrong correlation never reads provider or finalizes',async()=>{
+    const s=setup();s.setPending();
+    const callback=new Request(`https://edge.test/feedback?paymentId=${paymentId}`,{
+      method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({result:JSON.stringify({ResultData:{
+        ConfirmationKey:'forged',TransactionId:paymentId,
+      }})}),
+    });
+    expect((await createPosFeedback(s.deps)(callback)).status).toBe(400);
+    expect(s.call).not.toHaveBeenCalled();
+    expect(s.finalize).not.toHaveBeenCalled();
     expect(s.onPaymentFinalized).not.toHaveBeenCalled();
   });
 });
