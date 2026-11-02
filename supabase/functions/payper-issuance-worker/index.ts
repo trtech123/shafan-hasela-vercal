@@ -8,12 +8,12 @@ function required(name: string): string {
   return value;
 }
 
-// Every invocation requires a server-authorized target header. This release
-// has no automatic oldest-payment mode.
+// Supervised invocations require a target. Automatic scanning has a separate
+// explicit switch and may only read the durable post-verification ledger.
 Deno.serve(async (request) => {
   try {
     const secret = required("PAYPER_WORKER_TOKEN");
-    const handler = createPayperWorkerHandler(secret, async (targetPaymentId) => {
+    const dispatch = async (targetPaymentId: string | null) => {
       if (Deno.env.get("PAYPER_DISPATCH_ENABLED") !== "true")
         return { processed: 0, succeeded: 0, held: 0 };
       const client = createClient(required("SUPABASE_URL"), required("SUPABASE_SERVICE_ROLE_KEY"),
@@ -27,9 +27,11 @@ Deno.serve(async (request) => {
       let candidates = client.from("payper_document_ledger")
         .select("payment_id").in("state", ["eligible", "source_frozen"])
         .order("created_at", { ascending: true }).limit(1);
-      candidates = candidates.eq("payment_id", targetPaymentId);
+      if (targetPaymentId) candidates = candidates.eq("payment_id", targetPaymentId);
       const { data, error } = await candidates;
       if (error || !Array.isArray(data)) throw new Error("payper_candidates_unavailable");
+      const selectedPaymentId = targetPaymentId ?? data[0]?.payment_id;
+      if (!selectedPaymentId) return { processed: 0, succeeded: 0, held: 0 };
       const runtime = createPayperIssuanceRuntime({ serviceClient: client, env: {
         PELECARD_TERMINAL: Deno.env.get("PELECARD_TERMINAL"),
         PELECARD_USER: Deno.env.get("PELECARD_USER"),
@@ -39,10 +41,14 @@ Deno.serve(async (request) => {
       } });
       return runPayperIssuanceBatch({
         listCandidates: async () => data.map(row => row.payment_id),
-        targetPaymentId,
+        targetPaymentId: selectedPaymentId,
         issue: runtime.issue,
         holdFailure: runtime.holdFailure,
       });
+    };
+    const handler = createPayperWorkerHandler(secret, (targetPaymentId) => dispatch(targetPaymentId), {
+      automaticEnabled: Deno.env.get("PAYPER_AUTO_SCAN_ENABLED") === "true",
+      runAuto: () => dispatch(null),
     });
     return handler(request);
   } catch {

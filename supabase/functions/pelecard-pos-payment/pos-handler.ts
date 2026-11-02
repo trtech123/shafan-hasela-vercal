@@ -16,6 +16,7 @@ export interface PosDependencies {
   get(paymentId:string):Promise<Attempt|null>;
   observe(paymentId:string,hostedState:string,apiStatus:string|null,transactionStatus:string|null,correlation:boolean):Promise<unknown>;
   finalize(paymentId:string,approvalId:string):Promise<unknown>;
+  onPaymentFinalized?(paymentId:string):void;
   cancel(actorId:string,requestKey:string):Promise<boolean>;
   call(action:'init'|'lookup'|'validate'|'hosted',paymentId:string):Promise<unknown>;
   log(event:Record<string,unknown>):void;
@@ -55,7 +56,10 @@ export async function recoverPos(deps:PosDependencies,paymentId:string){
     }catch{throw new PaymentHttpError(503,'hosted_session_unavailable');}
   }
   await deps.observe(paymentId,hostedState,evidence.apiStatus,evidence.transactionStatus,correlated);
-  if(evidence.approved)await deps.finalize(paymentId,evidence.approvalId);
+  if(evidence.approved){
+    await deps.finalize(paymentId,evidence.approvalId);
+    try{deps.onPaymentFinalized?.(paymentId);}catch{}
+  }
   return {approved:evidence.approved,resolution:evidence.approved?'approved':'unknown'};
 }
 export function createPosHandler(deps:PosDependencies){return async(request:Request):Promise<Response>=>{

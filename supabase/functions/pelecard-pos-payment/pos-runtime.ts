@@ -1,5 +1,6 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.45.0';
 import {createPosLiveAdapter} from '../pelecard-order-payment/_deployed_shared/pelecard-live-adapter.ts';
+import {createPayperAutoWake} from '../pelecard-order-payment/_deployed_shared/payper-auto-wake.ts';
 import type {PosDependencies} from './pos-handler.ts';
 
 export function posRuntime():PosDependencies{
@@ -8,6 +9,7 @@ export function posRuntime():PosDependencies{
   const client=createClient(required('SUPABASE_URL'),required('SUPABASE_SERVICE_ROLE_KEY'),
     {auth:{autoRefreshToken:false,persistSession:false}});
   const log=(event:Record<string,unknown>)=>console.error(JSON.stringify(event));
+  const wakePayper=createPayperAutoWake({read,log});
   async function rpc(name:string,args:Record<string,unknown>){
     const {data,error}=await client.rpc(name,args);
     if(error){log({event:'pelecard_pos_rpc',operation:name,sqlstate:/^[A-Z0-9]{5}$/.test(error.code??'')?error.code:null});throw Error('payment_database_unavailable');}
@@ -29,6 +31,11 @@ export function posRuntime():PosDependencies{
       p_payment_id:paymentId,p_hosted_state:state,p_lookup_status:lookup,
       p_transaction_status:transaction,p_correlation_valid:correlation}),
     finalize:(paymentId,approvalId)=>rpc('finalize_pos_pelecard',{p_payment_id:paymentId,p_approval_id:approvalId}),
+    onPaymentFinalized:(paymentId)=>{
+      const task=wakePayper(paymentId);
+      const edge=(globalThis as typeof globalThis & {EdgeRuntime?:{waitUntil?:(task:Promise<unknown>)=>void}}).EdgeRuntime;
+      try{edge?.waitUntil?.(task);}catch{log({event:'payper_auto_wake_schedule_failed'});}
+    },
     cancel:(actorId,requestKey)=>rpc('cancel_pos_pelecard_prepared',{p_actor_id:actorId,p_request_key:requestKey}),
   };
 }

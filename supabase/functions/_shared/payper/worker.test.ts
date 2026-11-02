@@ -58,4 +58,25 @@ describe("supervised Payper worker", () => {
       .toEqual({ processed: 0, succeeded: 0, held: 0 });
     expect(issue).not.toHaveBeenCalled();
   });
+  test("automatic scan is separately gated, token protected and has no caller target", async () => {
+    const target = "11111111-1111-1111-1111-111111111111";
+    const runTarget = vi.fn(async () => ({ processed: 0, succeeded: 0, held: 0 }));
+    const runAuto = vi.fn(async () => ({ processed: 1, succeeded: 1, held: 0 }));
+    const secret = "private-token-long-1";
+    const headers = { Authorization: `Bearer ${secret}`, "x-payper-mode": "automatic" };
+    const disabled = createPayperWorkerHandler(secret, runTarget, { runAuto, automaticEnabled: false });
+    expect((await disabled(new Request("https://local.test", { method: "POST", headers }))).status).toBe(403);
+    expect(runAuto).not.toHaveBeenCalled();
+    const enabled = createPayperWorkerHandler(secret, runTarget, { runAuto, automaticEnabled: true });
+    expect((await enabled(new Request("https://local.test", { method: "POST", headers: { ...headers,
+      Authorization: "Bearer wrong" } }))).status).toBe(401);
+    expect((await enabled(new Request("https://local.test", { method: "POST", headers: { ...headers,
+      "x-payper-target-payment-id": target } }))).status).toBe(400);
+    expect((await enabled(new Request("https://local.test?paymentId=" + target, { method: "POST", headers }))).status).toBe(400);
+    expect((await enabled(new Request("https://local.test", { method: "POST", headers, body: "{}" }))).status).toBe(400);
+    expect(runAuto).not.toHaveBeenCalled();
+    expect((await enabled(new Request("https://local.test", { method: "POST", headers }))).status).toBe(200);
+    expect(runAuto).toHaveBeenCalledOnce();
+    expect(runTarget).not.toHaveBeenCalled();
+  });
 });

@@ -16,6 +16,7 @@ export interface CommercialDependencies {
  get(paymentId:string):Promise<Attempt|null>;
  observe(paymentId:string,hostedState:string,apiStatus:string|null,transactionStatus:string|null,correlation:boolean):Promise<unknown>;
  finalize(attempt:Attempt,approvalId:string):Promise<unknown>;
+ onPaymentFinalized?(paymentId:string):void;
  call(action:'init'|'lookup'|'validate'|'hosted',paymentId:string):Promise<unknown>;
 }
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -58,7 +59,11 @@ export async function recoverCommercial(deps:CommercialDependencies,attempt:Atte
   }catch{throw new PaymentHttpError(503,'hosted_session_unavailable');}
  }
  await deps.observe(attempt.payment_id,hostedState,evidence.apiStatus,evidence.transactionStatus,correlation);
- if(evidence.approved)await deps.finalize(attempt,evidence.approvalId);
+ if(evidence.approved){
+  await deps.finalize(attempt,evidence.approvalId);
+  // Invoice wake failures must never turn a successful card payment into a failed one.
+  try{deps.onPaymentFinalized?.(attempt.payment_id);}catch{}
+ }
  // Nonapproval/510 is NOT terminal unpaid evidence. Never release ownership here.
  return {approved:evidence.approved,StatusCode:evidence.apiStatus,ShvaResult:evidence.transactionStatus,ShvaResultEmv:evidence.emvStatus,resolution:evidence.approved?'approved':'unknown'};
 }

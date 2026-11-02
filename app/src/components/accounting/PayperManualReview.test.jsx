@@ -44,3 +44,16 @@ test('warns the administrator that a provider timeout cannot be retried automati
   expect(await screen.findByText('לא התקבלה תשובה ודאית מהספק; אין לנסות שוב אוטומטית')).toBeInTheDocument();
   expect(screen.getByRole('alert')).toHaveTextContent('אישור מוסמך שלא נוצר מסמך קודם');
 });
+
+test('monitors pending automatic invoice work without suggesting a provider retry', async () => {
+  const states = vi.fn(() => ({ order: () => ({ limit: () => Promise.resolve({
+    data: [{ payment_id: 'pending-payment', order_id: 'pending-order', state: 'eligible',
+      reconciliation_code: null, created_at: '2026-11-01T00:00:00Z' }], error: null,
+  }) }) }));
+  query.mockReturnValue({ select: () => ({ in: states }) });
+  render(<PayperManualReview />);
+  expect(await screen.findByText(/ממתין לעיבוד אוטומטי/)).toBeInTheDocument();
+  expect(states).toHaveBeenCalledWith('state', expect.arrayContaining(['eligible', 'source_frozen', 'dispatch_reserved']));
+  expect(screen.getByText(/pending-payment/)).toBeInTheDocument();
+  expect(screen.getByText(/pending-payment/).parentElement).not.toHaveTextContent('אין להפיק מסמך חוזר');
+});

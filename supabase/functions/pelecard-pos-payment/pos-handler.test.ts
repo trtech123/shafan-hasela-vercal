@@ -11,6 +11,7 @@ function setup(role='cashier'){
     ConfirmationKey:'confirmation',ShvaResult:'000',JParam:'4',DebitTotal:'100',DebitCurrency:'1',DebitType:'01',ApprovedBy:'1',DebitApproveNumber:'approval'}}:action==='validate'?1:{reachable:true});
   const observe=vi.fn(async()=>undefined);
   const finalize=vi.fn(async()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555';});
+  const onPaymentFinalized=vi.fn();
   const deps:PosDependencies={read:()=> 'true',allowedOrigins:['https://example.org'],log:()=>{},
     auth:{authenticate:async()=>({id:actorId,role})},reserve,
     view:async()=>({paymentId,amountMinor:100,currency:'ILS',status:state,saleId,
@@ -18,12 +19,12 @@ function setup(role='cashier'){
       redirectUrl:`https://gateway20.pelecard.biz/PaymentGW?transactionId=${paymentId}`,canVerify:state==='pending_provider',dispatchStarted:state!=='initiated'}),
     get:async()=>({payment_id:paymentId,amount_minor:100,currency:'ILS',transaction_id:paymentId,
       confirmation_key:'confirmation',hosted_state:'usable',hosted_expires_at:'2099-01-01T00:00:00Z'}),
-    observe,finalize,call,cancel:async()=>true,
+    observe,finalize,onPaymentFinalized,call,cancel:async()=>true,
   };
   const handler=createPosHandler(deps);
   const post=(body:unknown,auth=true)=>handler(new Request('https://example.org/payment',{method:'POST',
     headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer valid'}:{})},body:JSON.stringify(body)}));
-  return {post,reserve,call,observe,finalize,setPending:()=>{state='pending_provider'},setPaid:()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555'}};
+  return {post,reserve,call,observe,finalize,onPaymentFinalized,setPending:()=>{state='pending_provider'},setPaid:()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555'}};
 }
 const prepared={action:'prepare',requestKey,lines:[{kind:'product',id:productId,qty:1}],discount:null,
   billing:{kind:'person',name:'',identity:'',email:''}};
@@ -53,12 +54,20 @@ describe('POS Edge payment boundary',()=>{
     const s=setup();s.setPending();
     const first=await s.post({action:'verify',paymentId});expect(first.status).toBe(200);
     expect((await first.json()).paid).toBe(true);expect(s.finalize).toHaveBeenCalledTimes(1);
+    expect(s.onPaymentFinalized).toHaveBeenCalledExactlyOnceWith(paymentId);
     expect((await s.post({action:'verify',paymentId})).status).toBe(200);
     expect(s.finalize).toHaveBeenCalledTimes(1);
+    expect(s.onPaymentFinalized).toHaveBeenCalledTimes(1);
   });
   test('nonapproved lookup never finalizes a sale',async()=>{
     const s=setup();s.setPending();s.call.mockImplementation(async(action:string)=>action==='lookup'?{StatusCode:'510',ResultData:null}:action==='validate'?1:{reachable:true});
     const response=await s.post({action:'verify',paymentId});expect(response.status).toBe(200);
     expect((await response.json()).paid).toBe(false);expect(s.finalize).not.toHaveBeenCalled();
+    expect(s.onPaymentFinalized).not.toHaveBeenCalled();
+  });
+  test('failed database finalization never wakes Payper',async()=>{
+    const s=setup();s.setPending();s.finalize.mockRejectedValueOnce(new Error('database_unavailable'));
+    expect((await s.post({action:'verify',paymentId})).status).toBe(502);
+    expect(s.onPaymentFinalized).not.toHaveBeenCalled();
   });
 });

@@ -37,7 +37,8 @@ export async function runPayperIssuanceBatch(deps: PayperWorkerDependencies): Pr
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export function createPayperWorkerHandler(secret: string, run: (targetPaymentId: string) => Promise<unknown>) {
+export function createPayperWorkerHandler(secret: string, run: (targetPaymentId: string) => Promise<unknown>,
+  automatic: { runAuto: () => Promise<unknown>; automaticEnabled: boolean } | null = null) {
   if (!secret || secret.length < 16) throw new Error("payper_worker_token_required");
   return async (request: Request): Promise<Response> => {
     const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -46,6 +47,17 @@ export function createPayperWorkerHandler(secret: string, run: (targetPaymentId:
       return new Response(null, { status: 401, headers });
     if (request.url.includes("?") || request.body !== null)
       return new Response(null, { status: 400, headers });
+    const automaticMode = request.headers.get("x-payper-mode");
+    if (automaticMode !== null) {
+      if (automaticMode !== "automatic" || request.headers.has("x-payper-target-payment-id"))
+        return new Response(null, { status: 400, headers });
+      if (!automatic?.automaticEnabled) return new Response(null, { status: 403, headers });
+      try {
+        return new Response(JSON.stringify(await automatic.runAuto()), { status: 200, headers });
+      } catch {
+        return new Response(JSON.stringify({ error: "worker_unavailable" }), { status: 503, headers });
+      }
+    }
     const suppliedTarget = request.headers.get("x-payper-target-payment-id");
     if (!suppliedTarget || !uuid.test(suppliedTarget))
       return new Response(null, { status: 400, headers });
