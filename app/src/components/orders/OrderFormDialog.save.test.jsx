@@ -34,13 +34,17 @@ const order = {
   activity_date: '2026-11-10', start_time: '10:00:00', end_time: '11:00:00',
   site: 'עכו', status: 'מאושר', instructor_id: 'instructor-1', activity_id: 'activity-1',
 };
-const renderDialog = () => {
+const renderDialog = (currentOrder = order) => {
   const onSaved = vi.fn();
-  const view = render(<OrderFormDialog open onClose={vi.fn()} order={order} activities={[{ id: 'activity-1', name: 'פעילות', status: 'פעיל' }]} onSaved={onSaved} />);
+  const view = render(<OrderFormDialog open onClose={vi.fn()} order={currentOrder} activities={[{ id: 'activity-1', name: 'פעילות', status: 'פעיל' }]} onSaved={onSaved} />);
   return { ...view, onSaved };
 };
 
 beforeEach(() => {
+  HTMLElement.prototype.hasPointerCapture = () => false;
+  HTMLElement.prototype.setPointerCapture = () => {};
+  HTMLElement.prototype.releasePointerCapture = () => {};
+  HTMLElement.prototype.scrollIntoView = () => {};
   state.blocks = [];
   state.orders = [];
   state.saveResult = { data: { id: 'order-1' }, error: null };
@@ -90,4 +94,57 @@ describe('existing order save', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'אישור והמשך בכל זאת' }));
     await waitFor(() => expect(state.writes).toHaveLength(1));
   });
+
+  test('editing onto a partial same-day booking warns without treating itself as a conflict', async () => {
+    state.orders = [
+      order,
+      { ...order, id: 'partial', order_number: 'ORD-1051', activity_date: '2026-11-11', site: null, instructor_id: null, start_time: '10:00:00', end_time: null, status: 'ממתין לאישור' },
+    ];
+    renderDialog();
+    await waitFor(() => expect(document.querySelector('input[type="date"]')).toHaveValue('2026-11-10'));
+    fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-11' } });
+    fireEvent.submit(document.querySelector('form'));
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('ORD-1051');
+    expect(state.writes).toHaveLength(0);
+  });
+});
+
+test('new order warns before insert when Supabase returns a same-day partial booking', async () => {
+  state.orders = [{ ...order, id: 'other', order_number: 'ORD-1051', activity_date: '2026-11-06', site: null, instructor_id: null, start_time: '09:00:00', end_time: null, status: 'ממתין לאישור' }];
+  renderDialog(null);
+  fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.click(screen.getByRole('button', { name: 'עכו' }));
+  const startTrigger = screen.getByText('שעת התחלה').parentElement.querySelector('[role="combobox"]');
+  fireEvent.keyDown(startTrigger, { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: '09:00' }));
+  const endTrigger = screen.getByText('שעת סיום').parentElement.querySelector('[role="combobox"]');
+  fireEvent.keyDown(endTrigger, { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: '10:00' }));
+  expect(startTrigger).toHaveTextContent('09:00');
+  expect(endTrigger).toHaveTextContent('10:00');
+  fireEvent.submit(document.querySelector('form'));
+  expect(await screen.findByRole('alertdialog')).toHaveTextContent('ORD-1051');
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('אתר לא צוין');
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('שעת סיום לא צוינה');
+  expect(state.writes).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'ביטול / חזרה לעריכה' }));
+  expect(state.writes).toHaveLength(0);
+  fireEvent.submit(document.querySelector('form'));
+  fireEvent.click(await screen.findByRole('button', { name: 'אישור והמשך בכל זאת' }));
+  await waitFor(() => expect(state.writes).toHaveLength(1));
+});
+
+test('new order sends explicitly selected site and end time in the insert payload', async () => {
+  renderDialog(null);
+  fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.click(screen.getByRole('button', { name: 'עכו' }));
+  const startTrigger = screen.getByText('שעת התחלה').parentElement.querySelector('[role="combobox"]');
+  fireEvent.keyDown(startTrigger, { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: '09:00' }));
+  const endTrigger = screen.getByText('שעת סיום').parentElement.querySelector('[role="combobox"]');
+  fireEvent.keyDown(endTrigger, { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: '10:00' }));
+  fireEvent.submit(document.querySelector('form'));
+  await waitFor(() => expect(state.writes).toHaveLength(1));
+  expect(state.writes[0].data).toMatchObject({ site: 'עכו', start_time: '09:00', end_time: '10:00' });
 });

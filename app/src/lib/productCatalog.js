@@ -4,7 +4,7 @@ export function filterProducts(products, { cafeteria = false, search = "", categ
   const query = search.trim().toLocaleLowerCase('he');
   return products.filter((product) =>
     Boolean(product.cafeteria_category) === cafeteria &&
-    (category === 'all' || product.cafeteria_category === category) &&
+    (!cafeteria || category === 'all' || product.cafeteria_category === category) &&
     (!query || product.name?.toLocaleLowerCase('he').includes(query))
   );
 }

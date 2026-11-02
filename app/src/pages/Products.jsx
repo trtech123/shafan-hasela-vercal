@@ -21,8 +21,10 @@ export default function Products({ cafeteria = false }) {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchByTab, setSearchByTab] = useState({ general: "", cafeteria: "" });
   const [category, setCategory] = useState("all");
+  const tab = cafeteria ? 'cafeteria' : 'general';
+  const search = searchByTab[tab];
   const visibleProducts = filterProducts(products, { cafeteria, search, category });
   const canAccess = user?.role === 'admin' || (cafeteria && user?.role === 'קופאי');
 
@@ -81,7 +83,7 @@ export default function Products({ cafeteria = false }) {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input aria-label="חיפוש מוצר לפי שם" placeholder="חיפוש מוצר לפי שם" value={search} onChange={(e) => setSearch(e.target.value)} className="pr-10" />
+          <Input aria-label="חיפוש מוצר לפי שם" placeholder="חיפוש מוצר לפי שם" value={search} onChange={(e) => setSearchByTab((previous) => ({ ...previous, [tab]: e.target.value }))} className="pr-10" />
         </div>
         {cafeteria && <select aria-label="סינון קטגוריה" value={category} onChange={(e) => setCategory(e.target.value)} className="h-9 w-full sm:w-48 rounded-md border border-input bg-background px-3 text-sm">
           <option value="all">כל הקטגוריות</option>
@@ -94,7 +96,7 @@ export default function Products({ cafeteria = false }) {
           <Loader2 className="w-5 h-5 animate-spin ml-2" /> טוען…
         </div>
       ) : visibleProducts.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-12 text-center">{search || category !== 'all' ? 'לא נמצאו מוצרים התואמים לחיפוש.' : 'אין מוצרים להצגה. ניתן ליצור מוצר חדש.'}</p>
+        <p className="text-sm text-muted-foreground py-12 text-center">{search || (cafeteria && category !== 'all') ? 'לא נמצאו מוצרים התואמים לחיפוש.' : 'אין מוצרים להצגה. ניתן ליצור מוצר חדש.'}</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleProducts.map((p) => (
