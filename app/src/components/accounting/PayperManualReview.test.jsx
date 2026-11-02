@@ -17,7 +17,7 @@ test('shows a durable manual review obligation without customer identity data', 
   expect(screen.getByText(/payment-1/)).toBeInTheDocument();
   expect(screen.getByRole('alert')).toHaveTextContent('ניסיון חדש מחייב אישור מוסמך שלא נוצר מסמך קודם');
   expect(screen.getByRole('region', { name: 'בדיקה ידנית למסמכי Payper' }).textContent).not.toMatch(/000000018/);
-  expect(query).toHaveBeenCalledWith('payper_document_ledger');
+  expect(query).toHaveBeenCalledWith('payper_accounting_exceptions');
 });
 
 test('warns when the review ledger cannot be read', async () => {

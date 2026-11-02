@@ -18,6 +18,7 @@ vi.mock("@/lib/AuthContext", () => ({
 vi.mock("@/components/SiteOpeningPrompt", () => ({
   default: () => null,
 }));
+vi.mock("@/components/accounting/PayperAdminAlert", () => ({ default: () => null }));
 
 const renderAtClubs = (role) => {
   currentRole = role;

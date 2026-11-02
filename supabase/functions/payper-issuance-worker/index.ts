@@ -19,15 +19,23 @@ Deno.serve(async (request) => {
       const client = createClient(required("SUPABASE_URL"), required("SUPABASE_SERVICE_ROLE_KEY"),
         { auth: { autoRefreshToken: false, persistSession: false } });
       const control = await client.from("payper_dispatch_control")
-        .select("enabled,activation_cutoff_utc,dispatch_remaining").eq("singleton", true).single();
+        .select("enabled,activation_cutoff_utc,dispatch_remaining,dispatch_mode,canary_payment_id")
+        .eq("singleton", true).single();
       if (control.error || !control.data) throw new Error("payper_control_unavailable");
       if (control.data.enabled !== true || !control.data.activation_cutoff_utc
-        || control.data.dispatch_remaining < 1)
+        || !["canary", "continuous"].includes(control.data.dispatch_mode)
+        || (control.data.dispatch_mode === "canary" &&
+          (!control.data.canary_payment_id || control.data.dispatch_remaining !== 1)))
+        return { processed: 0, succeeded: 0, held: 0 };
+      if (control.data.dispatch_mode === "canary" && targetPaymentId &&
+        targetPaymentId !== control.data.canary_payment_id)
         return { processed: 0, succeeded: 0, held: 0 };
       let candidates = client.from("payper_document_ledger")
         .select("payment_id").in("state", ["eligible", "source_frozen"])
         .order("created_at", { ascending: true }).limit(1);
-      if (targetPaymentId) candidates = candidates.eq("payment_id", targetPaymentId);
+      const constrainedTarget = control.data.dispatch_mode === "canary"
+        ? control.data.canary_payment_id : targetPaymentId;
+      if (constrainedTarget) candidates = candidates.eq("payment_id", constrainedTarget);
       const { data, error } = await candidates;
       if (error || !Array.isArray(data)) throw new Error("payper_candidates_unavailable");
       const selectedPaymentId = targetPaymentId ?? data[0]?.payment_id;

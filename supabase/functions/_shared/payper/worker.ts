@@ -45,11 +45,14 @@ export function createPayperWorkerHandler(secret: string, run: (targetPaymentId:
     if (request.method !== "POST") return new Response(null, { status: 405, headers });
     if (request.headers.get("authorization") !== `Bearer ${secret}`)
       return new Response(null, { status: 401, headers });
-    if (request.url.includes("?") || request.body !== null)
-      return new Response(null, { status: 400, headers });
+    if (request.url.includes("?")) return new Response(null, { status: 400, headers });
     const automaticMode = request.headers.get("x-payper-mode");
     if (automaticMode !== null) {
       if (automaticMode !== "automatic" || request.headers.has("x-payper-target-payment-id"))
+        return new Response(null, { status: 400, headers });
+      // pg_net sends an empty JSON object. No caller-supplied payment selector
+      // is accepted in scheduled mode.
+      if (request.body !== null && (await request.text()).trim() !== "{}")
         return new Response(null, { status: 400, headers });
       if (!automatic?.automaticEnabled) return new Response(null, { status: 403, headers });
       try {
@@ -59,7 +62,7 @@ export function createPayperWorkerHandler(secret: string, run: (targetPaymentId:
       }
     }
     const suppliedTarget = request.headers.get("x-payper-target-payment-id");
-    if (!suppliedTarget || !uuid.test(suppliedTarget))
+    if (request.body !== null || !suppliedTarget || !uuid.test(suppliedTarget))
       return new Response(null, { status: 400, headers });
     try {
       return new Response(JSON.stringify(await run(suppliedTarget)), { status: 200, headers });

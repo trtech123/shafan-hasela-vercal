@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 import SiteOpeningPrompt from "@/components/SiteOpeningPrompt";
+import PayperAdminAlert from "@/components/accounting/PayperAdminAlert";
 
 const allNavItems = [
 { path: "/", label: "דשבורד", icon: LayoutDashboard, roles: ["admin"] },
@@ -42,6 +43,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex" dir="rtl">
+      {role === "admin" && <div className="fixed left-3 top-3 z-50 max-w-sm"><PayperAdminAlert /></div>}
       {/* One-time site-opening form prompt (field roles only, once per session) */}
       <SiteOpeningPrompt />
 

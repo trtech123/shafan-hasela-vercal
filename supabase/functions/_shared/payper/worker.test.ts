@@ -73,10 +73,32 @@ describe("supervised Payper worker", () => {
     expect((await enabled(new Request("https://local.test", { method: "POST", headers: { ...headers,
       "x-payper-target-payment-id": target } }))).status).toBe(400);
     expect((await enabled(new Request("https://local.test?paymentId=" + target, { method: "POST", headers }))).status).toBe(400);
-    expect((await enabled(new Request("https://local.test", { method: "POST", headers, body: "{}" }))).status).toBe(400);
+    expect((await enabled(new Request("https://local.test", { method: "POST", headers, body: "{\"paymentId\":\"old\"}" }))).status).toBe(400);
     expect(runAuto).not.toHaveBeenCalled();
     expect((await enabled(new Request("https://local.test", { method: "POST", headers }))).status).toBe(200);
-    expect(runAuto).toHaveBeenCalledOnce();
+    expect((await enabled(new Request("https://local.test", { method: "POST", headers, body: "{}" }))).status).toBe(200);
+    expect(runAuto).toHaveBeenCalledTimes(2);
     expect(runTarget).not.toHaveBeenCalled();
+  });
+  test("scheduled recovery issues a missed-wake candidate once and leaves an uncertain result held", async () => {
+    const first = "11111111-1111-4111-8111-111111111111";
+    const second = "22222222-2222-4222-8222-222222222222";
+    const eligible = new Set([first, second]);
+    const issue = vi.fn(async (id: string) => {
+      eligible.delete(id);
+      return { state: id === first ? "succeeded" as const : "reconciliation_required" as const };
+    });
+    const runAuto = async () => {
+      const oldest = [...eligible][0];
+      return runPayperIssuanceBatch({ targetPaymentId: oldest ?? "", listCandidates: async () => [...eligible], issue });
+    };
+    const handler = createPayperWorkerHandler("private-token-long-1", vi.fn(),
+      { automaticEnabled: true, runAuto });
+    const request = () => new Request("https://local.test", { method: "POST",
+      headers: { Authorization: "Bearer private-token-long-1", "x-payper-mode": "automatic" }, body: "{}" });
+    expect(await (await handler(request())).json()).toEqual({ processed: 1, succeeded: 1, held: 0 });
+    expect(await (await handler(request())).json()).toEqual({ processed: 1, succeeded: 0, held: 1 });
+    expect(await (await handler(request())).json()).toEqual({ processed: 0, succeeded: 0, held: 0 });
+    expect(issue).toHaveBeenCalledTimes(2);
   });
 });
