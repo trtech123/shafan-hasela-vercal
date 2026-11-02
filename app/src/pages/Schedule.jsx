@@ -14,6 +14,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { subscribeOrderChanges } from "@/lib/orderEvents";
 
 const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
 const FILTER_BUTTONS = [
@@ -64,30 +65,44 @@ export default function Schedule() {
   // Cleared on every dialog open so plain "חסום זמן" doesn't inherit stale text.
   const [blockPrefillReason, setBlockPrefillReason] = useState("");
 
+  const loadOrders = useCallback(async () => {
+    const first = currentMonth.clone().startOf('month').startOf('week').format('YYYY-MM-DD');
+    const last = currentMonth.clone().endOf('month').endOf('week').format('YYYY-MM-DD');
+    const { data, error } = await supabase.from('orders').select('*')
+      .gte('activity_date', first).lte('activity_date', last);
+    if (error) {
+      console.error('orders fetch error:', error);
+      toast.error('לא ניתן לרענן את לוח ההזמנות');
+      return;
+    }
+    setOrders(data ?? []);
+  }, [currentMonth]);
+
+  useEffect(() => {
+    loadOrders();
+    return subscribeOrderChanges(loadOrders);
+  }, [loadOrders]);
+
   useEffect(() => {
     const load = async () => {
       try {
         const [
-          { data: o, error: eO },
           { data: a, error: eA },
           { data: t, error: eT },
           { data: m, error: eM },
           { data: p, error: eP },
         ] = await Promise.all([
-          supabase.from('orders').select('*').order('activity_date', { ascending: false }).limit(200),
           supabase.from('activities').select('*'),
           supabase.from('tasks').select('*').order('due_date', { ascending: false }).limit(200),
           supabase.from('maintenance_tasks').select('*').order('due_date', { ascending: false }).limit(200),
           supabase.from('profiles').select('id, full_name, email').order('full_name'),
         ]);
 
-        if (eO) console.error('orders fetch error:', eO);
         if (eA) console.error('activities fetch error:', eA);
         if (eT) console.error('tasks fetch error:', eT);
         if (eM) console.error('maintenance_tasks fetch error:', eM);
         if (eP) console.error('profiles fetch error:', eP);
 
-        setOrders(o ?? []);
         setActivities(a ?? []);
         setTasks(t ?? []);
         setMaintenanceTasks(m ?? []);

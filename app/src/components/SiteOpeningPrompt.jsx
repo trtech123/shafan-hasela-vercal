@@ -13,10 +13,8 @@ import { useAuth } from "@/lib/AuthContext";
 // Hebrew-mapped roles from AuthContext that must see the prompt.
 const RELEVANT_ROLES = ['אחמ"ש'];
 
-// Google Forms — two distinct site-opening options the customer treats separately.
-const FORM_PARK_EXTREME =
-  "https://docs.google.com/forms/d/e/1FAIpQLSfHkXeDpD_tIpYnvajCESaByf2ReJDZt2wa9mLAxyERpBaGWg/viewform?usp=header";
-const FORM_BARKO_KINNERET = "https://forms.gle/vccdsaCr9Cjw1aEdA";
+// Shared safety questionnaire for Acre and Tiberias; the form selects the site.
+const SITE_OPENING_FORM = "https://devout-daily-shift-pulse.base44.app";
 
 export default function SiteOpeningPrompt() {
   const { user } = useAuth();
@@ -43,7 +41,7 @@ export default function SiteOpeningPrompt() {
         <div className="space-y-2 text-center">
           <h2 className="text-xl font-bold">נוהל פתיחת אתר</h2>
           <p className="text-sm text-muted-foreground">
-            לפני תחילת העבודה יש למלא את טופס פתיחת האתר המתאים.
+            לפני תחילת העבודה יש למלא את טופס פתיחת האתר המתאים. בשאלון הבטיחות יש לבחור את האתר.
           </p>
         </div>
 
@@ -51,16 +49,9 @@ export default function SiteOpeningPrompt() {
           <Button
             variant="outline"
             className="w-full justify-center gap-2"
-            onClick={() => openForm(FORM_PARK_EXTREME)}
+            onClick={() => openForm(SITE_OPENING_FORM)}
           >
-            <ExternalLink className="w-4 h-4" /> פארק אקסטרים
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full justify-center gap-2"
-            onClick={() => openForm(FORM_BARKO_KINNERET)}
-          >
-            <ExternalLink className="w-4 h-4" /> אקסטרים ברקו
+            <ExternalLink className="w-4 h-4" /> שאלון בטיחות ופתיחת אתר — עכו וטבריה
           </Button>
         </div>
 

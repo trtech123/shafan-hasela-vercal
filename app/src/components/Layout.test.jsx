@@ -50,6 +50,21 @@ const renderAtAccounting = (role) => {
 
 afterEach(() => cleanup());
 
+describe("Cafeteria product navigation", () => {
+  test.each(["admin", "קופאי"])("%s can reach cafeteria products", (role) => {
+    currentRole = role;
+    render(<MemoryRouter initialEntries={["/cafeteria-products"]}><Routes><Route element={<Layout />}><Route path="/cafeteria-products" element={<h1>קפיטריה</h1>} /></Route></Routes></MemoryRouter>);
+    expect(screen.getByRole("link", { name: "ניהול מוצרי קפיטריה" })).toHaveAttribute("href", "/cafeteria-products");
+    expect(screen.getByRole("heading", { name: "קפיטריה" })).toBeInTheDocument();
+  });
+  test.each(['אחמ"ש', "מדריך"])("%s cannot reach cafeteria products", (role) => {
+    currentRole = role;
+    render(<MemoryRouter initialEntries={["/cafeteria-products"]}><Routes><Route element={<Layout />}><Route path="/cafeteria-products" element={<h1>קפיטריה</h1>} /><Route path="/schedule" element={<h1>לוח זמנים</h1>} /></Route></Routes></MemoryRouter>);
+    expect(screen.queryByRole("link", { name: "ניהול מוצרי קפיטריה" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "לוח זמנים" })).toBeInTheDocument();
+  });
+});
+
 describe("Clubs navigation and route authorization", () => {
   test("an admin sees the חוגים navigation entry and direct route content", () => {
     renderAtClubs("admin");

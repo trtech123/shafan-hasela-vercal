@@ -23,6 +23,7 @@ const allNavItems = [
 { path: "/tasks", label: "משימות", icon: ListTodo, roles: ["admin"] },
 { path: "/maintenance", label: "תחזוקה", icon: Wrench, roles: ["admin", "אחמ\"ש"] },
 { path: "/products", label: "ניהול מוצרים", icon: Package, roles: ["admin"] },
+{ path: "/cafeteria-products", label: "ניהול מוצרי קפיטריה", icon: Package, roles: ["admin", "קופאי"] },
 { path: "/templates", label: "תבניות הודעות", icon: MessageSquareText, roles: ["admin"] },
 { path: "/users", label: "ניהול משתמשים", icon: UserCog, roles: ["admin"] }];
 

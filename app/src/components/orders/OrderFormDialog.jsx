@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import moment from "moment";
-import { findConflictingBlocks } from "@/lib/blocking";
+import { findConflictingBlocks, findConflictingOrders } from "@/lib/blocking";
+import { publishOrderChange } from "@/lib/orderEvents";
+import { changedOrderFields } from "@/lib/orderUpdate";
 
 const timeSlots = [
   "07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30",
@@ -44,11 +47,10 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
   const [saving, setSaving] = useState(false);
   const [instructors, setInstructors] = useState([]);
   const [quotes, setQuotes] = useState([]);
-  // Same-day blocked_slots for the picked activity_date; used for conflict warning.
-  const [blocks, setBlocks] = useState([]);
-  // User must explicitly acknowledge before save proceeds over a conflict.
-  // Resets whenever the relevant slot fields change (see effect below).
-  const [overrideAck, setOverrideAck] = useState(false);
+  const [pendingSave, setPendingSave] = useState(null);
+  const [warningConflicts, setWarningConflicts] = useState([]);
+  const [instructorTouched, setInstructorTouched] = useState(false);
+  const [quoteTouched, setQuoteTouched] = useState(false);
 
   const selectedActivity = activities.find(a => a.id === form.activity_id);
   const isTaskMode = selectedActivity && TASK_CATEGORIES.includes(selectedActivity.category);
@@ -57,8 +59,7 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
     const fetchInstructors = async () => {
       const { data, error } = await supabase
         .from('instructors')
-        .select('*')
-        .eq('status', 'פעיל');
+        .select('*');
       if (error) console.error('instructors fetch error:', error);
       else setInstructors(data ?? []);
     };
@@ -78,46 +79,12 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
     fetchQuotes();
   }, []);
 
-  // Fetch same-day blocked_slots when the picked date changes.
-  // Task-mode orders skip the check entirely — internal task workflows
-  // aren't customer bookings.
   useEffect(() => {
-    if (!form.activity_date || isTaskMode) {
-      setBlocks([]);
-      return;
-    }
-    const fetchBlocks = async () => {
-      const { data, error } = await supabase
-        .from('blocked_slots')
-        .select('*')
-        .eq('block_date', form.activity_date);
-      if (error) {
-        console.error('blocks fetch error:', error);
-        return;
-      }
-      setBlocks(data ?? []);
-    };
-    fetchBlocks();
-  }, [form.activity_date, isTaskMode]);
-
-  // Compute conflicting blocks for the current slot. Exclude any order_lock
-  // that originated from THIS order (avoids self-conflict on edit).
-  const conflicts = useMemo(() => {
-    if (isTaskMode) return [];
-    const filtered = blocks.filter(b => !(b.source === 'order_lock' && b.source_order_id === order?.id));
-    return findConflictingBlocks(filtered, {
-      site: form.site || null,
-      date: form.activity_date,
-      start_time: form.start_time || null,
-      end_time:   form.end_time   || null,
-    });
-  }, [blocks, form.site, form.activity_date, form.start_time, form.end_time, isTaskMode, order?.id]);
-
-  // Reset override acknowledgement whenever any slot input changes — if the
-  // user tweaks the slot after acknowledging, they must re-confirm.
-  useEffect(() => {
-    setOverrideAck(false);
-  }, [form.activity_date, form.site, form.start_time, form.end_time]);
+    setPendingSave(null);
+    setWarningConflicts([]);
+    setInstructorTouched(false);
+    setQuoteTouched(false);
+  }, [order, open]);
 
   useEffect(() => {
     if (order) {
@@ -132,8 +99,8 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         // null quote_id in DB → sentinel so the picker displays "ללא הצעה מקושרת"
         quote_id: order.quote_id ?? NO_QUOTE,
         activity_date: order.activity_date || "",
-        start_time: order.start_time || "",
-        end_time: order.end_time || "",
+        start_time: order.start_time?.slice(0, 5) || "",
+        end_time: order.end_time?.slice(0, 5) || "",
         site: order.site || "",
         num_participants: order.num_participants || "",
         price_per_person: order.price_per_person || "",
@@ -177,8 +144,35 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
     });
   };
 
+  const persistOrder = async (data) => {
+    setSaving(true);
+    try {
+      const update = order ? changedOrderFields(order, data) : data;
+      if (order && Object.keys(update).length === 0) {
+        toast.info('לא בוצעו שינויים בהזמנה');
+        onClose();
+        return;
+      }
+      const result = order
+        ? await supabase.from('orders').update(update).eq('id', order.id).select('id, activity_date, start_time, end_time').single()
+        : await supabase.from('orders').insert(update).select('id').single();
+      if (result.error || !result.data?.id) throw result.error || new Error('No order row returned');
+      publishOrderChange();
+      toast.success(order ? 'ההזמנה עודכנה בהצלחה' : 'ההזמנה נשמרה בהצלחה');
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      console.error('save order error:', err);
+      toast.error('שמירת ההזמנה נכשלה. בדקו הרשאות ונתונים ונסו שוב.');
+    } finally {
+      setSaving(false);
+      setPendingSave(null);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving || pendingSave) return;
     setSaving(true);
     try {
       const data = {
@@ -186,12 +180,12 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         // UUID FK fields: empty string / NO_INSTRUCTOR sentinel → null
         // (Postgres rejects "" and "__none__" as UUIDs).
         activity_id: form.activity_id || null,
-        instructor_id:
+        instructor_id: !instructorTouched && order ? order.instructor_id :
           form.instructor_id && form.instructor_id !== NO_INSTRUCTOR
             ? form.instructor_id
             : null,
         // UUID FK to quotes; null when "ללא הצעה" sentinel chosen. Same empty-string-rejected pattern as instructor_id.
-        quote_id:
+        quote_id: !quoteTouched && order ? order.quote_id :
           form.quote_id && form.quote_id !== NO_QUOTE
             ? form.quote_id
             : null,
@@ -217,42 +211,37 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         data.client_phone = data.client_phone || "—";
       }
 
-      let error;
-      if (order) {
-        ({ error } = await supabase.from('orders').update(data).eq('id', order.id));
-      } else {
-        ({ error } = await supabase.from('orders').insert(data));
-      }
-
-      if (error) {
-        console.error('save order error:', error);
-        toast.error('שגיאה בשמירת ההזמנה');
-        return;
-      }
-
-      if (data.instructor_id) {
-        const instructor = instructors.find(i => i.id === data.instructor_id);
-        if (instructor) {
-          toast.success(
-            `הזמנה נשמרה! פרטי מדריך: ${instructor.full_name} — ${instructor.phone}${instructor.email ? " | " + instructor.email : ""}`,
-            { duration: 6000 }
-          );
+      if (!isTaskMode && data.activity_date) {
+        const [blocksResult, ordersResult] = await Promise.all([
+          supabase.from('blocked_slots').select('id, block_date, site, start_time, end_time, reason, source, source_order_id').eq('block_date', data.activity_date),
+          supabase.from('orders').select('id, order_number, activity_date, start_time, end_time, site, instructor_id, status').eq('activity_date', data.activity_date),
+        ]);
+        if (blocksResult.error || ordersResult.error || !blocksResult.data || !ordersResult.data) {
+          throw blocksResult.error || ordersResult.error || new Error('Availability query returned no rows');
         }
-      } else {
-        toast.success('הזמנה נשמרה בהצלחה');
+        const blockConflicts = findConflictingBlocks(
+          blocksResult.data.filter((b) => !(b.source === 'order_lock' && b.source_order_id === order?.id)),
+          { site: data.site, date: data.activity_date, start_time: data.start_time, end_time: data.end_time },
+        ).map((b) => ({ id: b.id, label: b.reason, site: b.site, start_time: b.start_time, end_time: b.end_time }));
+        const orderConflicts = findConflictingOrders(ordersResult.data, data, order?.id)
+          .map((o) => ({ id: o.id, label: `הזמנה ${o.order_number || o.id.slice(0, 8)} (${o.site === data.site ? 'אותו אתר' : 'אותו מדריך'})`, site: o.site, start_time: o.start_time, end_time: o.end_time }));
+        const found = [...blockConflicts, ...orderConflicts];
+        if (found.length) {
+          setWarningConflicts(found);
+          setPendingSave(data);
+          return;
+        }
       }
-
-      onSaved();
-      onClose();
+      await persistOrder(data);
     } catch (err) {
-      console.error('handleSubmit error:', err);
-      toast.error('שגיאה בשמירת ההזמנה');
+      console.error('availability check error:', err);
+      toast.error('לא ניתן לבדוק חפיפות כרגע. ההזמנה לא נשמרה. נסו שוב.');
     } finally {
       setSaving(false);
     }
   };
 
-  return (
+  return (<>
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
@@ -287,13 +276,13 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div onPointerDownCapture={(event) => { if (event.target instanceof Element && event.target.closest('[role="combobox"]')) setInstructorTouched(true); }} onKeyDownCapture={(event) => { if (event.target instanceof Element && event.target.closest('[role="combobox"]')) setInstructorTouched(true); }}>
               <Label>מדריך משובץ</Label>
               <Select value={form.instructor_id} onValueChange={v => handleChange("instructor_id", v)}>
                 <SelectTrigger><SelectValue placeholder="בחר מדריך" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_INSTRUCTOR}>ללא מדריך</SelectItem>
-                  {instructors.map(i => (
+                  {instructors.filter(i => i.status === 'פעיל' || i.id === order?.instructor_id).map(i => (
                     <SelectItem key={i.id} value={i.id}>{i.full_name} — {i.phone}</SelectItem>
                   ))}
                 </SelectContent>
@@ -302,7 +291,7 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
           </div>
 
           {!isTaskMode && (
-            <div>
+            <div onPointerDownCapture={(event) => { if (event.target instanceof Element && event.target.closest('[role="combobox"]')) setQuoteTouched(true); }} onKeyDownCapture={(event) => { if (event.target instanceof Element && event.target.closest('[role="combobox"]')) setQuoteTouched(true); }}>
               <Label>הצעת מחיר מקושרת</Label>
               <Select value={form.quote_id} onValueChange={v => handleChange("quote_id", v)}>
                 <SelectTrigger><SelectValue placeholder="בחר הצעת מחיר" /></SelectTrigger>
@@ -506,47 +495,33 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
 
           </Tabs>
 
-          {conflicts.length > 0 && (
-            <div className="p-3 rounded-xl border border-red-300 bg-red-50 space-y-2">
-              <p className="text-sm font-semibold text-red-800 flex items-center gap-1">
-                🔒 התאריך/השעה חסומים
-              </p>
-              <ul className="space-y-1">
-                {conflicts.map(b => (
-                  <li key={b.id} className="text-xs text-red-700">
-                    <span className="font-medium">{b.reason}</span>
-                    {" · "}
-                    {b.start_time && b.end_time
-                      ? `${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)}`
-                      : "כל היום"}
-                    {" · "}
-                    {b.site || "כל האתרים"}
-                    {b.source === 'order_lock' && " · נעילת הזמנה"}
-                  </li>
-                ))}
-              </ul>
-              <label className="flex items-start gap-2 text-xs text-red-800 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={overrideAck}
-                  onChange={e => setOverrideAck(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>אני יודע/ת שיש חסימה ומאשר/ת יצירה בכל זאת</span>
-              </label>
-            </div>
-          )}
-
           <div className="flex gap-3 justify-end pt-2">
             <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
-            <Button type="submit" disabled={saving || (conflicts.length > 0 && !overrideAck)}>
+            <Button type="submit" disabled={saving}>
               {saving ? "שומר..." : order ? "עדכון" : isTaskMode ? "צור משימה" : "צור הזמנה"}
             </Button>
           </div>
         </form>
       </DialogContent>
     </Dialog>
-  );
+    <AlertDialog open={!!pendingSave} onOpenChange={(isOpen) => { if (!isOpen) { setPendingSave(null); setWarningConflicts([]); } }}>
+      <AlertDialogContent dir="rtl" aria-label="אזהרת הזמנות חופפות">
+        <AlertDialogHeader>
+          <AlertDialogTitle>נמצאה חפיפה בלוח הזמנים</AlertDialogTitle>
+          <AlertDialogDescription>אפשר לשמור את ההזמנה למרות החפיפה רק באישור מפורש.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <ul className="max-h-44 overflow-y-auto space-y-2 text-sm">
+          {warningConflicts.map((item) => <li key={item.id}>
+            {item.label} · {item.site || 'כל האתרים'} · {item.start_time && item.end_time ? `${item.start_time.slice(0, 5)}–${item.end_time.slice(0, 5)}` : 'כל היום'}
+          </li>)}
+        </ul>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <Button type="button" variant="outline" onClick={() => { setPendingSave(null); setWarningConflicts([]); }}>ביטול / חזרה לעריכה</Button>
+          <Button type="button" disabled={saving} onClick={() => persistOrder(pendingSave)}>אישור והמשך בכל זאת</Button>
+        </div>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>);
 }
 
 function siteSelectedClass(site) {

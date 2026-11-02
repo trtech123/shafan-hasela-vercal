@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { X, ImagePlus, Loader2 } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { CAFETERIA_CATEGORIES } from "@/lib/productCatalog";
 
 // Reuse the existing public bucket from 004_storage.sql — no new storage migration.
 const STORAGE_BUCKET = "activity-images";
@@ -24,9 +26,10 @@ function sanitizeFileName(name) {
   return safeBase + ext.toLowerCase();
 }
 
-const emptyForm = { name: "", description: "", price: "", image_url: "", site: "", status: "פעיל" };
+const emptyForm = { name: "", description: "", price: "", image_url: "", site: "", status: "פעיל", cafeteria_category: "" };
 
-export default function ProductFormDialog({ open, onClose, product, onSaved }) {
+export default function ProductFormDialog({ open, onClose, product, onSaved, cafeteriaMode = false }) {
+  const { user } = useAuth();
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -41,6 +44,7 @@ export default function ProductFormDialog({ open, onClose, product, onSaved }) {
         image_url: product.image_url || "",
         site: product.site || "",
         status: product.status || "פעיל",
+        cafeteria_category: product.cafeteria_category || "",
       });
     } else {
       setForm(emptyForm);
@@ -79,6 +83,10 @@ export default function ProductFormDialog({ open, onClose, product, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (cafeteriaMode && !form.cafeteria_category && (!product || user?.role !== 'admin')) {
+      toast.error("יש לבחור קטגוריית קפיטריה לפני שמירה");
+      return;
+    }
     setSaving(true);
     const data = {
       name: form.name.trim(),
@@ -87,13 +95,15 @@ export default function ProductFormDialog({ open, onClose, product, onSaved }) {
       image_url: form.image_url || null,
       site: form.site || null,
       status: form.status,
+      cafeteria_category: form.cafeteria_category || null,
     };
+    if (user?.role !== 'admin') delete data.image_url;
     try {
       let error;
       if (product) {
-        ({ error } = await supabase.from("products").update(data).eq("id", product.id));
+        ({ error } = await supabase.from("products").update(data).eq("id", product.id).select('id').single());
       } else {
-        ({ error } = await supabase.from("products").insert(data));
+        ({ error } = await supabase.from("products").insert(data).select('id').single());
       }
       if (error) {
         console.error("save product error:", error);
@@ -103,6 +113,9 @@ export default function ProductFormDialog({ open, onClose, product, onSaved }) {
       toast.success(product ? "המוצר עודכן" : "המוצר נוצר");
       onSaved();
       onClose();
+    } catch (error) {
+      console.error('save product error:', error);
+      toast.error('שגיאה בשמירת המוצר');
     } finally {
       setSaving(false);
     }
@@ -139,28 +152,36 @@ export default function ProductFormDialog({ open, onClose, product, onSaved }) {
             </div>
           </div>
 
+          <div>
+            <Label>קטגוריית קפיטריה {cafeteriaMode && (!product || user?.role !== 'admin') && '*'}</Label>
+            <select aria-label="קטגוריית קפיטריה" value={form.cafeteria_category} onChange={(e) => setForm((p) => ({ ...p, cafeteria_category: e.target.value }))} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+              <option value="">{user?.role === 'admin' ? 'לא מוצר קפיטריה' : 'בחר קטגוריה'}</option>
+              {CAFETERIA_CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </div>
+
           {/* Image upload (single) */}
           <div>
             <Label>תמונה</Label>
-            <input
+            {user?.role === 'admin' && <input
               ref={fileInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
               className="hidden"
               onChange={handleFileChange}
-            />
+            />}
             {form.image_url ? (
               <div className="relative mt-1 w-32">
                 <img src={form.image_url} alt="product" className="w-32 h-32 object-cover rounded-lg" />
-                <button
+                {user?.role === 'admin' && <button
                   type="button"
                   onClick={() => setForm((p) => ({ ...p, image_url: "" }))}
                   className="absolute top-1 left-1 bg-black/50 text-white rounded-full p-0.5"
                 >
                   <X className="w-3 h-3" />
-                </button>
+                </button>}
               </div>
-            ) : (
+            ) : user?.role === 'admin' ? (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -169,6 +190,8 @@ export default function ProductFormDialog({ open, onClose, product, onSaved }) {
               >
                 {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> מעלה...</> : <><ImagePlus className="w-4 h-4" /> העלאת תמונה</>}
               </button>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">תמונות מוצרים מנוהלות על ידי מנהל</p>
             )}
           </div>
 
