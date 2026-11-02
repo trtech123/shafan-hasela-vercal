@@ -1,7 +1,7 @@
 -- Disposable local database only. Apply all migrations first; rollback fixtures.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT extensions.plan(34);
+SELECT extensions.plan(37);
 SELECT extensions.ok(NOT has_table_privilege('authenticated','public.pos_pelecard_intents','SELECT,INSERT,UPDATE,DELETE'),'POS intent private');
 SELECT extensions.ok(NOT has_function_privilege('authenticated','public.reserve_pos_pelecard(uuid,uuid,jsonb,jsonb,jsonb)','EXECUTE'),'browser cannot reserve');
 SELECT extensions.ok(NOT has_function_privilege('service_role','public.claim_pos_pelecard_init(uuid)','EXECUTE'),'Edge cannot bypass Node claim');
@@ -48,14 +48,27 @@ SELECT extensions.is((SELECT sale_date FROM public.sales WHERE payment_transacti
   (clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date,'sale reported on local settlement date');
 SELECT extensions.is((SELECT count(*) FROM public.payper_document_ledger WHERE payment_id=current_setting('test.pos_payment')::uuid),
   0::bigint,'complete pre-cutoff payment excluded from future Payper processing');
+SELECT extensions.is((SELECT status FROM public.accounting_events WHERE source_type='payment_transaction'
+  AND source_id=current_setting('test.pos_payment')),'configuration_required',
+  'pre-cutoff POS payment cannot enter Rivhit issuance');
+SELECT extensions.throws_ok($$UPDATE public.accounting_events SET status='processing'
+  WHERE source_type='payment_transaction' AND source_id=current_setting('test.pos_payment')$$,
+  '42501','pos_rivhit_issuance_held','POS Rivhit force-retry remains blocked');
+INSERT INTO public.accounting_customers(id,provider,account_namespace,identity_key,external_reference)
+  VALUES('91000000-0000-4000-8000-000000000015','rivhit','pos-test','synthetic-identity','synthetic-reference');
+SELECT extensions.throws_ok($$INSERT INTO public.accounting_documents(provider,account_namespace,accounting_customer_id,
+  source_type,source_id,document_type_key,external_document_type,status,request_reference,payload_hash)
+  VALUES('rivhit','pos-test','91000000-0000-4000-8000-000000000015',
+  'payment_transaction',current_setting('test.pos_payment'),'invoice_receipt',1,'processing','synthetic-request','synthetic-hash')$$,
+  '42501','pos_rivhit_issuance_held','direct Rivhit document claim blocked for POS');
 SELECT set_config('test.pos_discount',(public.reserve_pos_pelecard('91000000-0000-4000-8000-000000000001',
   '91000000-0000-4000-8000-000000000012',
   '[{"kind":"product","id":"91000000-0000-4000-8000-000000000002","qty":1}]',
   '{"type":"הנחה כללית","mode":"fixed","value":0.5}','{}')->>'paymentId'),true);
 SELECT extensions.is((SELECT amount FROM public.payment_transactions WHERE id=current_setting('test.pos_discount')::uuid),
   0.50::numeric,'admin discount computed against catalog price');
-SELECT extensions.is((SELECT checkout_snapshot->'discount'->>'final_total' FROM public.payment_transactions
-  WHERE id=current_setting('test.pos_discount')::uuid),'0.5','discount snapshot frozen');
+SELECT extensions.is((SELECT (checkout_snapshot->'discount'->>'final_total')::numeric FROM public.payment_transactions
+  WHERE id=current_setting('test.pos_discount')::uuid),0.50::numeric,'discount snapshot frozen');
 SELECT extensions.ok(public.cancel_pos_pelecard_prepared('91000000-0000-4000-8000-000000000012',
   '91000000-0000-4000-8000-000000000001'),'prepared intent can be canceled without provider contact');
 SELECT extensions.is((SELECT status FROM public.payment_transactions WHERE id=current_setting('test.pos_discount')::uuid),

@@ -194,7 +194,8 @@ BEGIN
     p.status NOT IN ('initiated','pending_provider') OR p.currency<>'ILS' OR p.operation<>'payment'
   THEN RAISE EXCEPTION 'pos_session_mismatch' USING ERRCODE='23514'; END IF;
   IF p_transaction_id IS NULL OR p_transaction_id !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' OR
-    p_confirmation_key IS NULL OR p_confirmation_key !~ '^[A-Za-z0-9_+/=-]{1,512}$' OR
+    p_confirmation_key IS NULL OR pg_catalog.length(p_confirmation_key) NOT BETWEEN 1 AND 512 OR
+    p_confirmation_key !~ '^[A-Za-z0-9_+/=-]+$' OR
     p_url IS DISTINCT FROM 'https://gateway20.pelecard.biz/PaymentGW?transactionId='||p_transaction_id
   THEN RAISE EXCEPTION 'pos_session_invalid' USING ERRCODE='23514'; END IF;
   IF i.transaction_id IS NOT NULL THEN
@@ -294,6 +295,48 @@ END $$;
 CREATE TRIGGER guard_pos_pelecard_sale BEFORE INSERT ON public.sales
   FOR EACH ROW EXECUTE FUNCTION public.guard_pos_pelecard_sale();
 REVOKE ALL ON FUNCTION public.guard_pos_pelecard_sale() FROM PUBLIC,anon,authenticated,service_role;
+
+-- A POS payment belongs to the Payper/manual-review path even while the
+-- activation cutoff is NULL. The pre-existing Rivhit cutoff fence only covers
+-- post-cutoff payments, so hold POS Rivhit events independently of that cutoff.
+CREATE FUNCTION public.hold_pos_rivhit_event() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  IF NEW.accounting_provider='rivhit' AND NEW.purpose='payment_success' AND
+    ((NEW.source_type='payment_transaction' AND EXISTS
+      (SELECT 1 FROM public.pos_pelecard_intents i WHERE i.payment_id::text=NEW.source_id)) OR
+     (NEW.source_type='sale' AND EXISTS
+      (SELECT 1 FROM public.pos_pelecard_intents i JOIN public.payment_transactions p ON p.id=i.payment_id
+       WHERE p.sale_id::text=NEW.source_id)))
+  THEN
+    IF TG_OP='INSERT' THEN
+      NEW.status:='configuration_required';
+      NEW.last_error:='{"code":"pos_payper_only"}'::jsonb;
+    ELSIF NEW.status='processing' THEN
+      RAISE EXCEPTION 'pos_rivhit_issuance_held' USING ERRCODE='42501';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER trg_hold_pos_rivhit_event BEFORE INSERT OR UPDATE OF status ON public.accounting_events
+  FOR EACH ROW EXECUTE FUNCTION public.hold_pos_rivhit_event();
+REVOKE ALL ON FUNCTION public.hold_pos_rivhit_event() FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE FUNCTION public.hold_pos_rivhit_document() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  IF NEW.provider='rivhit' AND NEW.status='processing' AND
+    ((NEW.source_type='payment_transaction' AND EXISTS
+      (SELECT 1 FROM public.pos_pelecard_intents i WHERE i.payment_id::text=NEW.source_id)) OR
+     (NEW.source_type='sale' AND EXISTS
+      (SELECT 1 FROM public.pos_pelecard_intents i JOIN public.payment_transactions p ON p.id=i.payment_id
+       WHERE p.sale_id::text=NEW.source_id)))
+  THEN RAISE EXCEPTION 'pos_rivhit_issuance_held' USING ERRCODE='42501'; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER trg_hold_pos_rivhit_document BEFORE INSERT OR UPDATE OF status ON public.accounting_documents
+  FOR EACH ROW EXECUTE FUNCTION public.hold_pos_rivhit_document();
+REVOKE ALL ON FUNCTION public.hold_pos_rivhit_document() FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE FUNCTION public.get_pos_pelecard_view(p_payment_id uuid,p_actor_id uuid)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
