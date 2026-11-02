@@ -49,6 +49,19 @@ export async function runPayperIssuanceBatch(deps: PayperWorkerDependencies): Pr
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function hasDiagnosticPayload(request: Request): Promise<boolean> {
+  if (request.body === null) return false;
+  const reader = request.body.getReader();
+  // pg_net can send a zero-byte POST as a non-null stream. Reject every
+  // non-empty payload without buffering attacker-controlled input.
+  for (let i = 0; i < 8; i++) {
+    const { done, value } = await reader.read();
+    if (done) return false;
+    if (value?.byteLength) { await reader.cancel(); return true; }
+  }
+  await reader.cancel();
+  return true;
+}
 export function createPayperWorkerHandler(secret: string, run: (targetPaymentId: string) => Promise<unknown>,
   automatic: { runAuto: () => Promise<unknown>; automaticEnabled: boolean } | null = null,
   diagnostic: { runLookup: (targetPaymentId: string) => Promise<unknown>; enabled: boolean } | null = null) {
@@ -62,7 +75,7 @@ export function createPayperWorkerHandler(secret: string, run: (targetPaymentId:
     const automaticMode = request.headers.get("x-payper-mode");
     if (automaticMode === "lookup-diagnostic") {
       const target = request.headers.get("x-payper-target-payment-id");
-      if (request.body !== null || !target || !uuid.test(target))
+      if (!target || !uuid.test(target) || await hasDiagnosticPayload(request))
         return new Response(null, { status: 400, headers });
       if (!diagnostic?.enabled) return new Response(null, { status: 403, headers });
       try {

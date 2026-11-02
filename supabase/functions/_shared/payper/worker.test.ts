@@ -105,9 +105,15 @@ describe("supervised Payper worker", () => {
       ...headers, "x-payper-target-payment-id": "invalid" } }))).status).toBe(400);
     expect((await handler(new Request("https://local.test", { method: "POST", headers,
       body: "{}" }))).status).toBe(400);
+    expect((await handler(new Request("https://local.test", { method: "POST", headers,
+      body: "{" }))).status).toBe(400);
     expect(await (await handler(new Request("https://local.test", { method: "POST", headers }))).json())
       .toEqual({ verified: true, transactionRecordId: "3175016155" });
-    expect(runLookup).toHaveBeenCalledExactlyOnceWith(target);
+    expect(await (await handler(new Request("https://local.test", { method: "POST", headers,
+      body: new Uint8Array() }))).json())
+      .toEqual({ verified: true, transactionRecordId: "3175016155" });
+    expect(runLookup).toHaveBeenCalledTimes(2);
+    expect(runLookup).toHaveBeenLastCalledWith(target);
     expect(runTarget).not.toHaveBeenCalled();
     expect(runAuto).not.toHaveBeenCalled();
     const disabled = createPayperWorkerHandler(secret, runTarget, null, { runLookup, enabled: false });

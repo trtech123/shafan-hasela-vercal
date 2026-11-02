@@ -27,7 +27,8 @@ Keep the previous Vercel deployment and Edge snapshots for recovery.
    dispatch is OFF, call the worker once with its existing bearer token,
    `x-payper-mode: lookup-diagnostic`, and
    `x-payper-target-payment-id: 28b4786f-e722-40ae-9661-f3e805fc71bf`,
-   with no body. Require `verified=true` and record ID `3175016155`.
+   with no body or a zero-byte body. Require `verified=true` and record ID
+   `3175016155`. Non-empty JSON and all other payloads are rejected.
    This path reads the existing succeeded payment and calls only
    `GetTransaction`; it cannot reserve or create a document. Record only the
    sanitized response and stop the release on a mismatch or lookup error.
