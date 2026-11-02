@@ -137,6 +137,14 @@ describe("documented Pelecard Payper contract", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  test("classifies Pelecard 501 before any invoice dispatch", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ StatusCode: "501", ResultData: null }), { status: 200 }));
+    const provider = createPelecardPayperProvider({ credentials: gateway(), fetcher, dispatchEnabled: true });
+    await expect(provider.lookupTransaction("hosted-session-123", 300)).rejects.toThrow("provider_credentials_rejected");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][0]).toBe("https://gateway21.pelecard.biz/PaymentGW/GetTransaction");
+  });
+
   test("mocked dispatch validates success and treats rejection or timeout as reconciliation", async () => {
     const success = { StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "595170", InvoiceLink: "https://app.payper.co.il/public/invoice_show/595170?ak=opaque" } };
     const fetcher = vi.fn(async () => new Response(JSON.stringify(success), { status: 200 }));

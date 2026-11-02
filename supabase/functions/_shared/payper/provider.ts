@@ -169,9 +169,13 @@ export function createPelecardPayperProvider(options: {
             password: options.credentials.password, TransactionId: hostedId }),
           redirect: "error", signal: AbortSignal.timeout(timeout) });
         if (!response.ok) throw new Error("payper_lookup_failed");
-        return decodeTransactionRecord(await readJson(response), hostedId, amountMinor);
+        const body = await readJson(response);
+        // Pelecard's official error lookup maps 501 to rejected credentials.
+        // No provider message or credential value may reach the ledger or logs.
+        if (record(body)?.StatusCode === "501") throw new Error("provider_credentials_rejected");
+        return decodeTransactionRecord(body, hostedId, amountMinor);
       } catch (error) {
-        if (error instanceof Error && error.message === "payper_transaction_mismatch") throw error;
+        if (error instanceof Error && ["provider_credentials_rejected", "payper_transaction_mismatch"].includes(error.message)) throw error;
         throw new Error("payper_lookup_failed");
       }
     },

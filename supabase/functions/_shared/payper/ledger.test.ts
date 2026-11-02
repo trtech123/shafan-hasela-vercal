@@ -54,6 +54,13 @@ describe("disabled Payper ledger application gate", () => {
     const ledger = createDisabledPayperLedger({ rpc: vi.fn().mockResolvedValue({ error: { message: "secret-token" } }) });
     await expect(ledger.freezeSource("payment-1")).rejects.toThrow("payper_freeze_source_failed");
   });
+  test("records a safe pre-dispatch reason without raw provider text", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    await createDisabledPayperLedger({ rpc }).holdFailure("payment-1", "provider_credentials_rejected");
+    expect(rpc).toHaveBeenCalledWith("hold_payper_source", {
+      p_payment_id: "payment-1", p_code: "provider_credentials_rejected",
+    });
+  });
   test("preserves only the safe quota code so valid payments stay eligible", async () => {
     const ledger = createPayperLedger({ rpc: vi.fn().mockResolvedValue({ error: { message: "payper_dispatch_limit_reached" } }) }, true);
     await expect(ledger.reserveDispatch("payment-1", "103059585")).rejects.toThrow("payper_dispatch_limit_reached");

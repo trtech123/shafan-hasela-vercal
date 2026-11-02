@@ -11,6 +11,18 @@ const reasons = {
   service_description_required: 'נדרש בירור תיאור השירות בחשבונית',
   vat_treatment_required: 'נדרש בירור סיווג מע״מ',
   pre_dispatch_review_required: 'נדרשת בדיקה לפני הפקת מסמך',
+  payper_lookup_failed: 'בדיקת עסקת פלאקארד נכשלה לפני בקשת חשבונית. יש לבדוק את החיבור לספק',
+  payper_transaction_mismatch: 'פרטי עסקת פלאקארד אינם תואמים לתשלום השמור. נדרשת התאמה ידנית',
+  payper_billing_incomplete: 'פרטי החיוב אינם מספקים להפקת חשבונית. יש לבדוק את הרשומה המאומתת',
+  payper_email_required: 'כתובת הדוא״ל לחיוב אינה תקינה לשליחת החשבונית',
+  payper_vat_contract_mismatch: 'סיווג המע״מ חסר או אינו תקין',
+  payper_items_required: 'פרטי המוצר או השירות חסרים לחשבונית',
+  payper_items_invalid: 'פרטי המוצר או השירות אינם תקינים לחשבונית',
+  payper_amount_mismatch: 'סכום החשבונית אינו תואם לתשלום המאומת',
+  payper_description_required: 'חסר תיאור מוצר או שירות לחשבונית',
+  payper_discount_mapping_required: 'מיפוי ההנחה לחשבונית דורש בדיקה',
+  payper_freeze_source_failed: 'לא ניתן לאמת את מקור התשלום לחשבונית',
+  payper_reserve_dispatch_failed: 'שמירת בקשת החשבונית נכשלה לפני פנייה לספק. נדרשת בדיקת יומן',
   missing_ledger: 'התשלום אומת אך חסר רישום Payper — נדרשת בדיקת מערכת מיידית',
   provider_credentials_rejected: 'הספק דחה את פרטי הגישה להפקת המסמך; יש לבדוק אם נוצר מסמך',
   provider_ip_rejected: 'הספק דחה את בקשת ההפקה; יש לבדוק אם נוצר מסמך',
@@ -20,6 +32,12 @@ const reasons = {
   provider_response_uncertain: 'תשובת הספק אינה ודאית; אין לנסות שוב אוטומטית',
   uncertain_provider_outcome: 'תוצאת הפקת המסמך אינה ודאית; אין לנסות שוב אוטומטית',
 };
+
+function reasonFor(row) {
+  if (row.state === 'source_blocked' && row.reconciliation_code === 'provider_credentials_rejected')
+    return 'פלאקארד דחתה את פרטי הגישה של שירות החשבוניות. יש לבדוק מסוף ומשתמש לפני ניסיון מאושר נוסף';
+  return reasons[row.state] ?? reasons[row.reconciliation_code] ?? 'נדרשת התאמה ידנית';
+}
 
 export default function PayperManualReview() {
   const [rows, setRows] = useState([]);
@@ -60,7 +78,7 @@ export default function PayperManualReview() {
       : 'הודעה למנהל: קיימים תשלומים שממתינים לעיבוד אוטומטי של Payper.'}</p>}
     {rows.length === 0 ? <p className="text-sm text-muted-foreground">אין תשלומים שממתינים לבדיקה ידנית.</p>
       : <ul className="space-y-2">{rows.map(row => <li key={row.payment_id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
-        <strong>{reasons[row.state] ?? reasons[row.reconciliation_code] ?? 'נדרשת התאמה ידנית'}</strong>
+        <strong>{reasonFor(row)}</strong>
         <span className="block font-mono text-xs">תשלום: {row.payment_id} · {row.order_id?`הזמנה: ${row.order_number ?? row.order_id}`:`מכירת קופה: ${row.sale_id}`}</span>
         {row.provider_transaction_id && <span className="block font-mono text-xs">עסקת פלאקארד: {row.provider_transaction_id}</span>}
         <span className="block text-xs">{['eligible', 'source_frozen'].includes(row.state)

@@ -4,8 +4,18 @@ export interface PayperWorkerDependencies {
   listCandidates(): Promise<string[]>;
   targetPaymentId: string;
   issue(paymentId: string): Promise<PayperDispatchOutcome>;
-  holdFailure?(paymentId: string): Promise<void>;
+  holdFailure?(paymentId: string, code: string): Promise<void>;
 }
+
+const safePreDispatchCodes = new Set([
+  "provider_credentials_rejected", "payper_lookup_failed", "payper_transaction_mismatch",
+  "payper_billing_incomplete", "payper_email_required", "payper_vat_contract_mismatch",
+  "payper_items_required", "payper_items_invalid", "payper_amount_mismatch",
+  "payper_description_required", "payper_discount_mapping_required",
+  "payper_freeze_source_failed", "payper_reserve_dispatch_failed",
+]);
+const safeFailureCode = (error: unknown) => error instanceof Error && safePreDispatchCodes.has(error.message)
+  ? error.message : "pre_dispatch_review_required";
 
 /** Polls only database-created ledger candidates. A failed dispatch reservation is one-shot. */
 export async function runPayperIssuanceBatch(deps: PayperWorkerDependencies): Promise<{
@@ -30,7 +40,9 @@ export async function runPayperIssuanceBatch(deps: PayperWorkerDependencies): Pr
       // durable state cannot be selected again and requires manual review.
       if (error instanceof Error && error.message === "payper_dispatch_limit_reached") break;
       held++;
-      try { await deps.holdFailure?.(id); } catch { /* reservation may already be durable */ }
+      const code = safeFailureCode(error);
+      console.error(JSON.stringify({ event: "payper_worker_hold", paymentId: id, code }));
+      try { await deps.holdFailure?.(id, code); } catch { /* reservation may already be durable */ }
     }
   }
   return { processed, succeeded, held };

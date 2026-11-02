@@ -67,6 +67,16 @@ describe("Payper ledger to provider issuance bridge", () => {
     expect(provider.createInvoice).not.toHaveBeenCalled();
   });
 
+  test("rejected lookup credentials cannot reserve or send an invoice", async () => {
+    const ledger = { freezeSource: vi.fn(async () => source()), reserveDispatch: vi.fn(), recordOutcome: vi.fn() };
+    const provider = { lookupTransaction: vi.fn(async () => { throw new Error("provider_credentials_rejected"); }),
+      createInvoice: vi.fn() };
+    await expect(issueFrozenPayperDocument(source().paymentId, { ledger, provider, credentials: auth }))
+      .rejects.toThrow("provider_credentials_rejected");
+    expect(ledger.reserveDispatch).not.toHaveBeenCalled();
+    expect(provider.createInvoice).not.toHaveBeenCalled();
+  });
+
   test("two concurrent callers share one durable reservation and only one sends", async () => {
     let reserved = false;
     const ledger = { freezeSource: vi.fn(async () => source()),

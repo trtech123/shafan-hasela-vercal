@@ -26,6 +26,18 @@ test('warns when the review ledger cannot be read', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('יש לבדוק את מצב המסמכים');
 });
 
+test('gives the administrator a specific credential repair action without exposing credentials', async () => {
+  query.mockReturnValue({ select: () => ({ in: () => ({ order: () => ({ limit: () => Promise.resolve({
+    data: [{ payment_id: 'payment-credentials', sale_id: 'sale-1', state: 'source_blocked',
+      reconciliation_code: 'provider_credentials_rejected' }], error: null,
+  }) }) }) }) });
+  render(<PayperManualReview />);
+  expect(await screen.findByText(/פלאקארד דחתה את פרטי הגישה/)).toBeInTheDocument();
+  expect(screen.getByText(/payment-credentials/)).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'בדיקה ידנית למסמכי Payper' }).textContent)
+    .not.toMatch(/gateway-secret/);
+});
+
 test('shows the durable missing-service-description review reason', async () => {
   query.mockReturnValue({ select: () => ({ in: () => ({ order: () => ({ limit: () => Promise.resolve({
     data: [{ payment_id: 'payment-2', order_id: 'order-2', state: 'source_blocked',

@@ -151,7 +151,7 @@ describe("Accounting operations", () => {
       ...rows[1],
       accounting_provider: "rivhit",
       local_receipt_number: "RCP-1020",
-      last_error: { code: "payper_transition_hold" },
+      last_error: { code: "payper_transition_hold", message: "Payper transition fence" },
       retry_allowed: true,
     };
     fromMock.mockReturnValue(queryResult({ data: [held], error: null }));

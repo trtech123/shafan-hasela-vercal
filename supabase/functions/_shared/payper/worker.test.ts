@@ -15,9 +15,18 @@ describe("supervised Payper worker", () => {
   });
   test("pre-dispatch failure is durably blocked for manual review", async () => {
     const holdFailure = vi.fn(async () => undefined);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     expect(await runPayperIssuanceBatch({ targetPaymentId: "new-1", listCandidates: async () => ["new-1"],
       issue: async () => { throw new Error("private database detail"); }, holdFailure })).toEqual({ processed: 1, succeeded: 0, held: 1 });
-    expect(holdFailure).toHaveBeenCalledWith("new-1");
+    expect(holdFailure).toHaveBeenCalledWith("new-1", "pre_dispatch_review_required");
+    expect(log.mock.calls.flat().join(" ")).not.toContain("private database detail");
+    log.mockRestore();
+  });
+  test("persists only the allowlisted provider credential failure code", async () => {
+    const holdFailure = vi.fn(async () => undefined);
+    await runPayperIssuanceBatch({ targetPaymentId: "new-1", listCandidates: async () => ["new-1"],
+      issue: async () => { throw new Error("provider_credentials_rejected"); }, holdFailure });
+    expect(holdFailure).toHaveBeenCalledWith("new-1", "provider_credentials_rejected");
   });
   test("quota exhaustion leaves another valid payment eligible for a later authorized release", async () => {
     const holdFailure = vi.fn(async () => undefined);

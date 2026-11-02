@@ -82,16 +82,53 @@ try {
   await db.query(`SELECT public.finalize_pos_pelecard('${first}','synthetic-approval')`);
   assert.equal((await scalar(`SELECT state FROM public.payper_document_ledger WHERE payment_id='${first}'`)).state,'eligible');
   await db.query(`SELECT public.freeze_payper_source('${first}')`);
+  stage = 'classified pre-dispatch hold';
+  await fail(`SELECT public.hold_payper_source('${first}','private-provider-error')`, 'payper_safe_code_required');
+  await db.query(`SELECT public.hold_payper_source('${first}','provider_credentials_rejected')`);
+  assert.deepEqual(await scalar(`SELECT state,reconciliation_code,dispatch_reserved_at
+    FROM public.payper_document_ledger WHERE payment_id='${first}'`), {
+    state: 'source_blocked', reconciliation_code: 'provider_credentials_rejected',
+    dispatch_reserved_at: null,
+  });
+  stage = 'targeted held-source recovery';
+  await fail(`SELECT public.rearm_payper_source_after_reconciliation('${first}','${actor}','1000000001')`,
+    'payper_recovery_fence');
+  await db.query(`SELECT public.stop_payper_dispatch('${actor}')`);
+  await fail(`SELECT public.rearm_payper_source_after_reconciliation('${first}','${actor}','1000000001')`,
+    'payper_reconciliation_evidence_required');
+  await db.query(`SELECT public.note_payper_reconciliation('${first}','${actor}','1000000001',
+    'Synthetic read-only provider confirmation; no document request')`);
+  await fail(`SELECT public.rearm_payper_source_after_reconciliation('${first}','${actor}','100002')`,
+    'payper_reconciliation_evidence_required');
+  await db.query(`SELECT public.rearm_payper_source_after_reconciliation('${first}','${actor}','1000000001')`);
+  assert.deepEqual(await scalar(`SELECT state,reconciliation_code,
+    reconciliation_evidence->>'previousCode' AS previous_code,dispatch_reserved_at
+    FROM public.payper_document_ledger WHERE payment_id='${first}'`), {
+    state: 'source_frozen', reconciliation_code: null,
+    previous_code: 'provider_credentials_rejected', dispatch_reserved_at: null,
+  });
+  await fail(`SELECT public.rearm_payper_source_after_reconciliation('${first}','${actor}','1000000001')`,
+    'payper_recovery_fence');
+  // A second pre-dispatch hold cannot reuse the same admin evidence to rearm.
+  await db.query(`UPDATE public.payper_document_ledger SET state='source_blocked',
+    reconciliation_code='provider_credentials_rejected' WHERE payment_id='${first}'`);
+  await fail(`SELECT public.rearm_payper_source_after_reconciliation('${first}','${actor}','1000000001')`,
+    'payper_reconciliation_evidence_required');
+  await db.query(`UPDATE public.payper_document_ledger SET state='source_frozen',
+    reconciliation_code=NULL WHERE payment_id='${first}'`);
+  // Local-only simulation of the later, separately authorized canary switch.
+  await db.query(`UPDATE public.payper_dispatch_control SET enabled=true WHERE singleton
+    AND dispatch_mode='canary' AND canary_payment_id='${first}' AND dispatch_remaining=1`);
   const second = await makePos('92000000-0000-4000-8000-000000000005',
     '92000000-0000-4000-8000-000000000006');
   await db.query(`SELECT public.freeze_payper_source('${second}')`);
   stage = 'non-target canary reservation';
   await fail(`SELECT public.reserve_payper_dispatch('${second}','100002')`, 'payper_dispatch_limit_reached');
   stage = 'target canary reservation';
-  await db.query(`SELECT public.reserve_payper_dispatch('${first}','100001')`);
+  await db.query(`SELECT public.reserve_payper_dispatch('${first}','1000000001')`);
   assert.equal((await scalar('SELECT dispatch_remaining FROM public.payper_dispatch_control')).dispatch_remaining,0);
   stage = 'duplicate canary reservation';
-  await fail(`SELECT public.reserve_payper_dispatch('${first}','100001')`, 'payper_dispatch_fence');
+  await fail(`SELECT public.reserve_payper_dispatch('${first}','1000000001')`, 'payper_dispatch_fence');
   await fail(`SELECT public.enable_payper_continuous('${actor}')`, 'payper_canary_document_required');
   await db.query(`SELECT public.record_payper_dispatch_outcome('${first}','succeeded','900001',
     'https://app.payper.co.il/public/invoice_show/900001?ak=synthetic',NULL)`);

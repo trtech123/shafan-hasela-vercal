@@ -29,9 +29,9 @@ export function createPayperLedger(client: RpcClient, dispatchEnabled = false) {
       if (typeof reservation !== "string" || !reservation) throw new Error("payper_reservation_invalid");
       return reservation;
     },
-    async holdFailure(paymentId: string): Promise<void> {
+    async holdFailure(paymentId: string, code = "pre_dispatch_review_required"): Promise<void> {
       if (!paymentId) throw new Error("payper_payment_id_required");
-      result(await client.rpc("hold_payper_source", { p_payment_id: paymentId }), "hold_source");
+      result(await client.rpc("hold_payper_source", { p_payment_id: paymentId, p_code: code }), "hold_source");
     },
     async recordOutcome(paymentId: string, outcome: PayperDispatchOutcome): Promise<void> {
       if (!paymentId) throw new Error("payper_payment_id_required");
