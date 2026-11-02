@@ -1,19 +1,21 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import ActivityGrid from "@/components/cashregister/ActivityGrid";
 import Cart from "@/components/cashregister/Cart";
 import PaymentScreen from "@/components/cashregister/PaymentScreen";
 import ReceiptScreen from "@/components/cashregister/ReceiptScreen";
-import {
-  beginHostedPelecardPayment,
-  calculateCheckoutTotals,
-} from "@/payments/pelecardPayments";
+import { calculateCheckoutTotals } from "@/payments/pelecardPayments";
+import { orderPaymentPath } from "@/payments/orderPayments";
+import { useAuth } from "@/lib/AuthContext";
 
 // SCREENS: menu | payment | receipt
 export default function CashRegister() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canPayOrder = user?.role === 'admin' || user?.role === 'קופאי';
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cartItems, setCartItems] = useState([]);
@@ -24,7 +26,6 @@ export default function CashRegister() {
   const [discount, setDiscount] = useState(null);
   // null = standalone sale; else { id, order_number, client_name, client_phone, organization }
   const [linkedOrder, setLinkedOrder] = useState(null);
-  const [pelecardBusy, setPelecardBusy] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -127,53 +128,8 @@ export default function CashRegister() {
     setScreen("receipt");
   };
 
-  const handlePelecardStart = async () => {
-    if (pelecardBusy) return;
-    setPelecardBusy(true);
-    const saleItems = cartItems.map((item) => ({
-      id: item.id,
-      name: item.name,
-      qty: item.qty,
-      customPrice: item.customPrice,
-    }));
-    try {
-      await beginHostedPelecardPayment({
-        orderId: linkedOrder?.id || null,
-        checkout: {
-          schema_version: 1,
-          items: saleItems,
-          discount: discount
-            ? {
-                type: discount.type,
-                mode: discount.mode,
-                value: discountValue,
-                original_total: subtotal,
-                final_total: total,
-              }
-            : null,
-          linked_order_info: linkedOrder
-            ? {
-                order_number: linkedOrder.order_number,
-                client_name: linkedOrder.client_name,
-                client_phone: linkedOrder.client_phone,
-                organization: linkedOrder.organization || "",
-              }
-            : null,
-          sale_date: new Date().toISOString().slice(0, 10),
-        },
-      }, {
-        client: supabase,
-        storage: window.sessionStorage,
-        location: window.location,
-        createIdempotencyKey: () => crypto.randomUUID(),
-        allowedRedirectOrigins:
-          (import.meta.env.VITE_PELECARD_REDIRECT_ORIGINS || "")
-            .split(",").map((origin) => origin.trim()).filter(Boolean),
-      });
-    } catch {
-      toast.error("לא ניתן להתחיל תשלום מאומת בפלאקארד כרגע");
-      setPelecardBusy(false);
-    }
+  const handlePelecardStart = () => {
+    if (canPayOrder && linkedOrder?.id) navigate(orderPaymentPath(linkedOrder.id));
   };
 
   const handleNewSale = () => {
@@ -204,7 +160,7 @@ export default function CashRegister() {
         cartItems={cartItems}
         onConfirm={handlePaymentConfirm}
         onPelecard={handlePelecardStart}
-        pelecardBusy={pelecardBusy}
+        pelecardEnabled={canPayOrder && Boolean(linkedOrder?.id)}
         onBack={() => setScreen("menu")}
       />
     );

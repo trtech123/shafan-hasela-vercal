@@ -29,11 +29,20 @@ describe("PaymentScreen payment-method separation", () => {
     expect(props.onPelecard).not.toHaveBeenCalled();
   });
 
-  test("starts verified Pelecard through its separate callback", () => {
-    const props = renderPayment();
-    fireEvent.click(screen.getByRole("button", { name: /פלאקארד.*מאובטח/s }));
+  test("starts Pelecard only for an eligible linked order", () => {
+    const props = renderPayment({ pelecardEnabled: true });
+    fireEvent.click(screen.getByRole("button", { name: /פלאקארד/s }));
     expect(props.onPelecard).toHaveBeenCalledTimes(1);
     expect(props.onConfirm).not.toHaveBeenCalled();
+  });
+
+  test("does not offer a standalone cart a broken Pelecard initiation", () => {
+    const props = renderPayment({ pelecardEnabled: false });
+    const button = screen.getByRole("button", { name: /פלאקארד/s });
+    expect(button).toBeDisabled();
+    expect(screen.getByText(/יש לקשר הזמנה קיימת/)).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(props.onPelecard).not.toHaveBeenCalled();
   });
 
   test("disables only the verified provider action while initiation is running", () => {

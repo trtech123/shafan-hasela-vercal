@@ -54,6 +54,7 @@ export default function PaymentScreen({
   onPelecard = () => {},
   onBack,
   pelecardBusy = false,
+  pelecardEnabled = false,
 }) {
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
   const [detailFor, setDetailFor] = useState(null);
@@ -279,7 +280,7 @@ export default function PaymentScreen({
           <p className="text-slate-400 text-sm font-medium text-center mb-4">בחר אמצעי תשלום</p>
           <button
             onClick={onPelecard}
-            disabled={pelecardBusy}
+            disabled={pelecardBusy || !pelecardEnabled}
             className="w-full bg-gradient-to-l from-cyan-600 to-sky-700 rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right disabled:opacity-60 disabled:cursor-wait"
           >
             <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -289,7 +290,7 @@ export default function PaymentScreen({
             </div>
             <div>
               <p className="font-bold text-lg">פלאקארד — תשלום מאומת</p>
-              <p className="text-white/70 text-sm">מעבר מאובטח לעמוד התשלום של פלאקארד</p>
+              <p className="text-white/70 text-sm">{pelecardEnabled ? 'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה' : 'יש לקשר הזמנה קיימת; תשלום סל ללא הזמנה אינו זמין'}</p>
             </div>
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>
