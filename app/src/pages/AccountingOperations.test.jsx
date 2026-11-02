@@ -146,6 +146,23 @@ describe("Accounting operations", () => {
     expect(screen.getByText("ללא הזמנה מקושרת")).toBeInTheDocument();
   });
 
+  test("explains a Payper transition hold without offering a Rivhit retry", async () => {
+    const held = {
+      ...rows[1],
+      accounting_provider: "rivhit",
+      local_receipt_number: "RCP-1020",
+      last_error: { code: "payper_transition_hold" },
+      retry_allowed: true,
+    };
+    fromMock.mockReturnValue(queryResult({ data: [held], error: null }));
+    render(<AccountingOperations />);
+
+    expect(await screen.findByText(/RCP-1020/)).toBeInTheDocument();
+    expect(screen.getByText(/יצירת מסמך Rivhit נחסמה.*Payper/)).toBeInTheDocument();
+    expect(screen.queryByText(/נדרשת השלמת הגדרות Rivhit/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ניסיון חוזר/ })).not.toBeInTheDocument();
+  });
+
   test("queries the read-only operations view newest-first without table writes", async () => {
     const builder = queryResult();
     fromMock.mockReturnValue(builder);

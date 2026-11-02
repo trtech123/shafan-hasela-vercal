@@ -103,6 +103,9 @@ function safeDocumentUrl(value) {
 
 function controlledErrorText(row) {
   if (!row.last_error) return null;
+  if (isPayperTransitionHold(row)) {
+    return "יצירת מסמך Rivhit נחסמה כדי למנוע מסמך כפול. מצב חשבונית Payper מוצג בבקרת Payper למעלה; אין להפעיל ניסיון חוזר ב־Rivhit.";
+  }
   if (row.accounting_status === "configuration_required") {
     return "נדרשת השלמת הגדרות Rivhit לפני יצירת מסמך.";
   }
@@ -113,6 +116,10 @@ function controlledErrorText(row) {
     return "הפעולה נכשלה זמנית ותישאר זמינה לניסיון חוזר.";
   }
   return "לא ניתן היה להשלים את פעולת הנהלת החשבונות.";
+}
+
+function isPayperTransitionHold(row) {
+  return row.last_error?.code === "payper_transition_hold" || row.last_error?.code === "pos_payper_only";
 }
 
 function SummaryCard({ icon: Icon, label, value, tone = "slate" }) {
@@ -176,7 +183,7 @@ export default function AccountingOperations() {
   });
 
   const retryAccounting = async (row) => {
-    if (!row.retry_allowed || busyEventId) return;
+    if (!row.retry_allowed || isPayperTransitionHold(row) || busyEventId) return;
     setBusyEventId(row.event_id);
     const body = { eventId: row.event_id };
     if (row.accounting_status === "configuration_required") body.forceRetry = true;
@@ -250,7 +257,7 @@ export default function AccountingOperations() {
         <div className="flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-black">עסקאות ומסמכי Rivhit</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{visibleOperations.length} אירועים מוצגים · החדשים ביותר ראשונים</p>
+            <p className="mt-1 text-sm text-muted-foreground">{visibleOperations.length} אירועים מוצגים · החדשים ביותר ראשונים · חסימות מעבר ל־Payper נשמרות כאן לתיעוד בלבד</p>
           </div>
           <select aria-label="סינון מצב הנהלת חשבונות" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-10 rounded-xl border bg-background px-3 text-sm font-medium">
             <option value="all">כל המצבים</option>
@@ -316,13 +323,13 @@ export default function AccountingOperations() {
 
                     <div className="space-y-3">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">מסמך ופעולות</p>
-                      {row.accounting_document_status ? <StatusPill status={row.accounting_document_status} /> : <p className="text-sm text-muted-foreground">טרם נוצר מסמך Rivhit</p>}
+                      {row.accounting_document_status ? <StatusPill status={row.accounting_document_status} /> : <p className="text-sm text-muted-foreground">{isPayperTransitionHold(row) ? "Rivhit חסום; בדקו את מסמך Payper למעלה" : "טרם נוצר מסמך Rivhit"}</p>}
                       {documentUrl && row.external_document_number ? (
                         <a href={documentUrl} target="_blank" rel="noopener noreferrer" className="flex w-fit items-center gap-1.5 text-sm font-bold text-sky-700 underline-offset-4 hover:underline">
                           מסמך {row.external_document_number}<ArrowUpLeft className="h-3.5 w-3.5" />
                         </a>
                       ) : row.external_document_number ? <p className="text-sm font-bold">מסמך {row.external_document_number}</p> : null}
-                      {row.retry_allowed ? (
+                      {row.retry_allowed && !isPayperTransitionHold(row) ? (
                         <Button type="button" size="sm" variant="outline" className="gap-2" disabled={isBusy} aria-label={`ניסיון חוזר עבור ${row.payment_transaction_id || row.source_id}`} onClick={() => retryAccounting(row)}>
                           {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} ניסיון חוזר
                         </Button>
