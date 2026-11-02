@@ -41,7 +41,7 @@ export default function Cart({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">מחיר/אדם:</span>
+              <span className="text-xs text-slate-400">{item.kind==='product'?'מחיר יחידה:':'מחיר/אדם:'}</span>
               <input
                 type="number"
                 value={item.customPrice}

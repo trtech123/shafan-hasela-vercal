@@ -3,11 +3,13 @@ import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { useLocation, useNavigate } from "react-router-dom";
 import ActivityGrid from "@/components/cashregister/ActivityGrid";
+import ProductGrid from "@/components/cashregister/ProductGrid";
 import Cart from "@/components/cashregister/Cart";
 import PaymentScreen from "@/components/cashregister/PaymentScreen";
 import ReceiptScreen from "@/components/cashregister/ReceiptScreen";
 import { calculateCheckoutTotals } from "@/payments/pelecardPayments";
 import { orderPaymentPath } from "@/payments/orderPayments";
+import { buildStandaloneCheckout } from "@/payments/standaloneCart";
 import { useAuth } from "@/lib/AuthContext";
 
 // SCREENS: menu | payment | receipt
@@ -17,6 +19,8 @@ export default function CashRegister() {
   const { user } = useAuth();
   const canPayOrder = user?.role === 'admin' || user?.role === 'קופאי';
   const [activities, setActivities] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [catalogTab, setCatalogTab] = useState('service');
   const [loading, setLoading] = useState(true);
   const [cartItems, setCartItems] = useState([]);
   const [screen, setScreen] = useState("menu");
@@ -38,13 +42,17 @@ export default function CashRegister() {
         toast.error('שגיאה בטעינת הפעילויות');
       }
       setActivities(data ?? []);
+      const {data:productRows,error:productError}=await supabase.from('products').select('id,name,price,image_url,status').eq('status','פעיל');
+      if(productError)toast.error('שגיאה בטעינת המוצרים');
+      setProducts(productRows??[]);
 
       // Load prefilled item from URL (coming from Schedule)
       const params = new URLSearchParams(location.search);
       const prefill = params.get("prefill");
       if (prefill) {
         const item = JSON.parse(prefill);
-        setCartItems([{ ...item, qty: item.qty || 1, customPrice: item.customPrice || 0 }]);
+        setCartItems([{ ...item, kind:'service', qty: item.qty || 1, customPrice: item.customPrice || 0,
+          catalogPrice: data?.find(row=>row.id===item.id)?.price_per_person ?? null }]);
         setScreen("payment");
       }
 
@@ -57,9 +65,16 @@ export default function CashRegister() {
     setCartItems(prev => {
       const existing = prev.find(i => i.id === activity.id);
       if (existing) return prev.map(i => i.id === activity.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...activity, qty: 1, customPrice: activity.price_per_person || 0 }];
+      return [...prev, { ...activity, kind:'service', catalogPrice:activity.price_per_person,
+        qty: 1, customPrice: activity.price_per_person || 0 }];
     });
   };
+
+  const addProduct=(product)=>setCartItems(prev=>{
+    const existing=prev.find(item=>item.id===product.id);
+    if(existing)return prev.map(item=>item.id===product.id?{...item,qty:item.qty+1}:item);
+    return [...prev,{...product,kind:'product',catalogPrice:product.price,qty:1,customPrice:product.price||0}];
+  });
 
   const updateQty = (id, delta) => {
     setCartItems(prev =>
@@ -78,6 +93,13 @@ export default function CashRegister() {
   const { subtotal, discountAmount, total } = checkoutTotals;
   const discountValue = Number(discount?.value) || 0;
   const discountValid = checkoutTotals.valid;
+  let hostedPreview=null;
+  try{
+    hostedPreview=buildStandaloneCheckout(cartItems.map(item=>({kind:item.kind,id:item.id,qty:item.qty})),
+      cartItems.map(item=>({kind:item.kind,id:item.id,name:item.name,price:Number(item.catalogPrice),status:'פעיל'})));
+  }catch{/* The server makes the final eligibility decision. */}
+  const canHostedCart=cartItems.length>0&&discountValid&&(!discount||user?.role==='admin')&&
+    hostedPreview&&cartItems.every((item,index)=>Number(item.customPrice)===hostedPreview.items[index].customPrice);
 
   const handlePaymentConfirm = async (method, paymentDetails = null) => {
     setPaymentMethod(method);
@@ -129,7 +151,12 @@ export default function CashRegister() {
   };
 
   const handlePelecardStart = () => {
-    if (canPayOrder && linkedOrder?.id) navigate(orderPaymentPath(linkedOrder.id));
+    if(!canPayOrder)return;
+    if(linkedOrder?.id){navigate(orderPaymentPath(linkedOrder.id));return;}
+    if(canHostedCart)navigate('/payment/pos',{state:{cart:{
+      lines:cartItems.map(item=>({kind:item.kind,id:item.id,qty:item.qty})),
+      discount:discount?{type:discount.type,mode:discount.mode,value:Number(discount.value)}:null,
+    }}});
   };
 
   const handleNewSale = () => {
@@ -160,7 +187,10 @@ export default function CashRegister() {
         cartItems={cartItems}
         onConfirm={handlePaymentConfirm}
         onPelecard={handlePelecardStart}
-        pelecardEnabled={canPayOrder && Boolean(linkedOrder?.id)}
+        pelecardEnabled={canPayOrder && (Boolean(linkedOrder?.id)||canHostedCart)}
+        pelecardHint={linkedOrder?.id?'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה':
+          canHostedCart?'מחירי הקטלוג והסכום יאומתו בשרת לפני מעבר לפלאקארד':
+          'תשלום פלאקארד דורש מחיר קטלוג קבוע וללא שינוי ידני; הנחה מחייבת מנהל'}
         onBack={() => setScreen("menu")}
       />
     );
@@ -174,10 +204,14 @@ export default function CashRegister() {
           <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-lg">א</div>
           <div>
             <h1 className="text-xl font-bold">אדוונצ׳ר — קופה</h1>
-            <p className="text-slate-400 text-sm">בחר פעילות להוספה לסל</p>
+            <p className="text-slate-400 text-sm">בחר פעילות או מוצר להוספה לסל</p>
           </div>
         </div>
-        <ActivityGrid activities={activities} onAdd={addToCart} />
+        <div className="mb-4 flex gap-2">
+          <button className={`rounded-lg px-4 py-2 ${catalogTab==='service'?'bg-primary text-white':'bg-slate-100'}`} onClick={()=>setCatalogTab('service')}>פעילויות ושירותים</button>
+          <button className={`rounded-lg px-4 py-2 ${catalogTab==='product'?'bg-primary text-white':'bg-slate-100'}`} onClick={()=>setCatalogTab('product')}>מוצרים</button>
+        </div>
+        {catalogTab==='service'?<ActivityGrid activities={activities} onAdd={addToCart}/>:<ProductGrid products={products} onAdd={addProduct}/>}
       </div>
 
       {/* Right: Cart */}

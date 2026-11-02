@@ -78,6 +78,29 @@ describe("documented Pelecard Payper contract", () => {
     expect(data.document_rounded).toBe("false");
   });
 
+  test("maps a server-frozen POS discount to the exact VAT-inclusive invoice total", () => {
+    const sale = facts();
+    sale.orderId = null as never;
+    sale.orderNumber = "RCP-123";
+    sale.amount = 1;
+    sale.checkoutSnapshot.items = [{ id: "bottle", name: "Water", qty: 2, customPrice: 1 }];
+    sale.checkoutSnapshot.discount = { type: "הנחה כללית", mode: "fixed", value: 1,
+      original_total: 2, final_total: 1 } as never;
+    const data = buildCreatePayperInvoice(sale, "103059585", gateway()).PayperParameters.DataPayper;
+    expect(data.document_subject).toBe("RCP-123");
+    expect(data.invoice_lines).toEqual([{ description: "Water × 2 — הנחה כללית", quantity: "1",
+      price_per_unit: "100", include_vat: "true", catalog_id: "bottle" }]);
+  });
+  test("rejects a discounted source whose frozen line math disagrees with the charged amount", () => {
+    const sale = facts();sale.orderId = null as never;sale.orderNumber = "RCP-124";sale.amount = 0.90;
+    sale.checkoutSnapshot.items = [{ id: "bottle", name: "Water", qty: 1, customPrice: 1 }];
+    sale.checkoutSnapshot.discount = { type: "הנחה כללית", mode: "percentage", value: 10,
+      original_total: 1, final_total: 0.90 } as never;
+    expect(buildCreatePayperInvoice(sale, "103059585", gateway()).PayperParameters.DataPayper.invoice_lines[0].price_per_unit).toBe("90");
+    sale.amount = 0.89;
+    expect(() => buildCreatePayperInvoice(sale, "103059585", gateway())).toThrow("payper_discount_mapping_required");
+  });
+
   test("does not issue an invoice whose only service description is an order number", () => {
     const incomplete = facts();
     incomplete.checkoutSnapshot.items[0].name = incomplete.orderNumber;

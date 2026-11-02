@@ -1,7 +1,24 @@
 {
+  "functions": {
+    "api/pelecard-transactions.js": {
+      "maxDuration": 30
+    },
+    "api/pelecard-order.js": {
+      "maxDuration": 30,
+      "includeFiles": "server/pelecard-live/certs/**"
+    },
+    "api/pelecard-pos.js": {
+      "maxDuration": 30,
+      "includeFiles": "server/pelecard-live/certs/**"
+    },
+    "api/pelecard-live.js": {
+      "maxDuration": 30,
+      "includeFiles": "server/pelecard-live/certs/**"
+    }
+  },
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

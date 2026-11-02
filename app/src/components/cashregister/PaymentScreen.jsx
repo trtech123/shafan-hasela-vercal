@@ -55,6 +55,7 @@ export default function PaymentScreen({
   onBack,
   pelecardBusy = false,
   pelecardEnabled = false,
+  pelecardHint,
 }) {
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
   const [detailFor, setDetailFor] = useState(null);
@@ -290,7 +291,7 @@ export default function PaymentScreen({
             </div>
             <div>
               <p className="font-bold text-lg">פלאקארד — תשלום מאומת</p>
-              <p className="text-white/70 text-sm">{pelecardEnabled ? 'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה' : 'יש לקשר הזמנה קיימת; תשלום סל ללא הזמנה אינו זמין'}</p>
+              <p className="text-white/70 text-sm">{pelecardHint || (pelecardEnabled ? 'מעבר לתשלום המאובטח' : 'תשלום פלאקארד אינו זמין לסל זה')}</p>
             </div>
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>

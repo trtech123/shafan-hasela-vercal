@@ -25,6 +25,7 @@ import Templates from './pages/Templates';
 import Login from './pages/Login';
 import PaymentReturn from './pages/PaymentReturn';
 import OrderPayment from './pages/OrderPayment';
+import PosPayment from './pages/PosPayment';
 import ChatbotHandoffs from './pages/ChatbotHandoffs';
 import AccountingOperations from './pages/AccountingOperations';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -69,6 +70,7 @@ const AuthenticatedApp = () => {
         <Route path="/leads" element={<Leads />} />
         <Route path="/cashregister" element={<CashRegister />} />
         <Route path="/payment/order" element={<OrderPayment />} />
+        <Route path="/payment/pos" element={<PosPayment />} />
         <Route path="/payment/return" element={<PaymentReturnRoute />} />
         <Route path="/sales-report" element={<DailySalesReport />} />
         <Route path="/pricing" element={<Pricing />} />

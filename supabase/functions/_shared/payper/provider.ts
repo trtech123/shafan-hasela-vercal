@@ -8,7 +8,7 @@ export interface GatewayCredentials { terminalNumber: string; user: string; pass
 export interface FrozenPayperFacts {
   paymentId: string; pelecardTransactionId: string; amount: number; currency: string;
   paymentCreatedAt: string; verifiedAt: string; activationCutoffUtc: string;
-  orderId: string; orderNumber: string; customerKind: "organization" | "person";
+  orderId: string | null; orderNumber: string; customerKind: "organization" | "person";
   checkoutSnapshot: { items: Array<{ id: string; name: string; qty: number; customPrice: number }>; discount: unknown };
   billing: Record<string, unknown>;
 }
@@ -78,7 +78,6 @@ export function buildCreatePayperInvoice(
     throw new Error("payper_transaction_id_required");
   if (facts.currency !== "ILS" || !safeText(facts.orderNumber) || !safeText(facts.paymentId))
     throw new Error("payper_source_incomplete");
-  if (facts.checkoutSnapshot?.discount != null) throw new Error("payper_discount_mapping_required");
   const vat = facts.billing?.vat_applicable;
   if (typeof vat !== "boolean") throw new Error("payper_vat_contract_mismatch");
   const name = facts.billing.billing_institution_name ?? facts.billing.organization ?? facts.billing.client_name;
@@ -93,7 +92,7 @@ export function buildCreatePayperInvoice(
   const items = facts.checkoutSnapshot?.items;
   if (!Array.isArray(items) || items.length === 0 || items.length > 1000) throw new Error("payper_items_required");
   let totalMinor = 0;
-  const invoiceLines = items.map(item => {
+  let invoiceLines = items.map(item => {
     if (!safeText(item.name) || !safeText(item.id, 100) || !Number.isSafeInteger(item.qty) || item.qty <= 0)
       throw new Error("payper_items_invalid");
     // The legacy order reservation used only ORD-... as its item name.
@@ -106,7 +105,26 @@ export function buildCreatePayperInvoice(
       include_vat: vat ? "true" as const : "false" as const,
       ...(vat ? {} : { no_vat: "true" as const }), catalog_id: item.id };
   });
-  if (totalMinor !== minor(facts.amount)) throw new Error("payper_amount_mismatch");
+  const finalMinor = minor(facts.amount);
+  const discount = facts.checkoutSnapshot?.discount;
+  if (discount != null) {
+    const d = record(discount);
+    if (facts.orderId !== null || !d || !safeText(d.type, 100) ||
+      !["fixed", "percentage"].includes(String(d.mode)) ||
+      typeof d.value !== "number" || !Number.isFinite(d.value) || d.value < 0 ||
+      typeof d.original_total !== "number" || minor(d.original_total) !== totalMinor ||
+      typeof d.final_total !== "number" || minor(d.final_total) !== finalMinor)
+      throw new Error("payper_discount_mapping_required");
+    const deduction = d.mode === "fixed" ? minor(d.value) :
+      Math.round(totalMinor * minor(d.value) / 10_000);
+    if (d.mode === "percentage" && d.value > 100 || totalMinor - deduction !== finalMinor)
+      throw new Error("payper_discount_mapping_required");
+    const description = items.map(item => `${item.name}${item.qty === 1 ? "" : ` × ${item.qty}`}`).join(", ") + ` — ${d.type}`;
+    if (!safeText(description, 200)) throw new Error("payper_description_required");
+    invoiceLines = [{ description, quantity: "1", price_per_unit: String(finalMinor),
+      include_vat: vat ? "true" as const : "false" as const,
+      ...(vat ? {} : { no_vat: "true" as const }), catalog_id: items[0].id }];
+  } else if (totalMinor !== finalMinor) throw new Error("payper_amount_mismatch");
   return { terminalNumber: auth.terminalNumber, user: auth.user, password: auth.password,
     trxRecordId: recordId, Uid: "", PayperParameters: { typeDocument: "Invoice-Receipt", DataPayper: {
       document_lang: "hb", customer_unique_id: companyId as string,

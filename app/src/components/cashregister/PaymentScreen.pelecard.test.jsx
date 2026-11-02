@@ -29,18 +29,18 @@ describe("PaymentScreen payment-method separation", () => {
     expect(props.onPelecard).not.toHaveBeenCalled();
   });
 
-  test("starts Pelecard only for an eligible linked order", () => {
+  test("starts Pelecard for an eligible linked order or standalone cart", () => {
     const props = renderPayment({ pelecardEnabled: true });
     fireEvent.click(screen.getByRole("button", { name: /פלאקארד/s }));
     expect(props.onPelecard).toHaveBeenCalledTimes(1);
     expect(props.onConfirm).not.toHaveBeenCalled();
   });
 
-  test("does not offer a standalone cart a broken Pelecard initiation", () => {
+  test("does not offer hosted payment for an ineligible cart", () => {
     const props = renderPayment({ pelecardEnabled: false });
     const button = screen.getByRole("button", { name: /פלאקארד/s });
     expect(button).toBeDisabled();
-    expect(screen.getByText(/יש לקשר הזמנה קיימת/)).toBeInTheDocument();
+    expect(screen.getByText(/תשלום פלאקארד אינו זמין לסל זה/)).toBeInTheDocument();
     fireEvent.click(button);
     expect(props.onPelecard).not.toHaveBeenCalled();
   });

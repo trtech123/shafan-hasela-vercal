@@ -25,7 +25,7 @@ export default function PayperManualReview() {
     (async () => {
       try {
         const { data, error } = await supabase.from('payper_document_ledger')
-          .select('payment_id,order_id,state,reconciliation_code,created_at')
+          .select('payment_id,order_id,sale_id,state,reconciliation_code,created_at')
           .in('state', ['source_blocked', 'reconciliation_required'])
           .order('created_at', { ascending: false }).limit(100);
         if (!active) return;
@@ -41,11 +41,11 @@ export default function PayperManualReview() {
   return <section dir="rtl" aria-label="בדיקה ידנית למסמכי Payper" className="rounded-2xl border bg-card p-5 space-y-3">
     <h2 className="text-lg font-bold">בדיקה ידנית למסמכי Payper</h2>
     <p className="text-xs text-muted-foreground">מוצגות עד 100 הרשומות האחרונות. הרשימה המלאה שמורה ביומן Payper.</p>
-    {rows.length > 0 && <p role="alert" className="rounded-lg bg-amber-100 p-3 text-sm text-amber-950">הודעה למנהל: יש תשלומים שמחייבים טיפול במסמך החשבונאי. מזהי ההזמנה והתשלום מופיעים למטה. לאחר תוצאה לא ודאית אין לנסות הפקה חוזרת; ניסיון חדש מחייב אישור מוסמך שלא נוצר מסמך קודם.</p>}
+    {rows.length > 0 && <p role="alert" className="rounded-lg bg-amber-100 p-3 text-sm text-amber-950">הודעה למנהל: יש תשלומים שמחייבים טיפול במסמך החשבונאי. מזהי המקור והתשלום מופיעים למטה. לאחר תוצאה לא ודאית אין לנסות הפקה חוזרת; ניסיון חדש מחייב אישור מוסמך שלא נוצר מסמך קודם.</p>}
     {rows.length === 0 ? <p className="text-sm text-muted-foreground">אין תשלומים שממתינים לבדיקה ידנית.</p>
       : <ul className="space-y-2">{rows.map(row => <li key={row.payment_id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
         <strong>{reasons[row.reconciliation_code] ?? 'נדרשת התאמה ידנית'}</strong>
-        <span className="block font-mono text-xs">תשלום: {row.payment_id} · הזמנה: {row.order_id}</span>
+        <span className="block font-mono text-xs">תשלום: {row.payment_id} · {row.order_id?`הזמנה: ${row.order_id}`:`מכירת קופה: ${row.sale_id}`}</span>
         <span className="block text-xs">התשלום נשמר. אין להפיק מסמך חוזר אוטומטית או דרך Rivhit.</span>
       </li>)}</ul>}
   </section>;

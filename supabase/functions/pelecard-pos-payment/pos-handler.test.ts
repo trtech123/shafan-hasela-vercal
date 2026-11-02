@@ -1,0 +1,64 @@
+import {describe,expect,test,vi} from 'vitest';
+import {createPosHandler,type PosDependencies} from './pos-handler.ts';
+const paymentId='11111111-1111-4111-8111-111111111111';
+const requestKey='22222222-2222-4222-8222-222222222222';
+const productId='33333333-3333-4333-8333-333333333333';
+const actorId='44444444-4444-4444-8444-444444444444';
+function setup(role='cashier'){
+  let state='initiated';let saleId:string|null=null;
+  const reserve=vi.fn(async()=>({paymentId,created:true,amountMinor:100}));
+  const call=vi.fn(async(action:string)=>action==='lookup'?{StatusCode:'000',ResultData:{TransactionId:paymentId,
+    ConfirmationKey:'confirmation',ShvaResult:'000',JParam:'4',DebitTotal:'100',DebitCurrency:'1',DebitType:'01',ApprovedBy:'1',DebitApproveNumber:'approval'}}:action==='validate'?1:{reachable:true});
+  const observe=vi.fn(async()=>undefined);
+  const finalize=vi.fn(async()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555';});
+  const deps:PosDependencies={read:()=> 'true',allowedOrigins:['https://example.org'],log:()=>{},
+    auth:{authenticate:async()=>({id:actorId,role})},reserve,
+    view:async()=>({paymentId,amountMinor:100,currency:'ILS',status:state,saleId,
+      receiptNumber:saleId?'RCP-1':null,hostedState:'usable',hostedExpiresAt:'2099-01-01T00:00:00Z',
+      redirectUrl:`https://gateway20.pelecard.biz/PaymentGW?transactionId=${paymentId}`,canVerify:state==='pending_provider',dispatchStarted:state!=='initiated'}),
+    get:async()=>({payment_id:paymentId,amount_minor:100,currency:'ILS',transaction_id:paymentId,
+      confirmation_key:'confirmation',hosted_state:'usable',hosted_expires_at:'2099-01-01T00:00:00Z'}),
+    observe,finalize,call,cancel:async()=>true,
+  };
+  const handler=createPosHandler(deps);
+  const post=(body:unknown,auth=true)=>handler(new Request('https://example.org/payment',{method:'POST',
+    headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer valid'}:{})},body:JSON.stringify(body)}));
+  return {post,reserve,call,observe,finalize,setPending:()=>{state='pending_provider'},setPaid:()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555'}};
+}
+const prepared={action:'prepare',requestKey,lines:[{kind:'product',id:productId,qty:1}],discount:null,
+  billing:{kind:'person',name:'',identity:'',email:''}};
+describe('POS Edge payment boundary',()=>{
+  test.each(['admin','cashier'])('%s can prepare with only item IDs and quantities',async role=>{
+    const s=setup(role);expect((await s.post(prepared)).status).toBe(201);
+    expect(s.reserve).toHaveBeenCalledWith(actorId,requestKey,prepared.lines,null,prepared.billing);
+    expect(s.call).not.toHaveBeenCalled();
+  });
+  test.each(['operations','instructor'])('%s cannot reserve or see payment status',async role=>{
+    const s=setup(role);expect((await s.post(prepared)).status).toBe(403);expect(s.reserve).not.toHaveBeenCalled();
+  });
+  test('missing session and browser amount tampering have no side effects',async()=>{
+    const s=setup();expect((await s.post(prepared,false)).status).toBe(401);
+    expect((await s.post({...prepared,amountMinor:1})).status).toBe(400);expect(s.reserve).not.toHaveBeenCalled();
+  });
+  test('initialization calls the provider adapter only after preparation',async()=>{
+    const s=setup();expect((await s.post({action:'initialize',requestKey})).status).toBe(200);
+    expect(s.call).toHaveBeenCalledWith('init',paymentId);
+  });
+  test('an already-dispatched attempt cannot initialize a second hosted session',async()=>{
+    const s=setup();s.setPending();
+    expect((await s.post({action:'initialize',requestKey})).status).toBe(409);
+    expect(s.call).not.toHaveBeenCalled();
+  });
+  test('verified approval finalizes once and repeated verification reads success',async()=>{
+    const s=setup();s.setPending();
+    const first=await s.post({action:'verify',paymentId});expect(first.status).toBe(200);
+    expect((await first.json()).paid).toBe(true);expect(s.finalize).toHaveBeenCalledTimes(1);
+    expect((await s.post({action:'verify',paymentId})).status).toBe(200);
+    expect(s.finalize).toHaveBeenCalledTimes(1);
+  });
+  test('nonapproved lookup never finalizes a sale',async()=>{
+    const s=setup();s.setPending();s.call.mockImplementation(async(action:string)=>action==='lookup'?{StatusCode:'510',ResultData:null}:action==='validate'?1:{reachable:true});
+    const response=await s.post({action:'verify',paymentId});expect(response.status).toBe(200);
+    expect((await response.json()).paid).toBe(false);expect(s.finalize).not.toHaveBeenCalled();
+  });
+});

@@ -24,6 +24,12 @@ verify_jwt = false
 [functions.pelecard-order-payment]
 verify_jwt = false
 
+[functions.pelecard-pos-payment]
+verify_jwt = false
+
+[functions.pelecard-pos-feedback]
+verify_jwt = false
+
 [functions.whatsapp-webhook]
 verify_jwt = false
 
