@@ -319,7 +319,7 @@ export default function Orders() {
                 <div className="flex gap-0.5">
                   {(user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
                   {(user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
-                  <button onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-2 hover:bg-muted rounded-lg transition-colors">
+                  <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     <Pencil className="w-4 h-4 text-muted-foreground" />
                   </button>
                   <button onClick={() => setPdfOrder(order)} className="p-2 hover:bg-primary/10 rounded-lg transition-colors" title="אישור הזמנה ללקוח">
@@ -408,7 +408,7 @@ export default function Orders() {
                       <div className="flex gap-1">
                         {(user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
                         {(user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
-                        <button onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+                        <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                           <Pencil className="w-4 h-4 text-muted-foreground" />
                         </button>
                         <button onClick={() => setPdfOrder(order)} className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors" title="אישור הזמנה ללקוח">
