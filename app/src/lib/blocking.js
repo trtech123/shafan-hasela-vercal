@@ -72,17 +72,19 @@ export function findConflictingBlocks(blocks, { site, date, start_time, end_time
   });
 }
 
-/** Existing bookings share a site or an assigned instructor. Missing site and
- * instructor do not imply a shared resource. Cancelled/self rows are ignored. */
+/** Existing bookings share a site or an assigned instructor. If either site is
+ * unknown, a same-date time overlap is a possible conflict, not proof that the
+ * bookings use separate resources. Cancelled/self rows are ignored. */
 export function findConflictingOrders(orders, proposed, currentOrderId = null) {
-  if (!proposed.activity_date || !proposed.start_time || !proposed.end_time ||
-      proposed.start_time >= proposed.end_time) return [];
+  if (!proposed.activity_date || !proposed.start_time ||
+      (proposed.end_time && tnorm(proposed.start_time) >= tnorm(proposed.end_time))) return [];
   return orders.filter((order) =>
     order.id !== currentOrderId && order.status !== "בוטל" &&
     order.activity_date === proposed.activity_date &&
     ((proposed.site && order.site === proposed.site) ||
-      (proposed.instructor_id && order.instructor_id === proposed.instructor_id)) &&
-    order.start_time && order.end_time &&
+      (proposed.instructor_id && order.instructor_id === proposed.instructor_id) ||
+      !proposed.site || !order.site) &&
+    order.start_time &&
     timeOverlaps(proposed.start_time, proposed.end_time, order.start_time, order.end_time)
   );
 }

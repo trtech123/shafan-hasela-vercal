@@ -10,6 +10,7 @@ const products = [
 describe('product tabs and search', () => {
   test('preserves uncategorized existing products in general management', () => {
     expect(filterProducts(products).map((p) => p.id)).toEqual([1]);
+    expect(filterProducts(products, { cafeteria: false, category: 'שתייה' }).map((p) => p.id)).toEqual([1]);
   });
   test('combines Hebrew name search with cafeteria category', () => {
     expect(filterProducts(products, { cafeteria: true, search: ' קפה ', category: 'שתייה' }).map((p) => p.id)).toEqual([2]);

@@ -222,9 +222,14 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         const blockConflicts = findConflictingBlocks(
           blocksResult.data.filter((b) => !(b.source === 'order_lock' && b.source_order_id === order?.id)),
           { site: data.site, date: data.activity_date, start_time: data.start_time, end_time: data.end_time },
-        ).map((b) => ({ id: b.id, label: b.reason, site: b.site, start_time: b.start_time, end_time: b.end_time }));
+        ).map((b) => ({ id: b.id, kind: 'block', label: b.reason, site: b.site, start_time: b.start_time, end_time: b.end_time }));
         const orderConflicts = findConflictingOrders(ordersResult.data, data, order?.id)
-          .map((o) => ({ id: o.id, label: `הזמנה ${o.order_number || o.id.slice(0, 8)} (${o.site === data.site ? 'אותו אתר' : 'אותו מדריך'})`, site: o.site, start_time: o.start_time, end_time: o.end_time }));
+          .map((o) => {
+            const reason = o.site && data.site && o.site === data.site ? 'אותו אתר'
+              : o.instructor_id && data.instructor_id && o.instructor_id === data.instructor_id ? 'אותו מדריך'
+                : 'אתר לא ידוע — חפיפה אפשרית';
+            return { id: o.id, kind: 'order', label: `הזמנה ${o.order_number || o.id.slice(0, 8)} (${reason})`, site: o.site, start_time: o.start_time, end_time: o.end_time };
+          });
         const found = [...blockConflicts, ...orderConflicts];
         if (found.length) {
           setWarningConflicts(found);
@@ -512,7 +517,7 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         </AlertDialogHeader>
         <ul className="max-h-44 overflow-y-auto space-y-2 text-sm">
           {warningConflicts.map((item) => <li key={item.id}>
-            {item.label} · {item.site || 'כל האתרים'} · {item.start_time && item.end_time ? `${item.start_time.slice(0, 5)}–${item.end_time.slice(0, 5)}` : 'כל היום'}
+            {item.label} · {item.site || (item.kind === 'block' ? 'כל האתרים' : 'אתר לא צוין')} · {item.start_time && item.end_time ? `${item.start_time.slice(0, 5)}–${item.end_time.slice(0, 5)}` : item.kind === 'block' ? 'כל היום' : item.start_time ? `${item.start_time.slice(0, 5)} (שעת סיום לא צוינה)` : 'שעות לא צוינו'}
           </li>)}
         </ul>
         <div className="flex flex-wrap gap-2 justify-end">
