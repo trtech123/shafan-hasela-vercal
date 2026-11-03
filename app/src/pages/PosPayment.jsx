@@ -82,7 +82,6 @@ export default function PosPayment(){
       {view.paid&&<><p>מספר קבלה: {view.receiptNumber||'ממתין להצגה'}</p><Link to="/sales-report" className="text-primary underline">צפייה בדוח הקופה</Link></>}
       {!view.paid&&view.status==='initiated'&&!view.dispatchStarted&&<div className="flex gap-2"><Button disabled={busy} onClick={()=>act('initialize')}>המשך לדף התשלום המאובטח</Button><Button variant="outline" disabled={busy} onClick={()=>act('cancel')}>בטל סל שמור</Button></div>}
       {view.status==='initiated'&&view.dispatchStarted&&<p role="alert" className="text-amber-900">פתיחת דף התשלום התחילה אך תוצאתה אינה ודאית. אין להתחיל ניסיון נוסף; נדרש בירור של הניסיון הקיים.</p>}
-      {!view.paid&&view.canResume&&<Button disabled={busy} onClick={()=>redirectPosPayment(view.redirectUrl)}>המשך לניסיון התשלום הקיים</Button>}
       {!view.paid&&view.canVerify&&<Button variant="outline" disabled={busy} onClick={()=>act('verify')}>בדוק תוצאת תשלום</Button>}
       {view.status==='pending_provider'&&<p className="text-sm text-amber-900">חזרה מהדף או ביטול בדפדפן אינם הוכחה שלא בוצע חיוב. אין לפתוח ניסיון חדש עד לבירור.</p>}
       <Button variant="outline" disabled={busy} onClick={()=>act('status')}>רענן מצב</Button>
