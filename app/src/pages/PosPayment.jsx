@@ -4,7 +4,7 @@ import {useAuth} from '@/lib/AuthContext';
 import {supabase} from '@/api/supabaseClient';
 import {Button} from '@/components/ui/button';
 import {billingReviewIssues} from '@/payments/payperBilling';
-import {requestPosPayment,redirectPosPayment} from '@/payments/posPayments';
+import {requestPosPayment,redirectPosPayment,posPaymentErrorMessage} from '@/payments/posPayments';
 import {validOrderId} from '@/payments/orderPayments';
 
 const pendingKey='pelecard.posPending.v1';
@@ -66,8 +66,8 @@ export default function PosPayment(){
       if(action==='initialize'&&result.canResume&&result.redirectUrl&&
         Number.isFinite(result.hostedDeadlineMs)&&result.hostedDeadlineMs>performance.now())
         redirectPosPayment(result.redirectUrl);
-    }catch{
-      setError(action==='prepare'?'לא ניתן לשמור את הסל לתשלום. בדקו מחיר, הנחה והרשאות.':
+    }catch(error){
+      setError(action==='prepare'?posPaymentErrorMessage(error?.code):
         'תוצאת הניסיון אינה ודאית. בדקו את מצב התשלום הקיים; אין להתחיל חיוב נוסף.');
       try{setView(await requestPosPayment(supabase,{action:'status',requestKey}));}catch{/* Keep ambiguity visible. */}
     }finally{locked.current=false;setBusy(false);}

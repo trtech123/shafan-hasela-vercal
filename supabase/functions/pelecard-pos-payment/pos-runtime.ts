@@ -2,6 +2,7 @@ import {createClient} from 'npm:@supabase/supabase-js@2.45.0';
 import {createPosLiveAdapter} from '../pelecard-order-payment/_deployed_shared/pelecard-live-adapter.ts';
 import {createPayperAutoWake} from '../pelecard-order-payment/_deployed_shared/payper-auto-wake.ts';
 import type {PosDependencies} from './pos-handler.ts';
+import {classifyPosRpcError} from './pos-rpc-error.ts';
 
 export function posRuntime():PosDependencies{
   const read=(name:string)=>Deno.env.get(name);
@@ -12,7 +13,7 @@ export function posRuntime():PosDependencies{
   const wakePayper=createPayperAutoWake({read,log});
   async function rpc(name:string,args:Record<string,unknown>){
     const {data,error}=await client.rpc(name,args);
-    if(error){log({event:'pelecard_pos_rpc',operation:name,sqlstate:/^[A-Z0-9]{5}$/.test(error.code??'')?error.code:null});throw Error('payment_database_unavailable');}
+    if(error){const safe=classifyPosRpcError(error,name);log({event:'pelecard_pos_rpc',operation:name,sqlstate:/^[A-Z0-9]{5}$/.test(error.code??'')?error.code:null,reason:safe.code});throw safe;}
     return data;
   }
   return {read,log,allowedOrigins:required('PAYMENTS_APP_ORIGINS').split(',').map(value=>value.trim()),
