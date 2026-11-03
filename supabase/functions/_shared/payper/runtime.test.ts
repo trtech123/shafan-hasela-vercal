@@ -53,6 +53,6 @@ describe("server-only Payper runtime", () => {
     const runtime = createPayperIssuanceRuntime({ serviceClient: { rpc }, fetcher: fetcher as typeof fetch,
       env: { PELECARD_TERMINAL: "1234567", PELECARD_USER: "user", PELECARD_PASSWORD: "secret", PAYPER_DISPATCH_ENABLED: "true" } });
     expect((await runtime.issue("payment-1")).state).toBe("succeeded");
-    expect(calls).toEqual(["freeze_payper_source", "transaction_lookup", "reserve_payper_dispatch", "document_post", "record_payper_dispatch_outcome"]);
+    expect(calls).toEqual(["freeze_payper_source", "transaction_lookup", "reserve_payper_dispatch", "document_post", "record_payper_dispatch_outcome_v2"]);
   });
 });

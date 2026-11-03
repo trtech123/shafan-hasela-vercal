@@ -4,8 +4,13 @@ export type PayperDispatchResult =
   | { kind: "response"; body: unknown };
 
 export type PayperDispatchOutcome =
-  | { state: "succeeded"; documentNumber: string; documentUrl: string; automaticRetryAllowed: false }
-  | { state: "reconciliation_required"; automaticRetryAllowed: false; safeCode?: string };
+  ({ state: "succeeded"; documentNumber: string; documentUrl: string; automaticRetryAllowed: false }
+  | { state: "reconciliation_required"; automaticRetryAllowed: false; safeCode?: string }) & {
+    responseReceived?: boolean;
+    providerStatusCode?: string | null;
+    invoiceStatus?: string | null;
+    invoiceError?: string | null;
+  };
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)

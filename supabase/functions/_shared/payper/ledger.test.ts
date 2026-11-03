@@ -7,9 +7,10 @@ describe("disabled Payper ledger application gate", () => {
     const ledger = createDisabledPayperLedger({ rpc });
     await ledger.recordOutcome("payment-1", { state: "succeeded", documentNumber: "595170",
       documentUrl: "https://app.payper.co.il/public/invoice_show/595170?ak=opaque", automaticRetryAllowed: false });
-    expect(rpc).toHaveBeenCalledWith("record_payper_dispatch_outcome", {
+    expect(rpc).toHaveBeenCalledWith("record_payper_dispatch_outcome_v2", {
       p_payment_id: "payment-1", p_state: "succeeded", p_document_number: "595170",
       p_document_url: "https://app.payper.co.il/public/invoice_show/595170?ak=opaque", p_code: null,
+      p_response_received: false, p_provider_status_code: null, p_invoice_status: null, p_invoice_error: null,
     });
   });
   test("freezes a verified payment through the atomic database RPC", async () => {
@@ -31,9 +32,10 @@ describe("disabled Payper ledger application gate", () => {
     const rpc = vi.fn().mockResolvedValue({ data: "reconciliation_required", error: null });
     const ledger = createDisabledPayperLedger({ rpc });
     await ledger.recordDispatchedOutcome("payment-1", { kind: "transport_error" });
-    expect(rpc).toHaveBeenCalledWith("record_payper_dispatch_outcome", {
+    expect(rpc).toHaveBeenCalledWith("record_payper_dispatch_outcome_v2", {
       p_payment_id: "payment-1", p_state: "reconciliation_required",
       p_document_number: null, p_document_url: null, p_code: "uncertain_provider_outcome",
+      p_response_received: false, p_provider_status_code: null, p_invoice_status: null, p_invoice_error: null,
     });
   });
 
@@ -44,10 +46,23 @@ describe("disabled Payper ledger application gate", () => {
       StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "42",
         InvoiceLink: "https://app.payper.co.il/public/invoice_show/42?ak=opaque" },
     } });
-    expect(rpc).toHaveBeenCalledWith("record_payper_dispatch_outcome", {
+    expect(rpc).toHaveBeenCalledWith("record_payper_dispatch_outcome_v2", {
       p_payment_id: "payment-1", p_state: "succeeded", p_document_number: "42",
       p_document_url: "https://app.payper.co.il/public/invoice_show/42?ak=opaque", p_code: null,
+      p_response_received: false, p_provider_status_code: null, p_invoice_status: null, p_invoice_error: null,
     });
+  });
+
+  test("passes exact provider status and error only to the restricted outcome RPC", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: "reconciliation_required", error: null });
+    await createPayperLedger({ rpc }, true).recordOutcome("payment-1", {
+      state: "reconciliation_required", automaticRetryAllowed: false, safeCode: "provider_document_rejected",
+      responseReceived: true, providerStatusCode: "000", invoiceStatus: "Error", invoiceError: "catalog_id must be numeric",
+    });
+    expect(rpc).toHaveBeenCalledWith("record_payper_dispatch_outcome_v2", expect.objectContaining({
+      p_response_received: true, p_provider_status_code: "000", p_invoice_status: "Error",
+      p_invoice_error: "catalog_id must be numeric",
+    }));
   });
 
   test("redacts backend errors", async () => {

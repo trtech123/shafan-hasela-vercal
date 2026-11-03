@@ -172,4 +172,16 @@ describe("documented Pelecard Payper contract", () => {
     fetcher.mockRejectedValueOnce(new Error("secret-bearing transport failure"));
     expect(await provider.createInvoice(request, "reservation-3")).toMatchObject({ state: "reconciliation_required", safeCode: "provider_transport_uncertain" });
   });
+
+  test("retains only the documented provider rejection fields for restricted storage", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      StatusCode: "000", PayperData: { InvoiceStatus: "Error", InvoiceError: "catalog_id must be numeric",
+        RawResponse: "sensitive provider payload" },
+    }), { status: 200 }));
+    const provider = createPelecardPayperProvider({ credentials: gateway(), fetcher, dispatchEnabled: true });
+    const outcome = await provider.createInvoice(buildCreatePayperInvoice(facts(), "103059585", gateway()), "reservation-4");
+    expect(outcome).toMatchObject({ state: "reconciliation_required", safeCode: "provider_document_rejected",
+      providerStatusCode: "000", invoiceStatus: "Error", invoiceError: "catalog_id must be numeric" });
+    expect(JSON.stringify(outcome)).not.toContain("sensitive provider payload");
+  });
 });

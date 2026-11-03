@@ -46,7 +46,13 @@ export function createPayperLedger(client: RpcClient, dispatchEnabled = false) {
           p_document_number: null, p_document_url: null,
           p_code: outcome.safeCode ?? "uncertain_provider_outcome",
         };
-      result(await client.rpc("record_payper_dispatch_outcome", args), "record_outcome");
+      result(await client.rpc("record_payper_dispatch_outcome_v2", {
+        ...args,
+        p_response_received: outcome.responseReceived === true,
+        p_provider_status_code: outcome.providerStatusCode ?? null,
+        p_invoice_status: outcome.invoiceStatus ?? null,
+        p_invoice_error: outcome.invoiceError ?? null,
+      }), "record_outcome");
     },
     async recordDispatchedOutcome(paymentId: string, response: PayperDispatchResult): Promise<void> {
       await this.recordOutcome(paymentId, classifyDispatchedPayperOutcome(response));

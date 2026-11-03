@@ -54,6 +54,16 @@ function safeProviderCode(body: unknown): string {
     return "provider_document_rejected";
   return "provider_response_uncertain";
 }
+function providerDiagnostic(body: unknown) {
+  const value = record(body);
+  const data = record(value?.PayperData);
+  return {
+    responseReceived: true,
+    providerStatusCode: typeof value?.StatusCode === "string" ? value.StatusCode : null,
+    invoiceStatus: typeof data?.InvoiceStatus === "string" ? data.InvoiceStatus : null,
+    invoiceError: typeof data?.InvoiceError === "string" ? data.InvoiceError : null,
+  };
+}
 
 /** The stored hosted TransactionId is not the transaction record ID. */
 export function decodeTransactionRecord(body: unknown, hostedId: string, amountMinor: number): string {
@@ -191,10 +201,12 @@ export function createPelecardPayperProvider(options: {
           headers: { "Content-Type": "application/json" }, body: JSON.stringify(request),
           redirect: "error", signal: AbortSignal.timeout(timeout) });
         const body = await readJson(response);
+        const diagnostic = providerDiagnostic(body);
         if (!response.ok) return { state: "reconciliation_required", automaticRetryAllowed: false,
-          safeCode: "provider_http_error" };
+          safeCode: "provider_http_error", ...diagnostic };
         const outcome = classifyDispatchedPayperOutcome({ kind: "response", body });
-        return outcome.state === "succeeded" ? outcome : { ...outcome, safeCode: safeProviderCode(body) };
+        return outcome.state === "succeeded" ? { ...outcome, ...diagnostic }
+          : { ...outcome, safeCode: safeProviderCode(body), ...diagnostic };
       } catch {
         return { state: "reconciliation_required", automaticRetryAllowed: false,
           safeCode: "provider_transport_uncertain" };

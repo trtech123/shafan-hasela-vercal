@@ -152,8 +152,25 @@ try {
   await db.exec(`RESET ROLE; SELECT set_config('request.jwt.claim.role','service_role',false);`);
   await db.query(`SELECT public.stop_payper_dispatch('${actor}')`);
   assert.equal((await scalar('SELECT enabled FROM public.payper_dispatch_control')).enabled, false);
-  await db.query(`SELECT public.record_payper_dispatch_outcome('${second}',
-    'reconciliation_required',NULL,NULL,'synthetic_uncertain_outcome')`);
+  stage = 'private provider response diagnostics';
+  await db.query(`SELECT public.record_payper_dispatch_outcome_v2('${second}',
+    'reconciliation_required',NULL,NULL,'provider_document_rejected',
+    true,'000','Error','catalog_id must be numeric')`);
+  assert.deepEqual(await scalar(`SELECT response_received,provider_status_code,
+    invoice_status,invoice_error FROM public.payper_provider_response_diagnostics
+    WHERE payment_id='${second}'`), {
+    response_received: true, provider_status_code: '000', invoice_status: 'Error',
+    invoice_error: 'catalog_id must be numeric',
+  });
+  await fail(`SELECT public.record_payper_dispatch_outcome_v2('${second}',
+    'reconciliation_required',NULL,NULL,'provider_document_rejected',
+    true,'000','Error','another request')`, 'payper_outcome_fence');
+  await db.exec(`SET ROLE authenticated; SELECT set_config('request.jwt.claim.role','authenticated',false);`);
+  await fail('SELECT * FROM public.payper_provider_response_diagnostics', 'permission denied');
+  await fail(`SELECT public.record_payper_dispatch_outcome_v2('${second}',
+    'reconciliation_required',NULL,NULL,'provider_document_rejected',
+    true,'000','Error','unauthorized')`, 'permission denied');
+  await db.exec(`RESET ROLE; SELECT set_config('request.jwt.claim.role','service_role',false);`);
   stage = 'new immutable future activation epoch';
   const oldCutoff = (await scalar('SELECT activation_cutoff_utc AS value FROM public.payper_dispatch_control')).value;
   const oldPending = await makePos('92000000-0000-4000-8000-000000000007',
