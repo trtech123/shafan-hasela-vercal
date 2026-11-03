@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { recoverCommercial } from "./pelecard-commercial.ts";
+import { createCommercialFeedback, recoverCommercial } from "./pelecard-commercial.ts";
 import { createPayperAutoWake } from "./payper-auto-wake.ts";
 import { createPayperWorkerHandler, runPayperIssuanceBatch } from "../../_shared/payper/worker.ts";
 
@@ -28,6 +28,29 @@ function recovery(response: unknown, onPaymentFinalized = vi.fn()) {
 }
 
 describe("verified payment to Payper wake", () => {
+  test("Orders raw JSON callback records only sanitized nonapproval evidence", async () => {
+    const hostedId = "e0000000-0000-4000-8000-000000000001";
+    const stored = { ...attempt, transaction_id: hostedId };
+    const log = vi.fn(), finalize = vi.fn(), onPaymentFinalized = vi.fn();
+    const deps = {
+      read: () => undefined, auth: { authenticate: async () => null }, allowedOrigins: [], log,
+      view: vi.fn(), reserve: vi.fn(), get: vi.fn(async () => stored), observe: vi.fn(async () => {}),
+      finalize, onPaymentFinalized,
+      call: vi.fn(async (action: string) => action === "lookup"
+        ? { StatusCode: "425", ResultData: { ShvaResult: "173" } }
+        : action === "hosted" ? { reachable: true, state: "usable" } : 1),
+    };
+    const request = new Request(`https://edge.test/feedback?paymentId=${paymentId}`, {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: JSON.stringify({ ResultData: { ConfirmationKey: stored.confirmation_key, TransactionId: hostedId } }),
+    });
+    expect((await createCommercialFeedback(deps)(request)).status).toBe(200);
+    expect(finalize).not.toHaveBeenCalled();
+    expect(onPaymentFinalized).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith({ event: "pelecard_order_callback_checked", paymentId,
+      approved: false, apiStatus: "425", transactionStatus: "173" });
+    expect(JSON.stringify(log.mock.calls)).not.toContain(stored.confirmation_key);
+  });
   test("wakes only after durable approved finalization with the stored payment ID", async () => {
     const { deps, finalize, onPaymentFinalized } = recovery(approved);
     expect((await recoverCommercial(deps, attempt)).approved).toBe(true);

@@ -60,7 +60,8 @@ export async function recoverPos(deps:PosDependencies,paymentId:string){
     await deps.finalize(paymentId,evidence.approvalId);
     try{deps.onPaymentFinalized?.(paymentId);}catch{}
   }
-  return {approved:evidence.approved,resolution:evidence.approved?'approved':'unknown'};
+  return {approved:evidence.approved,resolution:evidence.approved?'approved':'unknown',
+    apiStatus:evidence.apiStatus,transactionStatus:evidence.transactionStatus};
 }
 export function createPosHandler(deps:PosDependencies){return async(request:Request):Promise<Response>=>{
   let cors:HeadersInit={},stage='authorization';
@@ -132,6 +133,9 @@ export function createPosFeedback(deps:PosDependencies){return async(request:Req
     }
     if([...url.searchParams].length!==1)throw new PaymentHttpError(400,'invalid_input');
     await parseControlledLiveCallback(request,{paymentId,transactionId:saved.transaction_id,confirmationKey:saved.confirmation_key});
-    return paymentJson(await recoverPos(deps,paymentId),200);
+    const result=await recoverPos(deps,paymentId);
+    try{deps.log({event:'pelecard_pos_callback_checked',paymentId,approved:result.approved,
+      apiStatus:result.apiStatus,transactionStatus:result.transactionStatus});}catch{}
+    return paymentJson(result,200);
   }catch(error){if(error instanceof ControlledLiveCallbackError){try{deps.log({event:'pelecard_pos_callback_rejected',...error.diagnostic});}catch{}return paymentJson({error:{code:'callback_rejected'}},400);}return failure(error);}
 };}

@@ -121,6 +121,9 @@ export function createCommercialFeedback(deps:CommercialDependencies){return asy
   }
   if([...url.searchParams].length!==1)throw new PaymentHttpError(400,'invalid_input');
   await parseControlledLiveCallback(request,{paymentId,transactionId:attempt.transaction_id,confirmationKey:attempt.confirmation_key});
-  return paymentJson(await recoverCommercial(deps,attempt),200);
+  const result=await recoverCommercial(deps,attempt);
+  try{deps.log({event:'pelecard_order_callback_checked',paymentId,approved:result.approved,
+   apiStatus:result.StatusCode,transactionStatus:result.ShvaResult});}catch{}
+  return paymentJson(result,200);
  }catch(error){if(error instanceof ControlledLiveCallbackError){try{deps.log({event:'pelecard_callback_rejected',...error.diagnostic});}catch{}return paymentJson({error:{code:'callback_rejected'}},400);}return failure(error);}
 };}

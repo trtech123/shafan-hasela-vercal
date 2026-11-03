@@ -12,7 +12,8 @@ function setup(role='cashier'){
   const observe=vi.fn(async()=>undefined);
   const finalize=vi.fn(async()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555';});
   const onPaymentFinalized=vi.fn();
-  const deps:PosDependencies={read:()=> 'true',allowedOrigins:['https://example.org'],log:()=>{},
+  const log=vi.fn();
+  const deps:PosDependencies={read:()=> 'true',allowedOrigins:['https://example.org'],log,
     auth:{authenticate:async()=>({id:actorId,role})},reserve,
     view:async()=>({paymentId,amountMinor:100,currency:'ILS',status:state,saleId,
       receiptNumber:saleId?'RCP-1':null,hostedState:'usable',hostedExpiresAt:'2099-01-01T00:00:00Z',
@@ -24,7 +25,7 @@ function setup(role='cashier'){
   const handler=createPosHandler(deps);
   const post=(body:unknown,auth=true)=>handler(new Request('https://example.org/payment',{method:'POST',
     headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer valid'}:{})},body:JSON.stringify(body)}));
-  return {post,deps,reserve,call,observe,finalize,onPaymentFinalized,setPending:()=>{state='pending_provider'},setPaid:()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555'}};
+  return {post,deps,reserve,call,observe,finalize,onPaymentFinalized,log,setPending:()=>{state='pending_provider'},setPaid:()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555'}};
 }
 const prepared={action:'prepare',requestKey,lines:[{kind:'product',id:productId,qty:1}],discount:null,
   billing:{kind:'person',name:'',identity:'',email:''}};
@@ -96,5 +97,20 @@ describe('POS Edge payment boundary',()=>{
     expect(s.call).not.toHaveBeenCalled();
     expect(s.finalize).not.toHaveBeenCalled();
     expect(s.onPaymentFinalized).not.toHaveBeenCalled();
+  });
+  test('provider duplicate warning is logged without finalization or customer data',async()=>{
+    const s=setup();s.setPending();
+    s.call.mockImplementation(async(action:string)=>action==='lookup'
+      ?{StatusCode:'425',ResultData:{ShvaResult:'173'}}:action==='validate'?1:{reachable:true});
+    const callback=new Request(`https://edge.test/feedback?paymentId=${paymentId}`,{
+      method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:JSON.stringify({ResultData:{ConfirmationKey:'confirmation',TransactionId:paymentId}}),
+    });
+    expect((await createPosFeedback(s.deps)(callback)).status).toBe(200);
+    expect(s.finalize).not.toHaveBeenCalled();
+    expect(s.onPaymentFinalized).not.toHaveBeenCalled();
+    expect(s.log).toHaveBeenCalledWith({event:'pelecard_pos_callback_checked',paymentId,approved:false,
+      apiStatus:'425',transactionStatus:'173'});
+    expect(JSON.stringify(s.log.mock.calls)).not.toContain('confirmation');
   });
 });

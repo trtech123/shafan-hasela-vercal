@@ -110,13 +110,15 @@ async function parseCallback(request: Request, expected: {
   if (type !== "application/json" && type !== "application/x-www-form-urlencoded") fail("content_type", "unsupported");
   const body = await boundedBody(request);
   let result: unknown;
-  if (type === "application/json") {
+  // Pelecard documents both a named form field and a raw JSON body. The
+  // latter may still carry the default form content type.
+  if (type === "application/json" || body.trimStart().startsWith("{")) {
     let parsed: unknown;
     try { parsed = JSON.parse(body); } catch { fail("outer_json", "malformed"); }
     summarize(parsed, "body", shape);
     const envelope = object(parsed);
-    if (!envelope || !Object.hasOwn(envelope, "result")) fail("envelope", "missing_or_duplicate");
-    result = envelope.result;
+    if (!envelope) fail("envelope", "malformed");
+    result = Object.hasOwn(envelope, "result") ? envelope.result : envelope;
   } else {
     const form = new URLSearchParams(body);
     // Fixed names only; never Object.fromEntries(form), which could retain
@@ -128,10 +130,10 @@ async function parseCallback(request: Request, expected: {
     if (values.length !== 1) fail("envelope", "missing_or_duplicate");
     result = values[0];
   }
-  // Only the configured field's JSON string representation is accepted.
-  if (typeof result !== "string") fail("envelope", "malformed");
   let parsed: unknown;
-  try { parsed = JSON.parse(result); } catch { fail("result_json", "malformed"); }
+  if (typeof result === "string") {
+    try { parsed = JSON.parse(result); } catch { fail("result_json", "malformed"); }
+  } else parsed = result;
   summarize(parsed, "result", shape);
   const notice = object(parsed);
   if (!notice) fail("result_json", "malformed");

@@ -15,6 +15,24 @@ describe('hosted Pelecard callback correlation', () => {
       ConfirmationKey: expected.confirmationKey, TransactionId: expected.transactionId,
     } }), expected)).resolves.toBeUndefined();
   });
+  test('accepts Pelecard documented raw JSON body with form content type', async () => {
+    const request = new Request(`https://edge.test/feedback?paymentId=${expected.paymentId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: JSON.stringify({ ResultData: {
+        ConfirmationKey: expected.confirmationKey, TransactionId: expected.transactionId,
+      } }),
+    });
+    await expect(parseControlledLiveCallback(request, expected)).resolves.toBeUndefined();
+  });
+  test('rejects forged raw JSON correlation before provider verification', async () => {
+    const request = new Request(`https://edge.test/feedback?paymentId=${expected.paymentId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: JSON.stringify({ ResultData: {
+        ConfirmationKey: 'forged', TransactionId: expected.transactionId,
+      } }),
+    });
+    await expect(parseControlledLiveCallback(request, expected)).rejects.toThrow('forged_callback');
+  });
   test('rejects a nested callback with the wrong stored confirmation', async () => {
     await expect(parseControlledLiveCallback(callback({ ResultData: {
       ConfirmationKey: 'forged', TransactionId: expected.transactionId,
