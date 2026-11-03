@@ -4,7 +4,7 @@ import {useAuth} from '@/lib/AuthContext';
 import {supabase} from '@/api/supabaseClient';
 import {Button} from '@/components/ui/button';
 import {billingReviewIssues} from '@/payments/payperBilling';
-import {requestPosPayment,redirectPosPayment,posPaymentErrorMessage} from '@/payments/posPayments';
+import {requestPosPayment,redirectPosPayment,posPaymentErrorMessage,posCheckoutRequestKey} from '@/payments/posPayments';
 import {validOrderId} from '@/payments/orderPayments';
 
 const pendingKey='pelecard.posPending.v1';
@@ -22,12 +22,7 @@ export default function PosPayment(){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const locked=useRef(false);const handledReturn=useRef(null);
-  const [requestKey]=useState(()=>{
-    try{const saved=JSON.parse(sessionStorage.getItem(pendingKey)||'null');
-      if(saved&&validOrderId(saved.requestKey)&&(!cart||saved.cart===JSON.stringify(cart)))return saved.requestKey;
-    }catch{/* Start with a new key. */}
-    return crypto.randomUUID();
-  });
+  const [requestKey]=useState(()=>posCheckoutRequestKey(location.state?.checkoutId,cart,sessionStorage.getItem(pendingKey)));
   const allowed=user?.role==='admin'||user?.role==='קופאי';
   const discountAllowed=!cart?.discount||user?.role==='admin';
   useEffect(()=>{if(view?.paid)sessionStorage.removeItem(pendingKey);},[view?.paid]);

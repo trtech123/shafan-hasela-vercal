@@ -18,6 +18,14 @@ export function posPaymentErrorMessage(code){
   return messages[code]||'לא ניתן לאמת את שמירת הסל. בדקו את מצב הניסיון הקיים ופנו למנהל; אין להתחיל חיוב נוסף.';
 }
 
+export function posCheckoutRequestKey(checkoutId,cart,savedRaw,create=()=>crypto.randomUUID()){
+  if(validOrderId(checkoutId))return checkoutId;
+  try{const saved=JSON.parse(savedRaw||'null');
+    if(saved&&validOrderId(saved.requestKey)&&(!cart||saved.cart===JSON.stringify(cart)))return saved.requestKey;
+  }catch{/* An invalid prior pointer cannot identify this checkout. */}
+  return create();
+}
+
 export async function requestPosPayment(client,body){
   if(!client?.functions?.invoke||!body||!['prepare','initialize','status','verify','cancel'].includes(body.action))throw Error('invalid_request');
   const startedAt=performance.now();

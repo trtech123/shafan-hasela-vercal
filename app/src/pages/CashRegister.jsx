@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -30,6 +30,7 @@ export default function CashRegister() {
   const [discount, setDiscount] = useState(null);
   // null = standalone sale; else { id, order_number, client_name, client_phone, organization }
   const [linkedOrder, setLinkedOrder] = useState(null);
+  const posCheckoutId = useRef(null);
 
   useEffect(() => {
     const load = async () => {
@@ -153,13 +154,17 @@ export default function CashRegister() {
   const handlePelecardStart = () => {
     if(!canPayOrder)return;
     if(linkedOrder?.id){navigate(orderPaymentPath(linkedOrder.id));return;}
-    if(canHostedCart)navigate('/payment/pos',{state:{cart:{
+    if(canHostedCart){
+      posCheckoutId.current ||= crypto.randomUUID();
+      navigate('/payment/pos',{state:{checkoutId:posCheckoutId.current,cart:{
       lines:cartItems.map(item=>({kind:item.kind,id:item.id,qty:item.qty})),
       discount:discount?{type:discount.type,mode:discount.mode,value:Number(discount.value)}:null,
-    }}});
+      }}});
+    }
   };
 
   const handleNewSale = () => {
+    posCheckoutId.current = null;
     setCartItems([]);
     setScreen("menu");
     setPaymentMethod(null);

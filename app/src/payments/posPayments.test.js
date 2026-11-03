@@ -1,5 +1,5 @@
 import {describe,expect,test,vi} from 'vitest';
-import {requestPosPayment,redirectPosPayment,posPaymentErrorMessage} from './posPayments';
+import {requestPosPayment,redirectPosPayment,posPaymentErrorMessage,posCheckoutRequestKey} from './posPayments';
 const id='11111111-1111-4111-8111-111111111111';
 const view={mode:'pos',paymentId:id,amountMinor:100,currency:'ILS',status:'initiated',paid:false,serverTime:new Date().toISOString()};
 describe('POS browser boundary',()=>{
@@ -23,5 +23,13 @@ describe('POS browser boundary',()=>{
   test('explains an existing unsettled POS attempt without suggesting a new checkout',()=>{
     expect(posPaymentErrorMessage('pos_payment_in_progress')).toMatch(/ניסיון תשלום קודם/);
     expect(posPaymentErrorMessage('pos_payment_in_progress')).toMatch(/אין להתחיל/);
+  });
+  test('new purchase key wins over an older pending checkout with identical cart',()=>{
+    const cart={lines:[{kind:'product',id,qty:1}],discount:null};
+    const oldKey='22222222-2222-4222-8222-222222222222';
+    const nextKey='33333333-3333-4333-8333-333333333333';
+    const saved=JSON.stringify({requestKey:oldKey,cart:JSON.stringify(cart)});
+    expect(posCheckoutRequestKey(nextKey,cart,saved)).toBe(nextKey);
+    expect(posCheckoutRequestKey(null,cart,saved)).toBe(oldKey);
   });
 });

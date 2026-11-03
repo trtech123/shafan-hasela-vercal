@@ -7,6 +7,7 @@ const state=vi.hoisted(()=>({role:'admin',navigate:vi.fn()}));
 const productId='11111111-1111-4111-8111-111111111111';
 const serviceId='22222222-2222-4222-8222-222222222222';
 const orderId='33333333-3333-4333-8333-333333333333';
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 vi.mock('@/lib/AuthContext',()=>({useAuth:()=>({user:{role:state.role}})}));
 vi.mock('react-router-dom',()=>({useLocation:()=>({search:''}),useNavigate:()=>state.navigate}));
 vi.mock('@/api/supabaseClient',()=>({supabase:{from:table=>({select:()=>({eq:async()=>({data:table==='products'
@@ -26,12 +27,21 @@ describe('Cash Register hosted routes',()=>{
     render(<CashRegister/>);await screen.findByText('add service');
     fireEvent.click(screen.getByText('מוצרים'));fireEvent.click(screen.getByText('add product'));
     fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
-    expect(state.navigate).toHaveBeenCalledWith('/payment/pos',{state:{cart:{lines:[{kind:'product',id:productId,qty:1}],discount:null}}});
+    expect(state.navigate).toHaveBeenCalledWith('/payment/pos',{state:{checkoutId:expect.stringMatching(uuid),cart:{lines:[{kind:'product',id:productId,qty:1}],discount:null}}});
   });
   test('standalone service cart reaches POS review',async()=>{
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
-    expect(state.navigate).toHaveBeenCalledWith('/payment/pos',{state:{cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}}});
+    expect(state.navigate).toHaveBeenCalledWith('/payment/pos',{state:{checkoutId:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}}});
+  });
+  test('repeat click on one checkout keeps its key; a new visit gets a different key',async()=>{
+    render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));fireEvent.click(screen.getByText('Pelecard'));
+    const first=state.navigate.mock.calls[0][1].state.checkoutId;
+    expect(state.navigate.mock.calls[1][1].state.checkoutId).toBe(first);
+    cleanup();state.navigate.mockReset();render(<CashRegister/>);await screen.findByText('add service');
+    fireEvent.click(screen.getByText('add service'));fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
+    expect(state.navigate.mock.calls[0][1].state.checkoutId).not.toBe(first);
   });
   test('linked saved order uses order review, and shift manager cannot start hosted checkout',async()=>{
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
