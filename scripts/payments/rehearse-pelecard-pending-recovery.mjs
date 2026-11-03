@@ -138,6 +138,35 @@ try{
   await db.query(`SELECT public.stop_pelecard_pending_recovery('${actor}')`);
   assert.equal((await one('SELECT enabled FROM public.pelecard_pending_recovery_control')).enabled,false);
   assert.equal((await db.query('SELECT * FROM public.claim_pelecard_pending_recovery()')).rows.length,0);
-  console.log('PASS pending recovery SQL: disabled, future cutoff, POS/Orders, lease, alert, idempotency, stop');
+  stage='repeatable future-only recovery epoch';
+  await assert.rejects(()=>db.query(`SELECT public.start_pelecard_pending_recovery('${cashier}')`),
+    /recovery_admin_required/);
+  const nextCutoff=(await one(`SELECT public.start_pelecard_pending_recovery('${actor}') AS value`)).value;
+  assert.ok(new Date(nextCutoff)>new Date(cutoff));
+  assert.equal((await one(`SELECT count(*)::integer AS n FROM public.pelecard_pending_recovery_epoch_audit`)).n,2);
+  assert.deepEqual((await db.query(`SELECT previous_cutoff_utc,cutoff_utc,origin
+    FROM public.pelecard_pending_recovery_epoch_audit ORDER BY id`)).rows,[
+    {previous_cutoff_utc:null,cutoff_utc:cutoff,origin:'activation'},
+    {previous_cutoff_utc:cutoff,cutoff_utc:nextCutoff,origin:'activation'}]);
+  assert.equal((await db.query('SELECT * FROM public.claim_pelecard_pending_recovery()')).rows.length,0);
+  await assert.rejects(()=>db.query(`SELECT public.start_pelecard_pending_recovery('${actor}')`),
+    /recovery_must_be_stopped/);
+  const nextBuyer='93000000-0000-4000-8000-000000000014';
+  await db.exec(`INSERT INTO auth.users(id,email) VALUES
+    ('${nextBuyer}','next-cashier@example.test');
+    UPDATE public.profiles SET role='cashier' WHERE id='${nextBuyer}';`);
+  const nextPayment=await pos(nextBuyer,'93000000-0000-4000-8000-000000000012',
+    '93000000-0000-4000-8000-000000000013');
+  assert.equal((await one('SELECT * FROM public.claim_pelecard_pending_recovery()')).payment_id,nextPayment);
+  await db.query(`SELECT public.stop_pelecard_pending_recovery('${actor}')`);
+  await assert.rejects(()=>db.query(`SELECT public.start_pelecard_pending_recovery('${actor}')`),
+    /recovery_claim_in_flight/);
+  await assert.rejects(()=>db.query(`UPDATE public.pelecard_pending_recovery_control
+    SET cutoff_utc=clock_timestamp()`),/recovery_cutoff_immutable/);
+  await assert.rejects(()=>db.query(`DELETE FROM public.pelecard_pending_recovery_epoch_audit`),
+    /recovery_epoch_audit_immutable/);
+  await assert.rejects(()=>db.query(`UPDATE public.pelecard_pending_recovery_epoch_audit
+    SET cutoff_utc=clock_timestamp()`),/recovery_epoch_audit_immutable/);
+  console.log('PASS pending recovery SQL: disabled, future cutoff, POS/Orders, lease, alert, idempotency, repeated epoch');
 }catch(error){console.error('FAIL stage:',stage);throw error;}
 finally{await db.close();}

@@ -1,6 +1,8 @@
--- Separate activation only, never part of the disabled release. First set the
--- new database cutoff with start_pelecard_pending_recovery(admin_uuid), and
--- enable PELECARD_PENDING_RECOVERY_ENABLED in Edge secrets. The callback and
+-- Separate activation only, never part of the disabled release. After migration
+-- 202611030003, first set and verify a NEW audited future cutoff with
+-- start_pelecard_pending_recovery(admin_uuid). This call requires recovery to
+-- be stopped; do not install this schedule if the returned cutoff is old.
+-- Then enable PELECARD_PENDING_RECOVERY_ENABLED in Edge secrets. The callback and
 -- payment finalizers still require authoritative Pelecard evidence.
 -- Vault must contain pelecard_pending_recovery_url and
 -- pelecard_pending_recovery_token; never embed values in this schedule.
