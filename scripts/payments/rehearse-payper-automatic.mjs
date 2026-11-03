@@ -42,7 +42,7 @@ try {
     WHERE id='92000000-0000-4000-8000-000000000001';`);
   const actor = '92000000-0000-4000-8000-000000000001';
   const fail = async (sql, code) => assert.rejects(() => db.query(sql), e => e.message.includes(code));
-  await fail(`SELECT public.enable_payper_continuous('${actor}')`, 'payper_canary_document_required');
+  await fail(`SELECT public.enable_payper_continuous('${actor}')`, 'payper_continuous_not_ready');
   const cutoff = (await scalar(`SELECT public.activate_payper_new_payments('${actor}') AS value`)).value;
   assert.ok(cutoff);
   assert.deepEqual(await scalar(`SELECT enabled,dispatch_mode,dispatch_remaining,canary_payment_id
@@ -119,21 +119,37 @@ try {
   // Local-only simulation of the later, separately authorized canary switch.
   await db.query(`UPDATE public.payper_dispatch_control SET enabled=true WHERE singleton
     AND dispatch_mode='canary' AND canary_payment_id='${first}' AND dispatch_remaining=1`);
-  const second = await makePos('92000000-0000-4000-8000-000000000005',
+  const prior = await makePos('92000000-0000-4000-8000-000000000005',
     '92000000-0000-4000-8000-000000000006');
-  await db.query(`SELECT public.freeze_payper_source('${second}')`);
+  await db.query(`SELECT public.freeze_payper_source('${prior}')`);
   stage = 'non-target canary reservation';
-  await fail(`SELECT public.reserve_payper_dispatch('${second}','100002')`, 'payper_dispatch_limit_reached');
+  await fail(`SELECT public.reserve_payper_dispatch('${prior}','100002')`, 'payper_dispatch_limit_reached');
   stage = 'target canary reservation';
   await db.query(`SELECT public.reserve_payper_dispatch('${first}','1000000001')`);
   assert.equal((await scalar('SELECT dispatch_remaining FROM public.payper_dispatch_control')).dispatch_remaining,0);
   stage = 'duplicate canary reservation';
   await fail(`SELECT public.reserve_payper_dispatch('${first}','1000000001')`, 'payper_dispatch_fence');
-  await fail(`SELECT public.enable_payper_continuous('${actor}')`, 'payper_canary_document_required');
+  await fail(`SELECT public.enable_payper_continuous('${actor}')`, 'payper_continuous_not_ready');
+  await db.query(`SELECT public.stop_payper_dispatch('${actor}')`);
   await db.query(`SELECT public.record_payper_dispatch_outcome('${first}','succeeded','900001',
     'https://app.payper.co.il/public/invoice_show/900001?ak=synthetic',NULL)`);
+  const canaryCutoff = (await scalar('SELECT public.payper_effective_cutoff() AS value')).value;
+  await db.query('SELECT pg_sleep(0.01)');
+  await db.query("SELECT set_config('request.jwt.claim.role','authenticated',false)");
+  await fail(`SELECT public.enable_payper_continuous('${actor}')`, 'administrator_required');
+  await db.query("SELECT set_config('request.jwt.claim.role','service_role',false)");
   await db.query(`SELECT public.enable_payper_continuous('${actor}')`);
-  assert.equal((await scalar('SELECT dispatch_mode FROM public.payper_dispatch_control')).dispatch_mode,'continuous');
+  assert.deepEqual(await scalar(`SELECT enabled,dispatch_mode,dispatch_remaining,canary_payment_id
+    FROM public.payper_dispatch_control`), {
+    enabled: true, dispatch_mode: 'continuous', dispatch_remaining: 0, canary_payment_id: null,
+  });
+  assert.ok((await scalar('SELECT public.payper_effective_cutoff() AS value')).value > canaryCutoff);
+  await fail(`SELECT public.enable_payper_continuous('${actor}')`, 'payper_continuous_not_ready');
+  assert.deepEqual((await db.query('SELECT public.list_payper_dispatch_candidates() AS id')).rows, []);
+  await fail(`SELECT public.reserve_payper_dispatch('${prior}','100002')`, 'payper_activation_fence');
+  const second = await makePos('92000000-0000-4000-8000-000000000019',
+    '92000000-0000-4000-8000-000000000020');
+  await db.query(`SELECT public.freeze_payper_source('${second}')`);
   await db.query(`SELECT public.reserve_payper_dispatch('${second}','100002')`);
   await fail(`SELECT public.reserve_payper_dispatch('${second}','100002')`, 'payper_dispatch_fence');
   assert.equal((await scalar(`SELECT state FROM public.payper_document_ledger WHERE payment_id='${second}'`)).state,
@@ -144,7 +160,7 @@ try {
   await db.exec(`SET ROLE authenticated;
     SELECT set_config('request.jwt.claim.role','authenticated',false);
     SELECT set_config('request.jwt.claim.sub','${actor}',false);`);
-  assert.equal(Number((await scalar(`SELECT count(*) AS count FROM public.payper_accounting_exceptions`)).count),1);
+  assert.equal(Number((await scalar(`SELECT count(*) AS count FROM public.payper_accounting_exceptions`)).count),2);
   assert.equal(Number((await scalar(`SELECT count(*) AS count FROM public.payper_accounting_exceptions
     WHERE actionable`)).count),1);
   await db.exec(`SELECT set_config('request.jwt.claim.sub','',false);`);
@@ -212,7 +228,11 @@ try {
   assert.deepEqual((await db.query('SELECT public.list_payper_dispatch_candidates() AS id')).rows, []);
   await db.query(`SELECT public.record_payper_dispatch_outcome('${future}','succeeded','900002',
     'https://app.payper.co.il/public/invoice_show/900002?ak=synthetic',NULL)`);
+  await db.query(`SELECT public.stop_payper_dispatch('${actor}')`);
+  const firstFutureCutoff = (await scalar('SELECT public.payper_effective_cutoff() AS value')).value;
+  await db.query('SELECT pg_sleep(0.01)');
   await db.query(`SELECT public.enable_payper_continuous('${actor}')`);
+  assert.ok((await scalar('SELECT public.payper_effective_cutoff() AS value')).value > firstFutureCutoff);
   assert.deepEqual((await db.query('SELECT public.list_payper_dispatch_candidates() AS id')).rows, []);
   const later = await makePos('92000000-0000-4000-8000-000000000015',
     '92000000-0000-4000-8000-000000000016');
@@ -240,7 +260,7 @@ try {
   assert.ok(new Date(renewedCutoff) > new Date(preservedCutoff));
   assert.equal((await scalar('SELECT future_cutoff_utc AS value FROM public.payper_dispatch_control')).value.toISOString(),
     preservedCutoff.toISOString());
-  assert.equal(Number((await scalar('SELECT count(*) AS count FROM public.payper_activation_epoch_audit')).count), 2);
+  assert.equal(Number((await scalar('SELECT count(*) AS count FROM public.payper_activation_epoch_audit')).count), 4);
   assert.equal((await scalar('SELECT public.payper_effective_cutoff() AS value')).value.toISOString(),
     renewedCutoff.toISOString());
   await fail(`SELECT public.target_payper_canary('${actor}','${later}')`, 'payper_canary_payment_invalid');
@@ -264,9 +284,13 @@ try {
   await db.query(`SELECT public.reserve_payper_dispatch('${renewed}','100006')`);
   await db.query(`SELECT public.record_payper_dispatch_outcome('${renewed}',
     'succeeded','900003','https://app.payper.co.il/public/invoice_show/900003?ak=synthetic',NULL)`);
+  await db.query(`SELECT public.stop_payper_dispatch('${actor}')`);
+  const finalCanaryCutoff = (await scalar('SELECT public.payper_effective_cutoff() AS value')).value;
+  await db.query('SELECT pg_sleep(0.01)');
   await db.query(`SELECT public.enable_payper_continuous('${actor}')`);
   assert.equal((await scalar('SELECT dispatch_mode AS value FROM public.payper_dispatch_control')).value,
     'continuous');
+  assert.ok((await scalar('SELECT public.payper_effective_cutoff() AS value')).value > finalCanaryCutoff);
   console.log('PASS automatic controls and synthetic POS payments: targeted canary, continuous dispatch, duplicate fence, emergency stop');
 } catch (error) {
   console.error(`FAIL ${stage}: ${error.message}`);

@@ -57,17 +57,38 @@ schedule installation, or activation. Keep RCP-1020 and payment
    document status is uncertain, stop the gates and reconcile manually; never
    retry a possible document request blindly.
 
+## Fresh-cutoff prerequisite, after exact-release approval
+
+With every invoice and recovery gate OFF, verify `202611030002` and `202611030005`
+are installed and `202611030006_payper_continuous_future_epoch.sql` is not.
+Apply **only** migration `202611030006_payper_continuous_future_epoch.sql`.
+It changes the continuous transition but does not activate it. Confirm the
+existing effective cutoff, audit rows, canary target, ledger, exceptions and
+document count remain unchanged. Preserve a copy of the prior function and
+current control state for recovery; do not reverse the migration or rewrite an
+immutable cutoff.
+
 ## Continuous activation, after successful canary and separate approval
 
-Inspect held, pending and missing-ledger exceptions. Require the targeted
-canary's saved document number and URL. Call
-`enable_payper_continuous(admin_uuid)` from a trusted service-role session.
-Verify mode `continuous`, the same latest immutable cutoff, no payment target
-filter in candidate selection, and the database's one-shot reservation for
-each new verified POS or Orders payment. Keep automatic wake and both recovery
-schedules active. Monitor queue age, worker and cron/net failures, payment
-holds, missing billing, definitive provider failures, and uncertain results in
-Admin Accounting. A failed invoice must not block unrelated eligible payments.
+Inspect held, pending and missing-ledger exceptions and reconcile any new
+eligible or frozen obligations from the canary window before closing it.
+Require the targeted canary's saved document number and URL. Set
+`PAYPER_DISPATCH_ENABLED=false` and stop database dispatch after the canary,
+then call `enable_payper_continuous(admin_uuid)`
+once from a trusted service-role session. The RPC requires dispatch OFF, a
+successful verified canary, zero remaining canary documents, and no in-flight
+reservation. It atomically appends a NEW immutable UTC cutoff to the audit,
+clears the canary target, and enables continuous mode. Record that exact new
+cutoff and verify it is later than the canary cutoff. Confirm no payment created
+before it is returned by `list_payper_dispatch_candidates()`, while a new
+verified POS or Orders payment can be reserved once. Restore
+`PAYPER_DISPATCH_ENABLED=true` only after verifying the new cutoff, the
+absence of in-flight reservations, and the remaining approved Edge switches.
+Keep automatic wake and
+both recovery schedules active. Monitor queue age, worker and cron/net
+failures, payment holds, missing billing, definitive provider failures, and
+uncertain results in Admin Accounting. A failed invoice must not block
+unrelated eligible payments.
 
 ## Stop and recovery
 
