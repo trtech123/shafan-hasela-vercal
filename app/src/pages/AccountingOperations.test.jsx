@@ -28,6 +28,9 @@ vi.mock("@/lib/AuthContext", () => ({
 vi.mock("@/components/accounting/PayperManualReview", () => ({
   default: () => null,
 }));
+vi.mock("@/components/accounting/PelecardPendingReview", () => ({
+  default: () => null,
+}));
 vi.mock("@/components/accounting/PayperIssuedDocuments", () => ({
   default: () => null,
 }));

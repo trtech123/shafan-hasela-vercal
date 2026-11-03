@@ -30,6 +30,9 @@ verify_jwt = false
 [functions.pelecard-pos-feedback]
 verify_jwt = false
 
+[functions.pelecard-pending-recovery]
+verify_jwt = false
+
 [functions.whatsapp-webhook]
 verify_jwt = false
 
