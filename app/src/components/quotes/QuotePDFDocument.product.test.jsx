@@ -8,6 +8,16 @@ import QuotePDFDocument from "./QuotePDFDocument";
 afterEach(cleanup);
 
 describe("QuotePDFDocument product rows", () => {
+  test('shows the saved item quantity rather than the event participant count in an order preview', () => {
+    render(<QuotePDFDocument mode="order" onClose={vi.fn()} quote={{
+      order_number: 'ORD-TEST', client_name: 'Synthetic customer', client_phone: '0500000000',
+      num_participants: 10, total_price: 30, final_price: 30,
+      selected_activities: [{ item_type: 'product', activity_name: 'Synthetic product',
+        price_per_person: 15, quantity: 2, line_total: 30 }],
+    }} />);
+    expect(screen.getByText(/2 × 15₪/)).toBeInTheDocument();
+  });
+
   test("does not print an activity duration for products that have none", () => {
     render(
       <QuotePDFDocument

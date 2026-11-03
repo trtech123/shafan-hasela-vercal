@@ -14,6 +14,9 @@ const statusLabels = {
   "בוטלה": { label: "בוטלה", color: "#ef4444" },
 };
 
+const itemQuantity = (item, quote) => Number(item.quantity ?? quote.num_participants ?? 0);
+const itemTotal = (item, quote) => Number(item.line_total ?? (Number(item.price_per_person || 0) * itemQuantity(item, quote)));
+
 export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
   const docRef = useRef(null);
   const [emailStatus, setEmailStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
@@ -49,7 +52,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
     try {
       const pdfBase64 = await generatePDFBase64();
       const activitiesList = (quote.selected_activities || [])
-        .map(a => `<li>${a.activity_name}${a.duration_hours ? ` — ${a.duration_hours} שע׳` : ""} — ${((a.price_per_person || 0) * (quote.num_participants || 0)).toLocaleString()}₪</li>`)
+        .map(a => `<li>${a.activity_name}${a.duration_hours ? ` — ${a.duration_hours} שע׳` : ""} — ${itemTotal(a, quote).toLocaleString()}₪</li>`)
         .join("");
 
       const htmlBody = `
@@ -106,7 +109,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
       "",
       "*פעילויות:*",
       ...(quote.selected_activities || []).map(a =>
-        `• ${a.activity_name}${a.duration_hours ? ` — ${a.duration_hours} שע׳` : ""} — ${(a.price_per_person * (quote.num_participants || 0)).toLocaleString()}₪`
+        `• ${a.activity_name}${a.duration_hours ? ` — ${a.duration_hours} שע׳` : ""} — ${itemTotal(a, quote).toLocaleString()}₪`
       ),
       "",
       quote.discount > 0 ? `סה״כ לפני הנחה: ${(quote.total_price || 0).toLocaleString()}₪` : "",
@@ -205,13 +208,13 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
                     <div className="flex-1">
                       <p className="font-semibold text-base">{act.activity_name}</p>
                       <p className="text-sm text-slate-500">
-                        {act.duration_hours ? `⏱ ${act.duration_hours} שעות • ` : ""}{act.price_per_person}₪ לאדם
+                        {act.duration_hours ? `⏱ ${act.duration_hours} שעות • ` : ""}{act.price_per_person}₪ {act.item_type === 'product' ? 'ליחידה' : 'לאדם'}
                       </p>
                       {act.description && <p className="text-sm text-slate-600 mt-1">{act.description}</p>}
                     </div>
                     <div className="text-left">
-                      <p className="font-bold text-lg">{((act.price_per_person || 0) * (quote.num_participants || 0)).toLocaleString()}₪</p>
-                      <p className="text-xs text-slate-400">{quote.num_participants} × {act.price_per_person}₪</p>
+                      <p className="font-bold text-lg">{itemTotal(act, quote).toLocaleString()}₪</p>
+                      <p className="text-xs text-slate-400">{itemQuantity(act, quote)} × {act.price_per_person}₪</p>
                     </div>
                   </div>
                 ))}

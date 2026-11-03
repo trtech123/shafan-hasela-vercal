@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-const { catalog, catalogState, from, quoteInsert, quoteUpdate } = vi.hoisted(() => {
+const { catalog, catalogState, from, quoteInsert, quoteUpdate, saveQuotation } = vi.hoisted(() => {
   const rows = { activities: [], products: [] };
   const state = { gate: null };
   const insert = vi.fn(async () => ({ error: null }));
@@ -14,6 +14,7 @@ const { catalog, catalogState, from, quoteInsert, quoteUpdate } = vi.hoisted(() 
     catalogState: state,
     quoteInsert: insert,
     quoteUpdate: update,
+    saveQuotation: vi.fn(async () => ({ data: { id: "saved-quote" }, error: null })),
     from: vi.fn((table) => {
       if (table === "quotes") {
         return { insert, update };
@@ -34,7 +35,7 @@ const { catalog, catalogState, from, quoteInsert, quoteUpdate } = vi.hoisted(() 
 });
 
 vi.mock("@/api/supabaseClient", () => ({
-  supabase: { from },
+  supabase: { from, rpc: saveQuotation },
 }));
 
 import QuoteFormDialog from "./QuoteFormDialog";
@@ -72,6 +73,8 @@ beforeEach(() => {
   from.mockClear();
   quoteInsert.mockClear();
   quoteUpdate.mockClear();
+  saveQuotation.mockClear();
+  saveQuotation.mockResolvedValue({ data: { id: "saved-quote" }, error: null });
   catalogState.gate = null;
   catalog.activities = [activeActivity];
   catalog.products = [
@@ -83,6 +86,72 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("QuoteFormDialog catalog", () => {
+  test("creates a quotation through the revision-safe production RPC", async () => {
+    const onSaved = vi.fn();
+    render(<QuoteFormDialog open onClose={vi.fn()} onSaved={onSaved} />);
+    const textboxes = screen.getAllByRole("textbox");
+    fireEvent.change(textboxes[0], { target: { value: "לקוח בדיקה" } });
+    fireEvent.change(textboxes[1], { target: { value: "0500000000" } });
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "2" } });
+    fireEvent.click(await screen.findByRole("button", { name: /פיצה קיימת/ }));
+    fireEvent.click(screen.getByRole("button", { name: "צור הצעה" }));
+
+    await waitFor(() => expect(saveQuotation).toHaveBeenCalledWith("save_quotation", expect.objectContaining({
+      p_quote_id: null,
+      p_expected_version: 0,
+      p_data: expect.objectContaining({ client_name: "לקוח בדיקה", client_phone: "0500000000" }),
+    })));
+    expect(quoteInsert).not.toHaveBeenCalled();
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ id: "saved-quote" })));
+  });
+
+  test("keeps one request and disables submit while the save is in flight", async () => {
+    let finish;
+    saveQuotation.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const onSaved = vi.fn();
+    render(<QuoteFormDialog open onClose={vi.fn()} onSaved={onSaved} />);
+    const textboxes = screen.getAllByRole("textbox");
+    fireEvent.change(textboxes[0], { target: { value: "לקוח בדיקה" } });
+    fireEvent.change(textboxes[1], { target: { value: "0500000000" } });
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "2" } });
+    fireEvent.click(await screen.findByRole("button", { name: /פיצה קיימת/ }));
+    fireEvent.click(screen.getByRole("button", { name: "צור הצעה" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "שומר..." })).toBeDisabled());
+    fireEvent.submit(document.querySelector("form"));
+    expect(saveQuotation).toHaveBeenCalledTimes(1);
+    finish({ data: { id: "saved-quote" }, error: null });
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  });
+
+  test("shows a database permission error inside the form", async () => {
+    saveQuotation.mockResolvedValue({ data: null, error: { code: "42501", message: "permission denied" } });
+    render(<QuoteFormDialog open onClose={vi.fn()} onSaved={vi.fn()} />);
+    const textboxes = screen.getAllByRole("textbox");
+    fireEvent.change(textboxes[0], { target: { value: "לקוח בדיקה" } });
+    fireEvent.change(textboxes[1], { target: { value: "0500000000" } });
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "2" } });
+    fireEvent.click(await screen.findByRole("button", { name: /פיצה קיימת/ }));
+    fireEvent.click(screen.getByRole("button", { name: "צור הצעה" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("אין הרשאה לשמור הצעת מחיר");
+    expect(screen.getByRole("button", { name: "צור הצעה" })).not.toBeDisabled();
+  });
+
+  test("retries an unknown outcome with the same idempotency key", async () => {
+    saveQuotation.mockRejectedValueOnce(new Error('network lost'));
+    const onSaved = vi.fn();
+    render(<QuoteFormDialog open onClose={vi.fn()} onSaved={onSaved} />);
+    const textboxes = screen.getAllByRole("textbox");
+    fireEvent.change(textboxes[0], { target: { value: "לקוח בדיקה" } });
+    fireEvent.change(textboxes[1], { target: { value: "0500000000" } });
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "2" } });
+    fireEvent.click(await screen.findByRole("button", { name: /פיצה קיימת/ }));
+    fireEvent.click(screen.getByRole("button", { name: "צור הצעה" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent('תוצאת השמירה אינה ידועה');
+    fireEvent.click(screen.getByRole("button", { name: "בדוק שוב" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(saveQuotation).toHaveBeenCalledTimes(2);
+    expect(saveQuotation.mock.calls[0][1]).toEqual(saveQuotation.mock.calls[1][1]);
+  });
   test("offers active legacy activities and active Product Management products", async () => {
     renderDialog();
 
@@ -105,8 +174,8 @@ describe("QuoteFormDialog catalog", () => {
     fireEvent.click(await screen.findByRole("button", { name: /אייס קפה חדש/ }));
     fireEvent.click(screen.getByRole("button", { name: "צור הצעה" }));
 
-    await waitFor(() => expect(quoteInsert).toHaveBeenCalledTimes(1));
-    const payload = quoteInsert.mock.calls[0][0];
+    await waitFor(() => expect(saveQuotation).toHaveBeenCalledTimes(1));
+    const payload = saveQuotation.mock.calls[0][1].p_data;
     expect(payload.selected_activities).toEqual([
       expect.objectContaining({
         item_type: "product",
@@ -148,6 +217,9 @@ describe("QuoteFormDialog catalog", () => {
         open
         quote={{
           id: "quote-1",
+          quotation_version: 2,
+          customer_id: "customer-1",
+          customer_version: 3,
           client_name: "לקוח קיים",
           client_phone: "0500000000",
           num_participants: 2,
@@ -161,8 +233,29 @@ describe("QuoteFormDialog catalog", () => {
     expect(await screen.findByRole("button", { name: /אייס קפה חדש/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "עדכון" }));
 
-    await waitFor(() => expect(quoteUpdate).toHaveBeenCalledTimes(1));
-    expect(quoteUpdate.mock.calls[0][0].selected_activities).toEqual([savedSnapshot]);
+    await waitFor(() => expect(saveQuotation).toHaveBeenCalledTimes(1));
+    expect(saveQuotation.mock.calls[0][1].p_data.selected_activities).toEqual([savedSnapshot]);
+    expect(saveQuotation.mock.calls[0][1].p_quote_id).toBe("quote-1");
+    expect(saveQuotation.mock.calls[0][1].p_expected_version).toBe(2);
+    expect(saveQuotation.mock.calls[0][1].p_customer_id).toBe("customer-1");
+    expect(saveQuotation.mock.calls[0][1].p_customer_version).toBe(3);
+  });
+
+  test('saves a legacy quotation as its first revision after the missing date is completed', async () => {
+    render(<QuoteFormDialog open quote={{
+      id: 'legacy-quote', quotation_version: 0, quotation_revision_id: null,
+      client_name: 'Synthetic customer', client_phone: '0500000000',
+      num_participants: 2, event_date: null, status: 'טיוטה',
+      selected_activities: [{ item_type: 'activity', activity_id: 'activity-1',
+        activity_name: 'Synthetic activity', price_per_person: 25 }],
+    }} onClose={vi.fn()} onSaved={vi.fn()} />);
+    fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-05' } });
+    fireEvent.click(screen.getByRole('button', { name: 'עדכון' }));
+    await waitFor(() => expect(saveQuotation).toHaveBeenCalledWith('save_quotation', expect.objectContaining({
+      p_quote_id: 'legacy-quote', p_expected_version: 0,
+      p_data: expect.objectContaining({ event_date: '2026-11-05' }),
+    })));
+    expect(quoteUpdate).not.toHaveBeenCalled();
   });
 
   test("reloads edited and deleted products whenever the dialog reopens", async () => {

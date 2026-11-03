@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,9 @@ export default function Quotes() {
   const [pdfMode, setPdfMode] = useState("quote");
   const [deleteId, setDeleteId] = useState(null);
   const [converting, setConverting] = useState(null);
+  const [saveNotice, setSaveNotice] = useState("");
+  const [conversionError, setConversionError] = useState("");
+  const conversionInFlight = useRef(false);
 
   const load = async () => {
     try {
@@ -77,57 +80,41 @@ export default function Quotes() {
   };
 
   const handleConvertToOrder = async (quote) => {
-    const includesProducts = quote.selected_activities?.some(
-      item => item.item_type === 'product' || item.product_id
-    );
-    if (includesProducts) {
-      toast.error('לא ניתן להמיר הצעה הכוללת מוצרים להזמנה אוטומטית. יש ליצור את ההזמנה ידנית.');
+    if (conversionInFlight.current || quote.converted_to_order_id || !quote.quotation_revision_id) return;
+    if (!quote.event_date || !(Number(quote.num_participants) > 0)
+      || !quote.selected_activities?.length || quote.final_price == null || Number(quote.final_price) < 0) {
+      setConversionError('להמרה להזמנה יש להשלים תאריך אירוע, מספר משתתפים ופריטים, ואז לשמור את ההצעה.');
       return;
     }
-
+    conversionInFlight.current = true;
     setConverting(quote.id);
+    setSaveNotice("");
+    setConversionError("");
     try {
-      // Use first selected activity's ID if available
-      const firstActivityId = quote.selected_activities?.[0]?.activity_id || null;
+      const { data: order, error } = await supabase.rpc('convert_quotation_to_order', {
+        p_quote_id: quote.id,
+        p_expected_version: quote.quotation_version,
+      });
+      if (error) throw error;
+      if (!order?.id || order.quote_id !== quote.id) throw new Error('quotation_conversion_result_missing');
 
-      const { data: order, error: eCreate } = await supabase
-        .from('orders')
-        .insert({
-          client_name:      quote.client_name,
-          client_phone:     quote.client_phone,
-          client_email:     quote.client_email,
-          organization:     quote.organization,
-          activity_id:      firstActivityId,
-          activity_date:    quote.event_date || new Date().toISOString().split('T')[0],
-          site:             quote.site,
-          num_participants: quote.num_participants || 1,
-          total_price:      quote.final_price,
-          notes:            quote.notes,
-          status:           "מאושר",
-          payment_status:   "לא שולם",
-          quote_id:         quote.id,
-        })
-        .select()
-        .single();
-
-      if (eCreate) { console.error('create order error:', eCreate); toast.error('שגיאה ביצירת הזמנה'); return; }
-
-      const { error: eUpdate } = await supabase
-        .from('quotes')
-        .update({ status: "אושרה", converted_to_order_id: order.id })
-        .eq('id', quote.id);
-
-      if (eUpdate) console.error('update quote error:', eUpdate);
-
-      await load();
-      // Show confirmation PDF with the DB-generated order number
-      setPdfQuote(enrichQuote({ ...quote, order_number: order.order_number, status: "אושרה" }));
-      setPdfMode("order");
-      toast.success('הצעה הומרה להזמנה בהצלחה');
+      setQuotes(rows => rows.map(row => row.id === quote.id
+        ? { ...row, converted_to_order_id: order.id, status: 'אושרה' }
+        : row));
+      if (order.quotation_snapshot) {
+        setPdfQuote({ ...order.quotation_snapshot, order_number: order.order_number });
+        setPdfMode('order');
+      }
+      setSaveNotice('ההצעה הומרה להזמנה בהצלחה');
     } catch (err) {
       console.error('handleConvertToOrder error:', err);
-      toast.error('שגיאה בהמרה להזמנה');
+      setConversionError(err.code === '42501'
+        ? 'אין הרשאה להמיר את ההצעה להזמנה.'
+        : err.code === 'PT409'
+          ? 'ההצעה השתנתה או שכבר קיימת הזמנה מקושרת. רעננו את הרשימה לפני ניסיון נוסף.'
+          : 'לא ניתן לאשר את תוצאת ההמרה. רעננו את הרשימה; ניסיון חוזר אינו יוצר הזמנה כפולה.');
     } finally {
+      conversionInFlight.current = false;
       setConverting(null);
     }
   };
@@ -153,10 +140,12 @@ export default function Quotes() {
           <h1 className="text-3xl font-bold tracking-tight">הצעות מחיר</h1>
           <p className="text-muted-foreground mt-1">ניהול הצעות מחיר ללקוחות</p>
         </div>
-        <Button onClick={() => { setEditingQuote(null); setDialogOpen(true); }} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={() => { setSaveNotice(""); setConversionError(""); setEditingQuote(null); setDialogOpen(true); }} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
           <Plus className="w-4 h-4" /> הצעה חדשה
         </Button>
       </div>
+      {saveNotice && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{saveNotice}</p>}
+      {conversionError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{conversionError}</p>}
 
       {/* Search */}
       <div className="relative max-w-sm">
@@ -173,7 +162,7 @@ export default function Quotes() {
         <div className="bg-card rounded-2xl border border-border shadow-sm p-12 text-center">
           <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
           <p className="text-muted-foreground mb-4">עדיין אין הצעות מחיר</p>
-          <Button onClick={() => { setEditingQuote(null); setDialogOpen(true); }} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+          <Button onClick={() => { setSaveNotice(""); setConversionError(""); setEditingQuote(null); setDialogOpen(true); }} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
             <Plus className="w-4 h-4" /> הצעה ראשונה
           </Button>
         </div>
@@ -212,19 +201,30 @@ export default function Quotes() {
                 <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => { setPdfQuote(enrichQuote(quote)); setPdfMode("quote"); }}>
                   <Eye className="w-3.5 h-3.5" /> צפה / שלח
                 </Button>
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => { setEditingQuote(quote); setDialogOpen(true); }}>
-                  עריכה
-                </Button>
-                {!quote.converted_to_order_id && quote.status !== "בוטלה" && (
+                {!quote.converted_to_order_id && (
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => { setSaveNotice(""); setConversionError(""); setEditingQuote(quote); setDialogOpen(true); }}>
+                    עריכה
+                  </Button>
+                )}
+                {!quote.converted_to_order_id && quote.status !== "בוטלה" && quote.quotation_revision_id && (
                   <Button
                     size="sm"
                     className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700"
                     onClick={() => handleConvertToOrder(quote)}
-                    disabled={converting === quote.id}
+                    disabled={Boolean(converting)}
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     {converting === quote.id ? "ממיר..." : "הפוך להזמנה"}
                   </Button>
+                )}
+                {!quote.converted_to_order_id && !quote.quotation_revision_id && (
+                  <span className="text-xs text-muted-foreground self-center">
+                    {!quote.event_date
+                      ? 'השלימו תאריך אירוע ושמרו את ההצעה לפני המרה להזמנה.'
+                      : !(Number(quote.num_participants) > 0)
+                        ? 'השלימו מספר משתתפים ושמרו את ההצעה לפני המרה להזמנה.'
+                        : 'שמרו את ההצעה כדי ליצור גרסה לפני המרה להזמנה.'}
+                  </span>
                 )}
                 {quote.converted_to_order_id && (
                   <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
@@ -244,7 +244,7 @@ export default function Quotes() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         quote={editingQuote}
-        onSaved={load}
+        onSaved={() => { setConversionError(""); setSaveNotice(editingQuote ? 'ההצעה עודכנה בהצלחה' : 'ההצעה נשמרה בהצלחה'); load(); }}
       />
 
       {pdfQuote && (
