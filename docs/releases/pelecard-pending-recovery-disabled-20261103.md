@@ -19,9 +19,13 @@ deployment, payment, invoice creation, or activation.
    exact new Edge Function. Do not print tokens or use payment-provider secrets
    as the recovery bearer token.
 4. Deploy `pelecard-pending-recovery`, `pelecard-pos-feedback`,
-   `pelecard-pos-payment`, and `pelecard-order-payment` from the reviewed tree.
-   The latter bundles contain the existing callback parser and verification
-   logic; the new worker reuses their guarded finalizers. Keep Payper dispatch,
+   `pelecard-pos-payment`, `pelecard-order-payment`, and the now source-tracked
+   `pelecard-order-feedback` receiver from the reviewed tree. Production
+   currently has an older Orders feedback function (v26); preserve its
+   snapshot for recovery. Confirm the
+   Orders hosted adapter points to that exact permanent callback URL. These
+   bundles contain the existing callback parser and verification logic; the
+   new worker reuses their guarded finalizers. Keep Payper dispatch,
    automatic wake, scan, customer email and POS initiation at their approved
    disabled values. A token-protected worker request must return HTTP 403 while
    its Edge gate is OFF. Do not install the cron schedule.
