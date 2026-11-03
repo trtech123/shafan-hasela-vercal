@@ -92,6 +92,7 @@ export function buildCreatePayperInvoice(
   const items = facts.checkoutSnapshot?.items;
   if (!Array.isArray(items) || items.length === 0 || items.length > 1000) throw new Error("payper_items_required");
   let totalMinor = 0;
+  // Payper catalog_id is an optional provider catalog number, not our UUID.
   let invoiceLines = items.map(item => {
     if (!safeText(item.name) || !safeText(item.id, 100) || !Number.isSafeInteger(item.qty) || item.qty <= 0)
       throw new Error("payper_items_invalid");
@@ -103,7 +104,7 @@ export function buildCreatePayperInvoice(
     if (!Number.isSafeInteger(totalMinor)) throw new Error("payper_amount_mismatch");
     return { description: item.name, quantity: String(item.qty), price_per_unit: String(unitMinor),
       include_vat: vat ? "true" as const : "false" as const,
-      ...(vat ? {} : { no_vat: "true" as const }), catalog_id: item.id };
+      ...(vat ? {} : { no_vat: "true" as const }), catalog_id: "" };
   });
   const finalMinor = minor(facts.amount);
   const discount = facts.checkoutSnapshot?.discount;
@@ -123,7 +124,7 @@ export function buildCreatePayperInvoice(
     if (!safeText(description, 200)) throw new Error("payper_description_required");
     invoiceLines = [{ description, quantity: "1", price_per_unit: String(finalMinor),
       include_vat: vat ? "true" as const : "false" as const,
-      ...(vat ? {} : { no_vat: "true" as const }), catalog_id: items[0].id }];
+      ...(vat ? {} : { no_vat: "true" as const }), catalog_id: "" }];
   } else if (totalMinor !== finalMinor) throw new Error("payper_amount_mismatch");
   return { terminalNumber: auth.terminalNumber, user: auth.user, password: auth.password,
     trxRecordId: recordId, Uid: "", PayperParameters: { typeDocument: "Invoice-Receipt", DataPayper: {

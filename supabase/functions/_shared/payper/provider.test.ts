@@ -37,7 +37,7 @@ describe("documented Pelecard Payper contract", () => {
           document_lang: "hb", customer_unique_id: "512783333",
           customer_mail: "billing@example.test", customer_name: "Example Ltd",
           document_subject: "ORD-1", document_no_vat: "false", document_rounded: "false",
-          invoice_lines: [{ description: "Climbing", quantity: "1", price_per_unit: "11800", include_vat: "true", catalog_id: "activity" }],
+          invoice_lines: [{ description: "Climbing", quantity: "1", price_per_unit: "11800", include_vat: "true", catalog_id: "" }],
         },
       },
     });
@@ -74,8 +74,21 @@ describe("documented Pelecard Payper contract", () => {
     twoUnits.checkoutSnapshot.items = [{ id: "activity", name: "Climbing", qty: 2, customPrice: 59.95 }];
     const data = buildCreatePayperInvoice(twoUnits, "103059585", gateway()).PayperParameters.DataPayper;
     expect(data.invoice_lines).toEqual([{ description: "Climbing", quantity: "2", price_per_unit: "5995",
-      include_vat: "true", catalog_id: "activity" }]);
+      include_vat: "true", catalog_id: "" }]);
     expect(data.document_rounded).toBe("false");
+  });
+
+  test("keeps the internal POS product UUID out of Payper's numeric catalog field", () => {
+    const sale = facts();
+    sale.orderId = null as never;
+    sale.orderNumber = "RCP-1021";
+    sale.amount = 4;
+    sale.checkoutSnapshot.items = [{ id: "8c73128f-713f-4e28-990c-f4e03835fa3f", name: "טרופית", qty: 1, customPrice: 4 }];
+    const request = buildCreatePayperInvoice(sale, "3176264291", gateway(), { sendByMail: true });
+    expect(request.PayperParameters.DataPayper.invoice_lines).toEqual([{
+      description: "טרופית", quantity: "1", price_per_unit: "400", include_vat: "true", catalog_id: "",
+    }]);
+    expect(request.PayperParameters.DataPayper.send_by_mail).toBe("true");
   });
 
   test("maps a server-frozen POS discount to the exact VAT-inclusive invoice total", () => {
@@ -89,7 +102,7 @@ describe("documented Pelecard Payper contract", () => {
     const data = buildCreatePayperInvoice(sale, "103059585", gateway()).PayperParameters.DataPayper;
     expect(data.document_subject).toBe("RCP-123");
     expect(data.invoice_lines).toEqual([{ description: "Water × 2 — הנחה כללית", quantity: "1",
-      price_per_unit: "100", include_vat: "true", catalog_id: "bottle" }]);
+      price_per_unit: "100", include_vat: "true", catalog_id: "" }]);
   });
   test("rejects a discounted source whose frozen line math disagrees with the charged amount", () => {
     const sale = facts();sale.orderId = null as never;sale.orderNumber = "RCP-124";sale.amount = 0.90;
