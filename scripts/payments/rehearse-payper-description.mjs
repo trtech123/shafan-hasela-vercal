@@ -1,10 +1,14 @@
 // Disposable in-memory PostgreSQL rehearsal. No remote connection or credentials.
 // Install once: npm install --prefix .tmp/payment-db --save-exact @electric-sql/pglite@0.5.8
 import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 
 const root = new URL('../../', import.meta.url);
-const { PGlite } = await import(new URL('.tmp/payment-db/node_modules/@electric-sql/pglite/dist/index.js', root));
+const moduleUrl = process.env.PAYPER_PGLITE_MODULE
+  ? pathToFileURL(process.env.PAYPER_PGLITE_MODULE)
+  : new URL('.tmp/payment-db/node_modules/@electric-sql/pglite/dist/index.js', root);
+const { PGlite } = await import(moduleUrl.href);
 const db = new PGlite();
 const order = '10000000-0000-4000-8000-000000000001';
 const activity = '20000000-0000-4000-8000-000000000001';

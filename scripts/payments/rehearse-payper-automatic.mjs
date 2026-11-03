@@ -210,6 +210,46 @@ try {
   await fail(`SELECT public.reserve_payper_dispatch('${oldPending}','100003')`, 'payper_activation_fence');
   await fail(`UPDATE public.payper_dispatch_control SET future_cutoff_utc=now()-interval '1 day'`,
     'payper_future_cutoff_immutable');
+  stage = 'repeatable future-only Payper canary epoch';
+  await db.query(`SELECT public.stop_payper_dispatch('${actor}')`);
+  await fail(`SELECT public.prepare_payper_next_canary('${actor}')`, 'payper_next_canary_not_ready');
+  await db.query(`SELECT public.record_payper_dispatch_outcome('${later}',
+    'reconciliation_required',NULL,NULL,'synthetic_uncertain_outcome')`);
+  const preservedCutoff = (await scalar('SELECT future_cutoff_utc AS value FROM public.payper_dispatch_control')).value;
+  await db.query("SELECT set_config('request.jwt.claim.role','authenticated',false)");
+  await fail(`SELECT public.prepare_payper_next_canary('${actor}')`, 'administrator_required');
+  await db.query("SELECT set_config('request.jwt.claim.role','service_role',false)");
+  const renewedCutoff = (await scalar(`SELECT public.prepare_payper_next_canary('${actor}') AS value`)).value;
+  assert.ok(new Date(renewedCutoff) > new Date(preservedCutoff));
+  assert.equal((await scalar('SELECT future_cutoff_utc AS value FROM public.payper_dispatch_control')).value.toISOString(),
+    preservedCutoff.toISOString());
+  assert.equal(Number((await scalar('SELECT count(*) AS count FROM public.payper_activation_epoch_audit')).count), 2);
+  assert.equal((await scalar('SELECT public.payper_effective_cutoff() AS value')).value.toISOString(),
+    renewedCutoff.toISOString());
+  await fail(`SELECT public.target_payper_canary('${actor}','${later}')`, 'payper_canary_payment_invalid');
+  assert.deepEqual((await db.query('SELECT public.list_payper_dispatch_candidates() AS id')).rows, []);
+  await fail(`SELECT public.prepare_payper_next_canary('${actor}')`, 'payper_next_canary_not_ready');
+  const renewed = (await scalar(`SELECT public.reserve_pos_pelecard('${actor}',
+    '92000000-0000-4000-8000-000000000017',
+    '[{"kind":"product","id":"92000000-0000-4000-8000-000000000002","qty":1}]',
+    NULL,'{"kind":"person","name":"Synthetic Customer","identity":"000000018","email":"synthetic@example.test"}')
+    AS value`)).value.paymentId;
+  await db.query(`SELECT public.target_payper_canary('${actor}','${renewed}')`);
+  await db.query(`SELECT public.claim_pos_pelecard_init('${renewed}')`);
+  await db.query(`SELECT public.persist_pos_pelecard_session('${renewed}',
+    '92000000-0000-4000-8000-000000000018','synthetic-key',
+    'https://gateway20.pelecard.biz/PaymentGW?transactionId=92000000-0000-4000-8000-000000000018')`);
+  await db.query(`SELECT public.observe_pos_pelecard('${renewed}','usable','000','000',true)`);
+  await db.query(`SELECT public.finalize_pos_pelecard('${renewed}','synthetic-approval')`);
+  assert.deepEqual((await db.query('SELECT public.list_payper_dispatch_candidates() AS id')).rows,
+    [{ id: renewed }]);
+  await db.query(`SELECT public.freeze_payper_source('${renewed}')`);
+  await db.query(`SELECT public.reserve_payper_dispatch('${renewed}','100006')`);
+  await db.query(`SELECT public.record_payper_dispatch_outcome('${renewed}',
+    'succeeded','900003','https://app.payper.co.il/public/invoice_show/900003?ak=synthetic',NULL)`);
+  await db.query(`SELECT public.enable_payper_continuous('${actor}')`);
+  assert.equal((await scalar('SELECT dispatch_mode AS value FROM public.payper_dispatch_control')).value,
+    'continuous');
   console.log('PASS automatic controls and synthetic POS payments: targeted canary, continuous dispatch, duplicate fence, emergency stop');
 } catch (error) {
   console.error(`FAIL ${stage}: ${error.message}`);
