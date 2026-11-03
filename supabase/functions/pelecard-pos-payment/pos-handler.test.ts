@@ -5,21 +5,21 @@ const requestKey='22222222-2222-4222-8222-222222222222';
 const productId='33333333-3333-4333-8333-333333333333';
 const actorId='44444444-4444-4444-8444-444444444444';
 function setup(role='cashier'){
-  let state='initiated';let saleId:string|null=null;
+  let state='initiated';let saleId:string|null=null;let hostedState='usable';
   const reserve=vi.fn(async()=>({paymentId,created:true,amountMinor:100}));
   const call=vi.fn(async(action:string)=>action==='lookup'?{StatusCode:'000',ResultData:{TransactionId:paymentId,
     ConfirmationKey:'confirmation',ShvaResult:'000',JParam:'4',DebitTotal:'100',DebitCurrency:'1',DebitType:'01',ApprovedBy:'1',DebitApproveNumber:'approval'}}:action==='validate'?1:{reachable:true});
-  const observe=vi.fn(async()=>undefined);
+  const observe=vi.fn(async(_id:string,nextState:string)=>{hostedState=nextState;});
   const finalize=vi.fn(async()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555';});
   const onPaymentFinalized=vi.fn();
   const log=vi.fn();
   const deps:PosDependencies={read:()=> 'true',allowedOrigins:['https://example.org'],log,
     auth:{authenticate:async()=>({id:actorId,role})},reserve,
     view:async()=>({paymentId,amountMinor:100,currency:'ILS',status:state,saleId,
-      receiptNumber:saleId?'RCP-1':null,hostedState:'usable',hostedExpiresAt:'2099-01-01T00:00:00Z',
+      receiptNumber:saleId?'RCP-1':null,hostedState,hostedExpiresAt:'2099-01-01T00:00:00Z',
       redirectUrl:`https://gateway20.pelecard.biz/PaymentGW?transactionId=${paymentId}`,canVerify:state==='pending_provider',dispatchStarted:state!=='initiated'}),
     get:async()=>({payment_id:paymentId,amount_minor:100,currency:'ILS',transaction_id:paymentId,
-      confirmation_key:'confirmation',hosted_state:'usable',hosted_expires_at:'2099-01-01T00:00:00Z'}),
+      confirmation_key:'confirmation',hosted_state:hostedState,hosted_expires_at:'2099-01-01T00:00:00Z'}),
     observe,finalize,onPaymentFinalized,call,cancel:async()=>true,
   };
   const handler=createPosHandler(deps);
@@ -65,6 +65,17 @@ describe('POS Edge payment boundary',()=>{
     const response=await s.post({action:'verify',paymentId});expect(response.status).toBe(200);
     expect((await response.json()).paid).toBe(false);expect(s.finalize).not.toHaveBeenCalled();
     expect(s.onPaymentFinalized).not.toHaveBeenCalled();
+    expect(s.call).not.toHaveBeenCalledWith('hosted',paymentId);
+  });
+  test('provider timeout closes the hosted link without declaring a charge outcome',async()=>{
+    const s=setup();s.setPending();s.call.mockImplementation(async(action:string)=>action==='lookup'
+      ?{StatusCode:'301',ResultData:null}:action==='validate'?1:{reachable:true});
+    const response=await s.post({action:'verify',paymentId});expect(response.status).toBe(200);
+    const body=await response.json();expect(body.paid).toBe(false);expect(body.canResume).toBe(false);
+    expect(body.verification).toMatchObject({approved:false,resolution:'unknown',apiStatus:'301'});
+    expect(s.observe).toHaveBeenCalledWith(paymentId,'expired','301',null,true);
+    expect(s.call).not.toHaveBeenCalledWith('hosted',paymentId);
+    expect(s.finalize).not.toHaveBeenCalled();expect(s.onPaymentFinalized).not.toHaveBeenCalled();
   });
   test('failed database finalization never wakes Payper',async()=>{
     const s=setup();s.setPending();s.finalize.mockRejectedValueOnce(new Error('database_unavailable'));

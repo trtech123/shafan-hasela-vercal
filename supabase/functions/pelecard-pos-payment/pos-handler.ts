@@ -48,13 +48,12 @@ export async function recoverPos(deps:PosDependencies,paymentId:string){
     transactionId:saved.transaction_id,confirmationKey:saved.confirmation_key,amountMinor:saved.amount_minor,currency:'ILS'});
   const correlated=await deps.call('validate',paymentId)===1;
   if(!correlated)throw new PaymentHttpError(409,'provider_correlation_mismatch');
-  let hostedState=Date.parse(saved.hosted_expires_at??'')<= (deps.now?.()??Date.now())?'expired':saved.hosted_state;
-  if(!evidence.approved&&hostedState!=='expired'){
-    try{const hosted=await deps.call('hosted',paymentId) as {state?:string;code?:string;reachable?:boolean};
-      if(hosted?.state==='expired'&&hosted.code==='0003')hostedState='expired';
-      else if(hosted?.reachable!==true)throw Error('hosted_session_unavailable');
-    }catch{throw new PaymentHttpError(503,'hosted_session_unavailable');}
-  }
+  // A GET of the hosted form is not a safe status probe: it revisits the
+  // buyer's one-time session. Pelecard's authoritative 301 means the session
+  // timed out; it is not evidence that the card was charged or declined.
+  const hostedState=evidence.apiStatus==='301'||
+    Date.parse(saved.hosted_expires_at??'')<= (deps.now?.()??Date.now())
+    ?'expired':saved.hosted_state;
   await deps.observe(paymentId,hostedState,evidence.apiStatus,evidence.transactionStatus,correlated);
   if(evidence.approved){
     await deps.finalize(paymentId,evidence.approvalId);
