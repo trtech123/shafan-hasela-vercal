@@ -6,12 +6,13 @@ import moment from "moment";
 
 export default function ReceiptScreen({ receipt, onNewSale }) {
   const receiptRef = useRef(null);
+  const deferred = receipt.method === 'חשבונית';
 
   const handlePrint = () => {
     const content = receiptRef.current.innerHTML;
     const win = window.open("", "_blank");
     win.document.write(`
-      <html dir="rtl"><head><title>קבלה</title>
+      <html dir="rtl"><head><title>אישור מכירה פנימי</title>
       <style>
         body { font-family: Arial, sans-serif; max-width: 320px; margin: 0 auto; padding: 20px; }
         h2 { text-align: center; } table { width: 100%; border-collapse: collapse; }
@@ -33,7 +34,7 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
           <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
             <CheckCircle className="w-10 h-10 text-emerald-400" />
           </div>
-          <h2 className="text-2xl font-bold">התשלום אושר!</h2>
+          <h2 className="text-2xl font-bold">{deferred ? 'המכירה נשמרה וממתינה לתשלום' : 'התשלום נרשם בקופה'}</h2>
           <p className="text-slate-400">אמצעי תשלום: <span className="text-white font-semibold">{receipt.method}</span></p>
         </div>
 
@@ -41,7 +42,8 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
         <div ref={receiptRef} className="bg-white text-slate-900 rounded-2xl p-6 space-y-4">
           <div className="text-center border-b border-slate-200 pb-3">
             <h2 className="font-bold text-lg">אדוונצ׳ר</h2>
-            <p className="text-slate-500 text-sm">קבלה מספר {receipt.receiptNumber}</p>
+            <p className="text-slate-500 text-sm">אישור מכירה פנימי {receipt.receiptNumber}</p>
+            <p className="text-slate-500 text-xs">אינו חשבונית מס או קבלה חשבונאית</p>
             <p className="text-slate-400 text-xs">{moment(receipt.timestamp).format("DD/MM/YYYY HH:mm")}</p>
           </div>
           <table className="w-full text-sm">
@@ -128,7 +130,7 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
             </div>
           )}
 
-          <p className="text-center text-slate-400 text-xs">תשלום ב{receipt.method} | אדוונצ׳ר — תודה!</p>
+          <p className="text-center text-slate-400 text-xs">{deferred ? 'חיוב מאוחר — טרם שולם' : `אמצעי תשלום: ${receipt.method}`} | אדוונצ׳ר — תודה!</p>
         </div>
 
         {/* Actions */}

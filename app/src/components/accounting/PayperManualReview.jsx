@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/api/supabaseClient';
+import RecordManualPayperDocument from './RecordManualPayperDocument';
 
 const reasons = {
   eligible: 'ממתין לעיבוד אוטומטי של Payper',
@@ -36,7 +37,7 @@ const reasons = {
 function reasonFor(row) {
   if (row.state === 'source_blocked' && row.reconciliation_code === 'provider_credentials_rejected')
     return 'פלאקארד דחתה את פרטי הגישה של שירות החשבוניות. יש לבדוק מסוף ומשתמש לפני ניסיון מאושר נוסף';
-  return reasons[row.state] ?? reasons[row.reconciliation_code] ?? 'נדרשת התאמה ידנית';
+  return reasons[row.reconciliation_code] ?? reasons[row.state] ?? 'נדרשת התאמה ידנית';
 }
 
 export default function PayperManualReview() {
@@ -47,7 +48,7 @@ export default function PayperManualReview() {
     (async () => {
       try {
         const { data, error } = await supabase.from('payper_accounting_exceptions')
-          .select('payment_id,order_id,sale_id,order_number,provider_transaction_id,state,reconciliation_code,created_at')
+          .select('payment_id,order_id,sale_id,order_number,provider_transaction_id,provider_trx_record_id,amount,state,reconciliation_code,created_at')
           .in('state', ['eligible', 'source_frozen', 'dispatch_reserved', 'source_blocked', 'reconciliation_required', 'missing_ledger'])
           .order('created_at', { ascending: false }).limit(100);
         if (!active) return;
@@ -58,7 +59,7 @@ export default function PayperManualReview() {
     const timer = setInterval(async () => {
       try {
         const { data, error } = await supabase.from('payper_accounting_exceptions')
-          .select('payment_id,order_id,sale_id,order_number,provider_transaction_id,state,reconciliation_code,created_at')
+          .select('payment_id,order_id,sale_id,order_number,provider_transaction_id,provider_trx_record_id,amount,state,reconciliation_code,created_at')
           .in('state', ['eligible', 'source_frozen', 'dispatch_reserved', 'source_blocked', 'reconciliation_required', 'missing_ledger'])
           .order('created_at', { ascending: false }).limit(100);
         if (active && !error) { setRows(data ?? []); setUnavailable(false); }
@@ -81,9 +82,14 @@ export default function PayperManualReview() {
         <strong>{reasonFor(row)}</strong>
         <span className="block font-mono text-xs">תשלום: {row.payment_id} · {row.order_id?`הזמנה: ${row.order_number ?? row.order_id}`:`מכירת קופה: ${row.sale_id}`}</span>
         {row.provider_transaction_id && <span className="block font-mono text-xs">עסקת פלאקארד: {row.provider_transaction_id}</span>}
+        {row.provider_trx_record_id && <span className="block font-mono text-xs">רשומת פלאקארד: {row.provider_trx_record_id}</span>}
+        {row.amount != null && <span className="block text-xs">סכום ששולם: ₪{Number(row.amount).toFixed(2)}</span>}
         <span className="block text-xs">{['eligible', 'source_frozen'].includes(row.state)
           ? 'התשלום נשמר. ההפקה ממתינה לעיבוד מורשה; אין להפיק מסמך דרך Rivhit.'
           : 'התשלום נשמר. אין להפיק מסמך חוזר אוטומטית או דרך Rivhit.'}</span>
+        {row.state === 'reconciliation_required' && row.provider_trx_record_id && row.amount != null &&
+          <RecordManualPayperDocument paymentId={row.payment_id} amount={row.amount}
+            onRecorded={() => setRows(current => current.filter(item => item.payment_id !== row.payment_id))} />}
       </li>)}</ul>}
   </section>;
 }

@@ -39,3 +39,11 @@ test('does not claim there are no documents when the protected query fails', asy
   render(<PayperIssuedDocuments />);
   expect(await screen.findByRole('alert')).toHaveTextContent('לא ניתן לטעון');
 });
+
+test('labels a manually reconciled document distinctly from automatic issuance', async () => {
+  withRows([{ payment_id: 'payment-1', sale_id: 'sale-1', document_origin: 'manual',
+    document_number: '595166', provider_trx_record_id: '103059585',
+    document_url: 'https://app.payper.co.il/public/invoice_show/595166' }]);
+  render(<PayperIssuedDocuments />);
+  expect(await screen.findByText(/נרשם ידנית לאחר אימות/)).toBeInTheDocument();
+});

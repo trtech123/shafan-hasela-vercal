@@ -56,6 +56,7 @@ export default function PaymentScreen({
   pelecardBusy = false,
   pelecardEnabled = false,
   pelecardHint,
+  manualSaleSaving = false,
 }) {
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
   const [detailFor, setDetailFor] = useState(null);
@@ -198,7 +199,7 @@ export default function PaymentScreen({
 
           <Button
             onClick={submitSplit}
-            disabled={!splitValid}
+            disabled={!splitValid || manualSaleSaving}
             className="w-full h-14 text-lg font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-2xl"
           >
             אשר תשלום מפוצל
@@ -254,7 +255,7 @@ export default function PaymentScreen({
 
           <Button
             onClick={submitCheck}
-            disabled={!valid}
+            disabled={!valid || manualSaleSaving}
             className="w-full h-14 text-lg font-bold bg-rose-600 hover:bg-rose-500 disabled:opacity-50 rounded-2xl"
           >
             אשר תשלום בצ'ק
@@ -301,6 +302,7 @@ export default function PaymentScreen({
               <button
                 key={method.key}
                 onClick={() => handleMethodClick(method.key)}
+                disabled={manualSaleSaving}
                 className={`w-full bg-gradient-to-l ${method.color} rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right`}
               >
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -318,6 +320,7 @@ export default function PaymentScreen({
           {/* Split payment entry */}
           <button
             onClick={enterSplit}
+            disabled={manualSaleSaving}
             className="w-full mt-2 border border-dashed border-slate-600 rounded-2xl p-4 flex items-center gap-4 hover:bg-slate-800 active:scale-[0.98] transition-all text-right"
           >
             <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
