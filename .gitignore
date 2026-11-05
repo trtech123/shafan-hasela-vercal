@@ -53,3 +53,5 @@ backups/
 
 # Supabase CLI local cache (project metadata, pooler host) — never commit
 supabase/.temp/
+.vercel
+.env*
