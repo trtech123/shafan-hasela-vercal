@@ -252,6 +252,23 @@ try {
   await fail(`SELECT public.prepare_payper_next_canary('${actor}')`, 'payper_next_canary_not_ready');
   await db.query(`SELECT public.record_payper_dispatch_outcome('${later}',
     'reconciliation_required',NULL,NULL,'synthetic_uncertain_outcome')`);
+  const accountantHeld = await makePos('92000000-0000-4000-8000-000000000021',
+    '92000000-0000-4000-8000-000000000022');
+  await fail(`SELECT public.prepare_payper_next_canary('${actor}')`, 'payper_next_canary_not_ready');
+  await db.query(`SELECT public.hold_payper_for_accountant('${accountantHeld}','${actor}')`);
+  assert.deepEqual(await scalar(`SELECT l.state,l.reconciliation_code,p.status
+    FROM public.payper_document_ledger l JOIN public.payment_transactions p ON p.id=l.payment_id
+    WHERE l.payment_id='${accountantHeld}'`), {
+    state: 'source_blocked', reconciliation_code: 'manual_accounting_hold', status: 'succeeded',
+  });
+  assert.equal((await scalar(`SELECT exception_kind AS value FROM public.payper_accounting_exceptions
+    WHERE payment_id='${accountantHeld}'`)).value, 'manual_accounting_hold');
+  assert.equal(Number((await scalar(`SELECT count(*) AS count FROM public.payper_manual_accounting_holds
+    WHERE payment_id='${accountantHeld}' AND reason_code='accountant_managed'`)).count), 1);
+  await fail(`SELECT public.hold_payper_for_accountant('${accountantHeld}','${actor}')`,
+    'payper_manual_hold_not_safe');
+  await fail(`DELETE FROM public.payper_manual_accounting_holds
+    WHERE payment_id='${accountantHeld}'`, 'payper_manual_hold_immutable');
   const preservedCutoff = (await scalar('SELECT future_cutoff_utc AS value FROM public.payper_dispatch_control')).value;
   await db.query("SELECT set_config('request.jwt.claim.role','authenticated',false)");
   await fail(`SELECT public.prepare_payper_next_canary('${actor}')`, 'administrator_required');
@@ -264,6 +281,8 @@ try {
   assert.equal((await scalar('SELECT public.payper_effective_cutoff() AS value')).value.toISOString(),
     renewedCutoff.toISOString());
   await fail(`SELECT public.target_payper_canary('${actor}','${later}')`, 'payper_canary_payment_invalid');
+  await fail(`SELECT public.target_payper_canary('${actor}','${accountantHeld}')`,
+    'payper_canary_payment_invalid');
   assert.deepEqual((await db.query('SELECT public.list_payper_dispatch_candidates() AS id')).rows, []);
   await fail(`SELECT public.prepare_payper_next_canary('${actor}')`, 'payper_next_canary_not_ready');
   const renewed = (await scalar(`SELECT public.reserve_pos_pelecard('${actor}',

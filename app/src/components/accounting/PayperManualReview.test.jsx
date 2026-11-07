@@ -47,6 +47,18 @@ test('shows the durable missing-service-description review reason', async () => 
   expect(await screen.findByText('נדרש בירור תיאור השירות בחשבונית')).toBeInTheDocument();
 });
 
+test('shows an accountant-managed paid sale as an actionable manual obligation', async () => {
+  query.mockReturnValue({ select: () => ({ in: () => ({ order: () => ({ limit: () => Promise.resolve({
+    data: [{ payment_id: 'held-payment', sale_id: 'sale-1024', amount: 0.15,
+      state: 'source_blocked', reconciliation_code: 'manual_accounting_hold' }], error: null,
+  }) }) }) }) });
+  render(<PayperManualReview />);
+  expect(await screen.findByText(/התשלום הועבר לטיפול חשבונאי ידני/)).toBeInTheDocument();
+  expect(screen.getByText(/held-payment/)).toBeInTheDocument();
+  expect(screen.getByText(/₪0.15/)).toBeInTheDocument();
+  expect(screen.queryByText(/מסמך שהופק/)).not.toBeInTheDocument();
+});
+
 test('warns the administrator that a provider timeout cannot be retried automatically', async () => {
   query.mockReturnValue({ select: () => ({ in: () => ({ order: () => ({ limit: () => Promise.resolve({
     data: [{ payment_id: 'payment-3', order_id: 'order-3', state: 'reconciliation_required',

@@ -12,6 +12,7 @@ const reasons = {
   service_description_required: 'נדרש בירור תיאור השירות בחשבונית',
   vat_treatment_required: 'נדרש בירור סיווג מע״מ',
   pre_dispatch_review_required: 'נדרשת בדיקה לפני הפקת מסמך',
+  manual_accounting_hold: 'התשלום הועבר לטיפול חשבונאי ידני; אין להפיק מסמך אוטומטית. יש לתעד את מסמך רואה החשבון לאחר אימות.',
   payper_lookup_failed: 'בדיקת עסקת פלאקארד נכשלה לפני בקשת חשבונית. יש לבדוק את החיבור לספק',
   payper_transaction_mismatch: 'פרטי עסקת פלאקארד אינם תואמים לתשלום השמור. נדרשת התאמה ידנית',
   payper_billing_incomplete: 'פרטי החיוב אינם מספקים להפקת חשבונית. יש לבדוק את הרשומה המאומתת',
