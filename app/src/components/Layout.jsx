@@ -45,9 +45,6 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex" dir="rtl">
-      {role === "admin" && <div className="fixed left-3 top-3 z-50 max-w-sm space-y-2">
-        <PayperAdminAlert /><PelecardPendingAlert />
-      </div>}
       {/* One-time site-opening form prompt (field roles only, once per session) */}
       <SiteOpeningPrompt />
 
@@ -126,6 +123,9 @@ export default function Layout() {
         </div>
 
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
+          {role === "admin" && <div className="mb-4 space-y-2 empty:hidden">
+            <PayperAdminAlert /><PelecardPendingAlert />
+          </div>}
           <Outlet />
         </div>
       </main>

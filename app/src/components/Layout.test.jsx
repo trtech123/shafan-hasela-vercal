@@ -84,6 +84,14 @@ describe("Clubs navigation and route authorization", () => {
 });
 
 describe("Accounting operations navigation and route authorization", () => {
+  test("operational alerts sit in page flow instead of covering navigation", () => {
+    const { container } = renderAtAccounting('admin');
+    const alertSlot = container.querySelector('main .mb-4.space-y-2');
+    expect(alertSlot).toBeInTheDocument();
+    expect(alertSlot).not.toHaveClass('fixed');
+    expect(container.querySelector('.fixed.left-3.top-3')).toBeNull();
+  });
+
   test.each(["admin", 'אחמ"ש'])("%s sees and can open accounting operations", (role) => {
     renderAtAccounting(role);
 
