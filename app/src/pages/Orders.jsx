@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Pencil, Trash2, Mail, FileText, CheckCircle2, Link2, Lock, CalendarClock } from "lucide-react";
+import { Plus, Search, Pencil, Archive, RotateCcw, Mail, FileText, CheckCircle2, Link2, Lock, CalendarClock } from "lucide-react";
 import InstructorEmailDialog from "../components/orders/InstructorEmailDialog";
 import InstructorDailyDialog from "../components/orders/InstructorDailyDialog";
 import OrderConfirmationPDF from "../components/orders/OrderConfirmationPDF";
@@ -20,6 +20,7 @@ import {
 import { useAuth } from "@/lib/AuthContext";
 import { orderPaymentPath } from "@/payments/orderPayments";
 import { toast } from "sonner";
+import { orderArchiveError } from "@/components/orders/orderArchiveError";
 
 const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
 
@@ -28,11 +29,14 @@ export default function Orders() {
   // Hebrew-mapped role strings from AuthContext: 'admin' / 'אחמ"ש' / 'מדריך'.
   // Lock-this-slot is admin/ops only (RLS blocks anyone else server-side too).
   const isAdminOrOps = user?.role === "admin" || user?.role === 'אחמ"ש';
+  const isAdmin = user?.role === "admin";
 
   const [orders, setOrders] = useState([]);
   const [activities, setActivities] = useState([]);
   const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [archiveView, setArchiveView] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [siteFilter, setSiteFilter] = useState("all");
@@ -41,14 +45,20 @@ export default function Orders() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [billingOrder, setBillingOrder] = useState(null);
-  const [deleteId, setDeleteId] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [externalConfirmed, setExternalConfirmed] = useState(false);
+  const [actionError, setActionError] = useState(null);
+  const actionInFlight = useRef(false);
+  const loadRequest = useRef(0);
   const [emailOrder, setEmailOrder] = useState(null);
   const [dailyOrder, setDailyOrder] = useState(null); // triggers the daily-summary dialog
   const [pdfOrder, setPdfOrder] = useState(null); // combined order-confirmation PDF
   // Order being prepared for "lock this slot" — null when no confirm dialog open.
   const [lockingOrder, setLockingOrder] = useState(null);
 
-  const loadData = async () => {
+  const loadData = async (showArchived = archiveView) => {
+    const request = ++loadRequest.current;
     try {
       const [
         { data: o, error: eO },
@@ -56,29 +66,37 @@ export default function Orders() {
         { data: ins, error: eI },
         { data: q, error: eQ },
       ] = await Promise.all([
-        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(100),
+        showArchived
+          ? supabase.from('orders').select('*').not('archived_at', 'is', null).order('archived_at', { ascending: false }).limit(100)
+          : supabase.from('orders').select('*').is('archived_at', null).order('created_at', { ascending: false }).limit(100),
         supabase.from('activities').select('*'),
         supabase.from('instructors').select('*'),
         supabase.from('quotes').select('id, quote_number, client_name, event_date').order('created_at', { ascending: false }).limit(200),
       ]);
 
-      if (eO) console.error('orders error:', eO);
+      if (eO) throw eO;
       if (eA) console.error('activities error:', eA);
       if (eI) console.error('instructors error:', eI);
       if (eQ) console.error('quotes error:', eQ);
 
+      if (request !== loadRequest.current) return;
       setOrders(o ?? []);
+      setLoadError(null);
       setActivities(a ?? []);
       setInstructors(ins ?? []);
       setQuotes(q ?? []);
     } catch (err) {
       console.error('Orders loadData error:', err);
+      if (request === loadRequest.current) {
+        setOrders([]);
+        setLoadError(err?.message || 'לא ניתן לטעון את ההזמנות');
+      }
     } finally {
-      setLoading(false);
+      if (request === loadRequest.current) setLoading(false);
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { setLoading(true); loadData(archiveView); }, [archiveView]);
 
   const getActivityName = (activityId) => {
     const act = activities.find(a => a.id === activityId);
@@ -114,11 +132,41 @@ export default function Orders() {
     return matchSearch && matchStatus && matchSite && matchCategory;
   });
 
-  const handleDelete = async () => {
-    const { error } = await supabase.from('orders').delete().eq('id', deleteId);
-    if (error) console.error('delete error:', error);
-    setDeleteId(null);
-    loadData();
+  const openArchiveAction = (order, action) => {
+    setExternalConfirmed(false);
+    setActionError(null);
+    setPendingAction({ order, action });
+  };
+
+  const handleArchiveAction = async () => {
+    if (!isAdmin || !pendingAction || actionInFlight.current ||
+        (pendingAction.action === 'archive' && !externalConfirmed)) return;
+    actionInFlight.current = true;
+    setActionBusy(true);
+    const { order, action } = pendingAction;
+    try {
+      const { data, error } = await supabase.rpc(
+        action === 'archive' ? 'archive_order' : 'restore_order',
+        action === 'archive'
+          ? { p_order_id: order.id, p_confirm_no_external_commitments: externalConfirmed }
+          : { p_order_id: order.id }
+      );
+      if (error) throw error;
+      if (data?.id !== order.id || (action === 'archive' ? !data.archived_at : !!data.archived_at)) {
+        throw new Error('פעולת הארכוב לא אושרה על ידי מסד הנתונים');
+      }
+      setOrders(prev => prev.filter(item => item.id !== order.id));
+      setPendingAction(null);
+      setActionError(null);
+      toast.success(action === 'archive' ? 'ההזמנה הועברה לארכיון' : 'ההזמנה שוחזרה לרשימת ההזמנות');
+    } catch (error) {
+      const message = orderArchiveError(error);
+      setActionError(message);
+      toast.error(message);
+    } finally {
+      actionInFlight.current = false;
+      setActionBusy(false);
+    }
   };
 
   const markNotified = async (orderId) => {
@@ -197,12 +245,18 @@ export default function Orders() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">הזמנות</h1>
-          <p className="text-muted-foreground mt-1">{orders.length} הזמנות סה״כ</p>
+          <p className="text-muted-foreground mt-1">{orders.length} {archiveView ? 'הזמנות בארכיון' : 'הזמנות פעילות'}</p>
         </div>
-        <Button onClick={() => { setEditingOrder(null); setDialogOpen(true); }} className="gap-2 hidden sm:inline-flex">
+        {!archiveView && <Button onClick={() => { setEditingOrder(null); setDialogOpen(true); }} className="gap-2 hidden sm:inline-flex">
           <Plus className="w-4 h-4" /> הזמנה חדשה
-        </Button>
+        </Button>}
       </div>
+
+      {isAdmin && <div className="flex gap-2" role="group" aria-label="תצוגת הזמנות">
+        <Button type="button" variant={archiveView ? 'outline' : 'default'} onClick={() => setArchiveView(false)}>הזמנות פעילות</Button>
+        <Button type="button" variant={archiveView ? 'default' : 'outline'} onClick={() => setArchiveView(true)}>ארכיון</Button>
+      </div>}
+      {loadError && <p role="alert" className="text-destructive">שגיאה בטעינת ההזמנות: {loadError}</p>}
 
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -317,32 +371,32 @@ export default function Orders() {
               <div className="flex items-center justify-between pt-1">
                 <PaymentBadge status={order.payment_status} />
                 <div className="flex gap-0.5">
-                  {(user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
-                  {(user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
-                  <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-2 hover:bg-muted rounded-lg transition-colors">
+                  {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
+                  {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
+                  {!archiveView && <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     <Pencil className="w-4 h-4 text-muted-foreground" />
-                  </button>
+                  </button>}
                   <button onClick={() => setPdfOrder(order)} className="p-2 hover:bg-primary/10 rounded-lg transition-colors" title="אישור הזמנה ללקוח">
                     <FileText className="w-4 h-4 text-primary" />
                   </button>
-                  {order.instructor_id && (
+                  {!archiveView && order.instructor_id && (
                     <button onClick={() => setEmailOrder(order)} className="p-2 hover:bg-blue-50 rounded-lg transition-colors" title="שלח מייל למדריך">
                       <Mail className="w-4 h-4 text-blue-400" />
                     </button>
                   )}
-                  {order.instructor_id && (
+                  {!archiveView && order.instructor_id && (
                     <button onClick={() => setDailyOrder(order)} className="p-2 hover:bg-indigo-50 rounded-lg transition-colors" title="סיכום יומי למדריך">
                       <CalendarClock className="w-4 h-4 text-indigo-400" />
                     </button>
                   )}
-                  {isAdminOrOps && canLockOrder(order) && (
+                  {!archiveView && isAdminOrOps && canLockOrder(order) && (
                     <button onClick={() => setLockingOrder(order)} className="p-2 hover:bg-red-50 rounded-lg transition-colors" title="חסום שעות אלו לאחרים">
                       <Lock className="w-4 h-4 text-red-500" />
                     </button>
                   )}
-                  <button onClick={() => setDeleteId(order.id)} className="p-2 hover:bg-red-50 rounded-lg transition-colors">
-                    <Trash2 className="w-4 h-4 text-red-400" />
-                  </button>
+                  {isAdmin && <button aria-label={archiveView ? 'שחזור הזמנה' : 'העברת הזמנה לארכיון'} onClick={() => openArchiveAction(order, archiveView ? 'restore' : 'archive')} className="p-2 hover:bg-muted rounded-lg transition-colors">
+                    {archiveView ? <RotateCcw className="w-4 h-4 text-primary" /> : <Archive className="w-4 h-4 text-muted-foreground" />}
+                  </button>}
                 </div>
               </div>
             </div>
@@ -406,32 +460,32 @@ export default function Orders() {
                     <td className="px-4 py-3 hidden lg:table-cell font-medium">₪{(order.total_price || 0).toLocaleString()}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        {(user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
-                        {(user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
-                        <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+                        {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
+                        {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
+                        {!archiveView && <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                           <Pencil className="w-4 h-4 text-muted-foreground" />
-                        </button>
+                        </button>}
                         <button onClick={() => setPdfOrder(order)} className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors" title="אישור הזמנה ללקוח">
                           <FileText className="w-4 h-4 text-primary" />
                         </button>
-                        {order.instructor_id && (
+                        {!archiveView && order.instructor_id && (
                           <button onClick={() => setEmailOrder(order)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="שלח מייל למדריך">
                             <Mail className="w-4 h-4 text-blue-400" />
                           </button>
                         )}
-                        {order.instructor_id && (
+                        {!archiveView && order.instructor_id && (
                           <button onClick={() => setDailyOrder(order)} className="p-1.5 hover:bg-indigo-50 rounded-lg transition-colors" title="סיכום יומי למדריך">
                             <CalendarClock className="w-4 h-4 text-indigo-400" />
                           </button>
                         )}
-                        {isAdminOrOps && canLockOrder(order) && (
+                        {!archiveView && isAdminOrOps && canLockOrder(order) && (
                           <button onClick={() => setLockingOrder(order)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" title="חסום שעות אלו לאחרים">
                             <Lock className="w-4 h-4 text-red-500" />
                           </button>
                         )}
-                        <button onClick={() => setDeleteId(order.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
-                          <Trash2 className="w-4 h-4 text-red-400" />
-                        </button>
+                        {isAdmin && <button aria-label={archiveView ? 'שחזור הזמנה' : 'העברת הזמנה לארכיון'} onClick={() => openArchiveAction(order, archiveView ? 'restore' : 'archive')} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+                          {archiveView ? <RotateCcw className="w-4 h-4 text-primary" /> : <Archive className="w-4 h-4 text-muted-foreground" />}
+                        </button>}
                       </div>
                     </td>
                   </tr>
@@ -479,15 +533,24 @@ export default function Orders() {
         />
       )}
 
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+      <AlertDialog open={!!pendingAction} onOpenChange={() => { if (!actionInFlight.current) { setPendingAction(null); setActionError(null); } }}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת הזמנה</AlertDialogTitle>
-            <AlertDialogDescription>האם את בטוחה שברצונך למחוק את ההזמנה? פעולה זו בלתי הפיכה.</AlertDialogDescription>
+            <AlertDialogTitle>{pendingAction?.action === 'restore' ? 'שחזור הזמנה' : 'העברת הזמנה לארכיון'}</AlertDialogTitle>
+            <AlertDialogDescription>{pendingAction?.action === 'restore'
+              ? 'האם לשחזר את ההזמנה לרשימת ההזמנות הפעילות?'
+              : 'ההזמנה תועבר לארכיון ותוסר מהרשימה הפעילה. פרטי ההזמנה והקשרים ההיסטוריים יישמרו. ארכוב אינו מבטל פעילות או תשלום.'}</AlertDialogDescription>
           </AlertDialogHeader>
+          {pendingAction?.action === 'archive' && <label className="flex items-start gap-2 text-sm leading-6">
+            <input type="checkbox" checked={externalConfirmed} onChange={event => setExternalConfirmed(event.target.checked)} disabled={actionBusy} className="mt-1" />
+            <span>בדקתי שאין ללקוח אישור שנשלח או התחייבות חיצונית פתוחה, ואני מאשר/ת להעביר את ההזמנה לארכיון.</span>
+          </label>}
+          {actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}
           <AlertDialogFooter className="flex-row-reverse gap-2">
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">מחק</AlertDialogAction>
+            <AlertDialogCancel disabled={actionBusy}>ביטול</AlertDialogCancel>
+            <AlertDialogAction disabled={actionBusy || (pendingAction?.action === 'archive' && !externalConfirmed)} onClick={event => { event.preventDefault(); handleArchiveAction(); }}>
+              {actionBusy ? 'מבצע...' : pendingAction?.action === 'restore' ? 'שחזר' : 'העבר לארכיון'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

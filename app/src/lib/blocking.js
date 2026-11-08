@@ -79,7 +79,7 @@ export function findConflictingOrders(orders, proposed, currentOrderId = null) {
   if (!proposed.activity_date || !proposed.start_time ||
       (proposed.end_time && tnorm(proposed.start_time) >= tnorm(proposed.end_time))) return [];
   return orders.filter((order) =>
-    order.id !== currentOrderId && order.status !== "בוטל" &&
+    order.id !== currentOrderId && order.status !== "בוטל" && !order.archived_at &&
     order.activity_date === proposed.activity_date &&
     ((proposed.site && order.site === proposed.site) ||
       (proposed.instructor_id && order.instructor_id === proposed.instructor_id) ||

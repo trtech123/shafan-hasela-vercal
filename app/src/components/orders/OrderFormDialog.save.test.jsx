@@ -14,6 +14,7 @@ vi.mock('@/api/supabaseClient', () => ({
     let mutation = false;
     const builder = {
       select: () => builder,
+      is: () => builder,
       eq: () => builder,
       order: () => builder,
       limit: () => builder,
@@ -93,6 +94,17 @@ describe('existing order save', () => {
     fireEvent.submit(document.querySelector('form'));
     fireEvent.click(await screen.findByRole('button', { name: 'אישור והמשך בכל זאת' }));
     await waitFor(() => expect(state.writes).toHaveLength(1));
+  });
+
+  test('an archived booking does not block an active order save', async () => {
+    state.orders = [{ ...order, id: 'archived', order_number: 'ORD-OLD',
+      activity_date: '2026-11-11', start_time: '10:30:00', archived_at: '2026-11-04T10:00:00Z' }];
+    renderDialog();
+    await waitFor(() => expect(document.querySelector('input[type="date"]')).toHaveValue('2026-11-10'));
+    fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-11' } });
+    fireEvent.submit(document.querySelector('form'));
+    await waitFor(() => expect(state.writes).toHaveLength(1));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
   test('editing onto a partial same-day booking warns without treating itself as a conflict', async () => {

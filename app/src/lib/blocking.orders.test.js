@@ -16,6 +16,9 @@ describe("order overlap warning", () => {
   test("does not invent a conflict for an incomplete time range", () => {
     expect(findConflictingOrders([row()], { ...proposed, end_time: null })).toEqual([]);
   });
+  test("ignores an archived order in operational conflict checks", () => {
+    expect(findConflictingOrders([row({ archived_at: "2026-11-04T10:00:00Z" })], proposed)).toEqual([]);
+  });
   test("warns when a same-day order has an unrecorded site and end time but the start overlaps", () => {
     const existing = row({ site: null, instructor_id: null, start_time: "09:00:00", end_time: null, status: "ממתין לאישור" });
     const candidate = { ...proposed, site: "עכו", start_time: "09:00", end_time: "10:00" };

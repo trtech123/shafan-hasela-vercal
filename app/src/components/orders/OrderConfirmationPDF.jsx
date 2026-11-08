@@ -393,7 +393,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {busy ? "מפיק PDF..." : "הורד PDF"}
             </Button>
-            <Button
+            {!order.archived_at && <Button
               onClick={handleEmail}
               disabled={emailBusy}
               variant="outline"
@@ -402,8 +402,8 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
             >
               {emailBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
               {emailBusy ? "שולח..." : emailSent ? "נשלח ✓" : "שלח במייל"}
-            </Button>
-            <Button
+            </Button>}
+            {!order.archived_at && <Button
               variant="outline"
               className="gap-2 border-green-700 text-green-800 hover:bg-green-50"
               onClick={handleWhatsAppAPI}
@@ -416,7 +416,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
                 : waResult?.type === "error"
                   ? "נסה לשלוח שוב בוואטסאפ"
                   : "שלח אישור בוואטסאפ")}
-            </Button>
+            </Button>}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
@@ -436,7 +436,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
           </p>
         )}
 
-        <div className="mb-3 rounded-xl bg-white px-3 py-3 shadow-sm">
+        {!order.archived_at && <div className="mb-3 rounded-xl bg-white px-3 py-3 shadow-sm">
           {isEditingEmail ? (
             <div>
               <Label htmlFor="order-pdf-recipient-email" className="text-sm font-medium text-slate-700">
@@ -488,7 +488,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
               </Button>
             </div>
           )}
-        </div>
+        </div>}
 
         <div className="space-y-4">
           {/* ===================== SECTION A — order confirmation ===================== */}

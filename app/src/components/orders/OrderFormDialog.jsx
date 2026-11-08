@@ -214,7 +214,7 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
       if (!isTaskMode && data.activity_date) {
         const [blocksResult, ordersResult] = await Promise.all([
           supabase.from('blocked_slots').select('id, block_date, site, start_time, end_time, reason, source, source_order_id').eq('block_date', data.activity_date),
-          supabase.from('orders').select('id, order_number, activity_date, start_time, end_time, site, instructor_id, status').eq('activity_date', data.activity_date),
+          supabase.from('orders').select('id, order_number, activity_date, start_time, end_time, site, instructor_id, status').is('archived_at', null).eq('activity_date', data.activity_date),
         ]);
         if (blocksResult.error || ordersResult.error || !blocksResult.data || !ordersResult.data) {
           throw blocksResult.error || ordersResult.error || new Error('Availability query returned no rows');

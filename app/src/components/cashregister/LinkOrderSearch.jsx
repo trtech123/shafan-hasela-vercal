@@ -23,6 +23,7 @@ export default function LinkOrderSearch({ linkedOrder, onSelect, onClear }) {
       const { data, error } = await supabase
         .from("orders")
         .select("id, order_number, client_name, client_phone, organization, activity_date")
+        .is("archived_at", null)
         .or(
           `client_name.ilike.${like},client_phone.ilike.${like},order_number.ilike.${like},organization.ilike.${like}`,
         )

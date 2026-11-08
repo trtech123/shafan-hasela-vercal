@@ -68,7 +68,7 @@ export default function Schedule() {
   const loadOrders = useCallback(async () => {
     const first = currentMonth.clone().startOf('month').startOf('week').format('YYYY-MM-DD');
     const last = currentMonth.clone().endOf('month').endOf('week').format('YYYY-MM-DD');
-    const { data, error } = await supabase.from('orders').select('*')
+    const { data, error } = await supabase.from('orders').select('*').is('archived_at', null)
       .gte('activity_date', first).lte('activity_date', last);
     if (error) {
       console.error('orders fetch error:', error);

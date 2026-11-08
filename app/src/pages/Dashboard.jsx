@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/api/supabaseClient";
-import { ClipboardList, Users, CalendarDays, Banknote, ShieldCheck, Mail, Link } from "lucide-react";
+import { ClipboardList, Users, CalendarDays, Banknote, ShieldCheck } from "lucide-react";
 import StatsCard from "../components/dashboard/StatsCard";
 import RecentOrders from "../components/dashboard/RecentOrders";
 import moment from "moment";
 
 export default function Dashboard() {
   const [orders, setOrders] = useState([]);
+  const [activeOrders, setActiveOrders] = useState([]);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,16 +16,20 @@ export default function Dashboard() {
       try {
         const [
           { data: ordersData, error: eO },
+          { data: activeOrdersData, error: eActive },
           { data: activitiesData, error: eA },
         ] = await Promise.all([
           supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(50),
+          supabase.from('orders').select('*').is('archived_at', null).order('created_at', { ascending: false }).limit(50),
           supabase.from('activities').select('*'),
         ]);
 
         if (eO) console.error('orders fetch error:', eO);
+        if (eActive) console.error('active orders fetch error:', eActive);
         if (eA) console.error('activities fetch error:', eA);
 
         setOrders(ordersData ?? []);
+        setActiveOrders(activeOrdersData ?? []);
         setActivities(activitiesData ?? []);
       } catch (err) {
         console.error('Dashboard load error:', err);
@@ -43,10 +48,10 @@ export default function Dashboard() {
     );
   }
 
-  const thisMonth = orders.filter(o => moment(o.activity_date).isSame(moment(), "month") && o.status !== "בוטל");
+  const thisMonth = activeOrders.filter(o => moment(o.activity_date).isSame(moment(), "month") && o.status !== "בוטל");
   const totalRevenue = orders.filter(o => o.status === "שולם").reduce((sum, o) => sum + (o.total_price || 0), 0);
   const totalParticipants = thisMonth.reduce((sum, o) => sum + (o.num_participants || 0), 0);
-  const pendingOrders = orders.filter(o => o.status === "ממתין לאישור");
+  const pendingOrders = activeOrders.filter(o => o.status === "ממתין לאישור");
 
   return (
     <div className="space-y-8" dir="rtl">
@@ -62,7 +67,7 @@ export default function Dashboard() {
         <StatsCard icon={Banknote} label="הכנסות (שולם)" value={`₪${totalRevenue.toLocaleString()}`} subtitle="סה״כ שולם" color="green" />
       </div>
 
-      <RecentOrders orders={orders} activities={activities} />
+      <RecentOrders orders={activeOrders} activities={activities} />
 
       {/* Login instructions */}
       <div className="bg-card border border-border rounded-2xl p-6" dir="rtl">

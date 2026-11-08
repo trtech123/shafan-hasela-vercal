@@ -90,6 +90,14 @@ afterEach(() => {
 });
 
 describe("OrderConfirmationPDF recipient email", () => {
+  test("keeps archived history downloadable without offering new customer notifications", () => {
+    render(<OrderConfirmationPDF order={{ ...order, archived_at: '2026-11-04T10:00:00Z' }} activity={activity} onClose={() => {}} />);
+    expect(screen.getByRole('button', { name: 'הורד PDF' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'שלח במייל' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /שלח אישור בוואטסאפ/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'עריכת כתובת אימייל' })).not.toBeInTheDocument();
+  });
+
   test("shows a valid recipient in compact mode by default", () => {
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
