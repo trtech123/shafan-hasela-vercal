@@ -310,6 +310,36 @@ try {
   assert.equal((await scalar('SELECT dispatch_mode AS value FROM public.payper_dispatch_control')).value,
     'continuous');
   assert.ok((await scalar('SELECT public.payper_effective_cutoff() AS value')).value > finalCanaryCutoff);
+  stage = 'canceled canary retirement';
+  await db.query(`SELECT public.stop_payper_dispatch('${actor}')`);
+  await db.query(`SELECT public.prepare_payper_next_canary('${actor}')`);
+  const canceledRequest = '92000000-0000-4000-8000-000000000029';
+  const canceled = (await scalar(`SELECT public.reserve_pos_pelecard('${actor}',
+    '${canceledRequest}',
+    '[{"kind":"product","id":"92000000-0000-4000-8000-000000000002","qty":1}]',
+    NULL,'{"kind":"person","name":"Synthetic Customer","identity":"000000018","email":"synthetic@example.test"}')
+    AS value`)).value.paymentId;
+  await db.query(`SELECT public.target_payper_canary('${actor}','${canceled}')`);
+  assert.equal((await scalar('SELECT public.retire_canceled_payper_canary() AS value')).value, false);
+  await db.query(`SELECT public.cancel_pos_pelecard_prepared('${canceledRequest}','${actor}')`);
+  await db.query("SELECT set_config('request.jwt.claim.role','authenticated',false)");
+  await fail('SELECT public.retire_canceled_payper_canary()', 'service_role_required');
+  await db.query("SELECT set_config('request.jwt.claim.role','service_role',false)");
+  assert.equal((await scalar('SELECT public.retire_canceled_payper_canary() AS value')).value, true);
+  assert.deepEqual(await scalar('SELECT enabled,dispatch_mode,canary_payment_id FROM public.payper_dispatch_control'), {
+    enabled: false, dispatch_mode: 'canary', canary_payment_id: canceled,
+  });
+  assert.equal((await scalar('SELECT public.retire_canceled_payper_canary() AS value')).value, false);
+  assert.equal(Number((await scalar(`SELECT count(*)::integer AS count FROM public.payper_stale_canary_retirements
+    WHERE payment_id='${canceled}' AND reason_code='canceled_before_hosted_checkout'`)).count), 1);
+  await fail(`DELETE FROM public.payper_stale_canary_retirements WHERE payment_id='${canceled}'`,
+    'payper_stale_retirement_immutable');
+  const afterCanceled = (await scalar('SELECT public.payper_effective_cutoff() AS value')).value;
+  await db.query(`SELECT public.prepare_payper_next_canary('${actor}')`);
+  assert.ok((await scalar('SELECT public.payper_effective_cutoff() AS value')).value > afterCanceled);
+  assert.deepEqual(await scalar('SELECT enabled,canary_payment_id,dispatch_remaining FROM public.payper_dispatch_control'), {
+    enabled: true, canary_payment_id: null, dispatch_remaining: 1,
+  });
   console.log('PASS automatic controls and synthetic POS payments: targeted canary, continuous dispatch, duplicate fence, emergency stop');
 } catch (error) {
   console.error(`FAIL ${stage}: ${error.message}`);

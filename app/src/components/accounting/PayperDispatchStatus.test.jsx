@@ -23,6 +23,13 @@ test('warns Admin when a canceled canary target blocks unrelated purchases', asy
   expect(query).toHaveBeenCalledWith('payment_transactions');
 });
 
+test('keeps the canceled-target warning after automatic retirement turns dispatch off', async () => {
+  mockControl({ enabled: false, dispatch_mode: 'canary', canary_payment_id: 'retired-payment', dispatch_remaining: 1 },
+    { status: 'failed' });
+  render(<PayperDispatchStatus />);
+  expect(await screen.findByText(/Payper מכוון לתשלום שבוטל/)).toBeInTheDocument();
+});
+
 test('reports continuous mode without looking up a canary payment', async () => {
   mockControl({ enabled: true, dispatch_mode: 'continuous', canary_payment_id: null, dispatch_remaining: 0 });
   render(<PayperDispatchStatus />);

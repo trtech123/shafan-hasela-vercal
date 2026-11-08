@@ -20,6 +20,8 @@ Deno.serve(async (request) => {
         return { processed: 0, succeeded: 0, held: 0 };
       const client = createClient(required("SUPABASE_URL"), required("SUPABASE_SERVICE_ROLE_KEY"),
         { auth: { autoRefreshToken: false, persistSession: false } });
+      const retired = await client.rpc("retire_canceled_payper_canary");
+      if (retired.error) throw new Error("payper_canary_health_unavailable");
       const control = await client.from("payper_dispatch_control")
         .select("enabled,activation_cutoff_utc,future_cutoff_utc,dispatch_remaining,dispatch_mode,canary_payment_id")
         .eq("singleton", true).single();

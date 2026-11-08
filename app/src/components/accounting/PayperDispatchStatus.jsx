@@ -11,6 +11,15 @@ export default function PayperDispatchStatus() {
         .select('enabled,dispatch_mode,canary_payment_id,dispatch_remaining').eq('singleton', true).single();
       if (!active) return;
       if (error || !control) { setStatus({ kind: 'unknown' }); return; }
+      if (control.dispatch_mode === 'canary' && control.canary_payment_id) {
+        const { data: payment, error: paymentError } = await supabase.from('payment_transactions')
+          .select('status').eq('id', control.canary_payment_id).single();
+        if (!active) return;
+        if (paymentError || !payment) { setStatus({ kind: 'unknown' }); return; }
+        if (payment.status === 'failed' || payment.status === 'cancelled') {
+          setStatus({ kind: 'stale', paymentId: control.canary_payment_id }); return;
+        }
+      }
       if (!control.enabled) { setStatus({ kind: 'off' }); return; }
       if (control.dispatch_mode === 'continuous' && !control.canary_payment_id && control.dispatch_remaining === 0) {
         setStatus({ kind: 'continuous' }); return;
@@ -18,12 +27,7 @@ export default function PayperDispatchStatus() {
       if (control.dispatch_mode !== 'canary' || !control.canary_payment_id) {
         setStatus({ kind: 'invalid' }); return;
       }
-      const { data: payment, error: paymentError } = await supabase.from('payment_transactions')
-        .select('status').eq('id', control.canary_payment_id).single();
-      if (!active) return;
-      setStatus(paymentError || !payment ? { kind: 'unknown' }
-        : { kind: payment.status === 'failed' || payment.status === 'cancelled' ? 'stale' : 'canary',
-          paymentId: control.canary_payment_id });
+      setStatus({ kind: 'canary', paymentId: control.canary_payment_id });
     }
     refresh();
     const timer = setInterval(refresh, 30_000);
