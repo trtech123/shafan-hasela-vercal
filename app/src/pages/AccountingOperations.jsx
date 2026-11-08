@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 import PayperManualReview from "@/components/accounting/PayperManualReview";
+import PayperDispatchStatus from "@/components/accounting/PayperDispatchStatus";
 import PelecardPendingReview from "@/components/accounting/PelecardPendingReview";
 import PayperIssuedDocuments from "@/components/accounting/PayperIssuedDocuments";
 
@@ -244,7 +245,7 @@ export default function AccountingOperations() {
         </div>
       </header>
 
-      {user?.role === 'admin' && <PayperManualReview />}
+      {user?.role === 'admin' && <><PayperDispatchStatus /><PayperManualReview /></>}
       {user?.role === 'admin' && <PelecardPendingReview />}
       {user?.role === 'admin' && <PayperIssuedDocuments />}
 
