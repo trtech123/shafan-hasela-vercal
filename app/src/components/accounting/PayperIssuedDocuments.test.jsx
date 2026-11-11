@@ -28,10 +28,18 @@ test('shows only a validated provider document link without exposing billing ide
 
 test('rejects unrelated or mismatched provider links', async () => {
   withRows([{ order_id: 'order-1', document_number: '595166',
-    document_url: 'https://app.payper.co.il/public/invoice_show/123?ak=opaque' }]);
+    document_url: 'https://app.payper.co.il/unrelated/123?ak=opaque' }]);
   render(<PayperIssuedDocuments />);
   expect(await screen.findByRole('alert')).toHaveTextContent('קישור המסמך אינו תקין');
   expect(screen.queryByRole('link')).not.toBeInTheDocument();
+});
+
+test('shows a Payper link whose internal ID differs from its legal document number', async () => {
+  withRows([{ payment_id: 'payment-1', sale_id: 'sale-1', document_number: '200002',
+    document_url: 'https://app.payper.co.il/public/invoice_show/3554599?ak=opaque' }]);
+  render(<PayperIssuedDocuments />);
+  expect(await screen.findByRole('link', { name: 'פתיחת מסמך Payper' }))
+    .toHaveAttribute('href', 'https://app.payper.co.il/public/invoice_show/3554599?ak=opaque');
 });
 
 test('does not claim there are no documents when the protected query fails', async () => {

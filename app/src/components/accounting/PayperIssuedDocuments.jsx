@@ -7,10 +7,7 @@ function safePayperLink(value, documentNumber) {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash) return null;
     if (!['payper.co.il', 'app.payper.co.il'].includes(url.hostname)) return null;
-    if (![
-      `/public/invoice_show/${documentNumber}`,
-      `/app/public/invoice_show/${documentNumber}`,
-    ].includes(url.pathname)) return null;
+    if (!/^\/(?:app\/)?public\/invoice_show\/[1-9][0-9]*$/.test(url.pathname)) return null;
     return url.href;
   } catch { return null; }
 }

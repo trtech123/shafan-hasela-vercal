@@ -4,6 +4,7 @@ import { ClipboardList, Users, CalendarDays, Banknote, ShieldCheck } from "lucid
 import StatsCard from "../components/dashboard/StatsCard";
 import RecentOrders from "../components/dashboard/RecentOrders";
 import moment from "moment";
+import { subscribeOrderChanges } from "@/lib/orderEvents";
 
 export default function Dashboard() {
   const [orders, setOrders] = useState([]);
@@ -38,6 +39,7 @@ export default function Dashboard() {
       }
     };
     load();
+    return subscribeOrderChanges(load);
   }, []);
 
   if (loading) {

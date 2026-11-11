@@ -43,6 +43,7 @@ WHERE o.archived_at IS NULL AND o.status != 'בוטל';
 -- protects archive columns even when an UPDATE bypasses the RPC.
 CREATE FUNCTION public.guard_order_archive_change() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE has_confirmation boolean;
 BEGIN
   -- An archive transition cannot simultaneously edit the business record.
   -- Once archived, only restoration (or FK cleanup of creator/actor profiles)
@@ -103,6 +104,23 @@ BEGIN
     END IF;
 
     IF OLD.status = 'ממתין לאישור' THEN
+      -- An already prepared or sent customer confirmation is a commitment,
+      -- even when the order has not yet reached the approved status. These
+      -- tables are installed by a separate release and may be absent.
+      IF pg_catalog.to_regclass('public.order_confirmation_revisions') IS NOT NULL THEN
+        EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.order_confirmation_revisions WHERE order_id = $1)'
+          INTO has_confirmation USING OLD.id;
+        IF has_confirmation THEN
+          RAISE EXCEPTION 'order_archive_confirmation_history' USING ERRCODE = 'P0001';
+        END IF;
+      END IF;
+      IF pg_catalog.to_regclass('public.order_delivery_attempts') IS NOT NULL THEN
+        EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.order_delivery_attempts WHERE order_id = $1)'
+          INTO has_confirmation USING OLD.id;
+        IF has_confirmation THEN
+          RAISE EXCEPTION 'order_archive_confirmation_history' USING ERRCODE = 'P0001';
+        END IF;
+      END IF;
       IF OLD.quote_id IS NOT NULL OR EXISTS (
         SELECT 1 FROM public.quotes q WHERE q.converted_to_order_id = OLD.id
       ) THEN

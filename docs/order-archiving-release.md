@@ -2,9 +2,11 @@
 
 ## Eligibility and effects
 
-Only an existing administrator may archive or restore. Archiving changes only
-`archived_at` and `archived_by`. It does not cancel an order or alter its payment
-status, quotation, scheduling, payment, sales, invoice or accounting history.
+Only an existing administrator may archive or restore. Archiving sets
+`archived_at` and `archived_by`; restoration clears them. The existing order
+update trigger also refreshes `updated_at` in both operations. Neither operation
+cancels an order or alters its payment status, quotation, scheduling, payment,
+sales, invoice or accounting history.
 
 The database accepts a cancelled (`בוטל`) or pending approval (`ממתין לאישור`)
 order only if its payment status is `לא שולם` and it has no financial dependency:
@@ -14,13 +16,16 @@ accounting document or event. Payment and sale rows linked only by order number
 also block archiving. A positive order amount is allowed. Cancelled
 orders cannot have a future order-linked scheduling block. Pending approval
 orders additionally cannot have a quotation conversion link, assigned or
-notified instructor, or any order-linked scheduling block. The administrator
+notified instructor, any order-linked scheduling block, or an existing customer
+confirmation revision or delivery attempt. The administrator
 must explicitly confirm that no external customer confirmation or commitment
 remains outstanding. A request without this confirmation is rejected by the
 database. Existing financial and historical records remain unchanged.
 
 Distinct Hebrew messages explain each rejection. The archive dialog remains
-open on failure, and repeat clicks cannot start a second request. Archived
+open on failure, and repeat clicks cannot start a second request. Successful
+archive and restore operations notify the order list, schedule and dashboard.
+Archived
 orders are absent from the active Orders list, Schedule, Dashboard operational
 metrics, the `dashboard_stats` and `instructor_schedule` database views, POS
 order search and order conflict lookup. They remain available in
@@ -45,23 +50,33 @@ the application has no other order deletion path.
 Authorization uses the existing `public.is_admin()` profile rule. The archive
 RPC uses caller privileges. The restore RPC and link guards use
 `SECURITY DEFINER` only where cross-table reads or restore locking require it;
-they have explicit authorization where callable, empty `search_path`, no
-dynamic SQL and restricted `EXECUTE` grants.
+they have explicit authorization where callable, empty `search_path` and
+restricted `EXECUTE` grants. The archive guard uses fixed SQL strings only to
+inspect optional confirmation tables that may not exist on every installation.
 
 ## Release order and prerequisites
 
-1. Reconfirm the production commit (currently `6e6caa90ef9065e18755ca97b407d68e23e8c138`)
-   and the installed migration history, including the newer Payper migrations
+The operational deployment procedure and recovery decision are in
+`docs/order-archiving-deployment-runbook.md`. Its recovery and payment-intake
+gates must be satisfied before step 2 below. A completed daily backup alone
+does not preserve writes made after that backup.
+
+1. Reconfirm the production application source (the public bundle on
+   2026-11-11 matched a clean `6e6caa9` build with the two Payper document
+   components from `3d454eb`) and the installed schema
+   markers, including those for the newer Payper migrations
    `202611080001_payper_audited_manual_hold.sql` and
-   `202611080002_payper_stale_canary_retirement.sql`. Run the read-only
-   `docs/order-archiving-production-preflight.sql` in the production SQL Editor
-   and verify the tables, columns, triggers, views, RLS, grants and existing
-   migration state before scheduling the release. Confirm a recent recoverable
-   backup or PITR recovery point separately in Database > Backups.
-   The archive migration has an earlier version number than the two new Payper
-   migrations. Inspect the remote migration history and a CLI `db push --dry-run`
-   before choosing the application method; stop if the dry run proposes any
-   other unapplied migration or a history repair.
+   `202611080002_payper_stale_canary_retirement.sql`. Production has no
+   `supabase_migrations.schema_migrations` ledger as of the 2026-11-09 preflight;
+   ledger absence does not imply that SQL Editor migrations were not applied.
+   Use `docs/order-archiving-production-preflight.sql` and the actual catalog
+   and operator records. Do not run `db push`, replay older migrations, or
+   create or repair a ledger. The archive migration's version precedes the
+   newer Payper versions, so the approved deployment method must target only
+   the reviewed archive SQL. Recheck a completed backup near the release window.
+   A physical restore to a new project is not an isolated rehearsal while the
+   Payper and Pelecard `pg_cron` jobs remain active: a copy can immediately call
+   production endpoints using Vault credentials.
 2. In an approved maintenance window, apply
    `supabase/migrations/202611030007_order_archiving.sql` to production. It adds
    nullable columns, indexes, functions and triggers, and updates two
@@ -84,7 +99,11 @@ Roll back the application before the schema. The manual rollback script is
 archive columns while any order remains archived, since that would erase
 archive state. Restore those orders deliberately, or retain the additive
 schema while reverting the application. Restoration changes visibility only;
-the original order status, payments and relationships are preserved.
+the original order status, payments and relationships are preserved. If the
+transactional migration fails, confirm its rollback and keep the old app; do
+not restore an older physical backup over transactions recorded since then.
+Without PITR, a completed daily backup cannot recover later transactions if
+the live database becomes unavailable.
 
 ## Verification limits
 

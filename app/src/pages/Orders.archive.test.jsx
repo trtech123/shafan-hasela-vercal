@@ -36,6 +36,7 @@ vi.mock('../components/orders/OrderConfirmationPDF', () => ({ default: () => nul
 vi.mock('@/components/customers/OrderCustomerLink', () => ({ default: () => null }));
 
 import Orders from './Orders';
+import { subscribeOrderChanges } from '@/lib/orderEvents';
 
 const order = {
   id: 'order-1', order_number: 'ORD-TEST-1', client_name: 'לקוח בדיקה',
@@ -68,6 +69,8 @@ const confirmArchive = (dialog) => {
 };
 
 test('archives, hides after refresh, preserves the order in history and restores it', async () => {
+  const changed = vi.fn();
+  const unsubscribe = subscribeOrderChanges(changed);
   const view = render(<Orders />);
   expect((await screen.findAllByText('ORD-TEST-1')).length).toBeGreaterThan(0);
   fireEvent.click(screen.getAllByRole('button', { name: 'העברת הזמנה לארכיון' })[0]);
@@ -75,6 +78,7 @@ test('archives, hides after refresh, preserves the order in history and restores
   expect(within(confirm).getByText(/פרטי ההזמנה והקשרים ההיסטוריים יישמרו/)).toBeInTheDocument();
   confirmArchive(confirm);
   await waitFor(() => expect(state.success).toHaveBeenCalledWith('ההזמנה הועברה לארכיון'));
+  expect(changed).toHaveBeenCalledTimes(1);
   expect(state.rpc).toHaveBeenCalledWith('archive_order', {
     p_order_id: 'order-1', p_confirm_no_external_commitments: true,
   });
@@ -90,9 +94,11 @@ test('archives, hides after refresh, preserves the order in history and restores
   fireEvent.click(screen.getAllByRole('button', { name: 'שחזור הזמנה' })[0]);
   fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'שחזר' }));
   await waitFor(() => expect(state.success).toHaveBeenCalledWith('ההזמנה שוחזרה לרשימת ההזמנות'));
+  expect(changed).toHaveBeenCalledTimes(2);
   expect(state.rows[0].archived_at).toBeNull();
   expect(state.queryModes).toContain(true);
   expect(state.queryModes).toContain(false);
+  unsubscribe();
 });
 
 test('archives a pending unpaid order without changing its business status or amount', async () => {
@@ -113,6 +119,15 @@ test('shows a real database rejection and keeps confirmation open', async () => 
   expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   expect(within(screen.getByRole('alertdialog')).getByRole('alert')).toHaveTextContent('תשלום');
   expect(screen.getAllByText('ORD-TEST-1').length).toBeGreaterThan(0);
+});
+
+test('explains that an existing customer confirmation blocks pending-order archiving', async () => {
+  state.rpc.mockResolvedValue({ data: null, error: { message: 'order_archive_confirmation_history' } });
+  render(<Orders />);
+  fireEvent.click((await screen.findAllByRole('button', { name: 'העברת הזמנה לארכיון' }))[0]);
+  confirmArchive(await screen.findByRole('alertdialog'));
+  await waitFor(() => expect(within(screen.getByRole('alertdialog')).getByRole('alert')).toHaveTextContent('אישור'));
+  expect(state.success).not.toHaveBeenCalled();
 });
 
 test('does not offer archive or restore to operations staff', async () => {

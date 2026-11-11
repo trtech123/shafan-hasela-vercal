@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import Dashboard from './Dashboard';
+import { publishOrderChange } from '@/lib/orderEvents';
 
 const mocks = vi.hoisted(() => ({ from: vi.fn(), is: vi.fn() }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { from: mocks.from } }));
@@ -21,7 +22,7 @@ beforeEach(() => {
     if (table === 'activities') return { select: () => Promise.resolve({ data: [], error: null }) };
     if (table !== 'orders') throw new Error(`Unexpected table: ${table}`);
     orderQuery += 1;
-    if (orderQuery === 1) return {
+    if (orderQuery % 2 === 1) return {
       select: () => ({ order: () => ({ limit: () => Promise.resolve({
         data: [{ id: 'archived', status: 'שולם', total_price: 100, archived_at: '2026-11-04T10:00:00Z' }],
         error: null,
@@ -37,6 +38,7 @@ beforeEach(() => {
     };
   });
 });
+afterEach(cleanup);
 
 test('excludes archived orders from operational metrics and recents while preserving revenue', async () => {
   render(<Dashboard />);
@@ -45,4 +47,11 @@ test('excludes archived orders from operational metrics and recents while preser
   expect(screen.getByText('ממתינות לאישור: 1')).toBeInTheDocument();
   expect(screen.getByText('הכנסות (שולם): ₪100')).toBeInTheDocument();
   expect(mocks.is).toHaveBeenCalledWith('archived_at', null);
+});
+
+test('refreshes operational metrics after an order archive or restore event', async () => {
+  render(<Dashboard />);
+  await waitFor(() => expect(mocks.from).toHaveBeenCalledTimes(3));
+  publishOrderChange();
+  await waitFor(() => expect(mocks.from).toHaveBeenCalledTimes(6));
 });

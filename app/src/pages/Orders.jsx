@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { orderPaymentPath } from "@/payments/orderPayments";
 import { toast } from "sonner";
 import { orderArchiveError } from "@/components/orders/orderArchiveError";
+import { publishOrderChange } from "@/lib/orderEvents";
 
 const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
 
@@ -156,6 +157,7 @@ export default function Orders() {
         throw new Error('פעולת הארכוב לא אושרה על ידי מסד הנתונים');
       }
       setOrders(prev => prev.filter(item => item.id !== order.id));
+      publishOrderChange();
       setPendingAction(null);
       setActionError(null);
       toast.success(action === 'archive' ? 'ההזמנה הועברה לארכיון' : 'ההזמנה שוחזרה לרשימת ההזמנות');

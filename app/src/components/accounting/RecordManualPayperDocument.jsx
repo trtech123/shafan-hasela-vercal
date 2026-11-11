@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/api/supabaseClient';
 
 const reference = (value) => /^[A-Za-z0-9:/._-]{8,120}$/.test(value);
-const payperUrl = (value) => /^https:\/\/(?:app\.)?payper\.co\.il\/(?:app\/)?public\/invoice_show\/[0-9]+(?:\?[^\s#]*)?$/.test(value);
+const payperUrl = (value) => /^https:\/\/app\.payper\.co\.il\/public\/invoice_show\/[1-9][0-9]*(?:\?ak=[A-Za-z0-9_-]{16,128})?$/.test(value);
 
 /** Records an already-issued portal document. This component never calls an issuance endpoint. */
 export default function RecordManualPayperDocument({ paymentId, amount, onRecorded }) {
@@ -16,7 +16,6 @@ export default function RecordManualPayperDocument({ paymentId, amount, onRecord
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const ready = /^[1-9][0-9]*$/.test(number) && payperUrl(url) &&
-    url.split('?')[0].endsWith(`/invoice_show/${number}`) &&
     issuedAt && reference(providerRef) && reference(accountantRef) && verified &&
     Number.isFinite(Number(amount)) && Number(amount) > 0;
 

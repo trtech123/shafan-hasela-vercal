@@ -38,6 +38,8 @@ CREATE TABLE public.accounting_documents(source_type text, source_id text);
 CREATE TABLE public.accounting_events(source_type text, source_id text);
 CREATE TABLE public.blocked_slots(source_order_id uuid, block_date date, site text, start_time time, end_time time);
 CREATE TABLE public.quotes(id uuid PRIMARY KEY, converted_to_order_id uuid, status text);
+CREATE TABLE public.order_confirmation_revisions(order_id uuid);
+CREATE TABLE public.order_delivery_attempts(order_id uuid);
 GRANT USAGE ON SCHEMA public, auth TO authenticated;
 GRANT SELECT, UPDATE, DELETE ON public.orders TO authenticated;
 GRANT INSERT ON public.sales TO authenticated;
@@ -90,7 +92,11 @@ INSERT INTO public.orders(id,status,payment_status,activity_date,total_price,sit
   ('20000000-0000-4000-8000-000000000019','מאושר','לא שולם',CURRENT_DATE + 5,250,'עכו','10:00','11:00',NULL,false),
   ('20000000-0000-4000-8000-000000000020','ממתין לאישור','לא שולם',CURRENT_DATE + 5,250,'עכו','22:00','23:00',NULL,false),
   ('20000000-0000-4000-8000-000000000021','ממתין לאישור','לא שולם',CURRENT_DATE + 5,250,'עכו','08:00','09:00',NULL,false),
-  ('20000000-0000-4000-8000-000000000022','ממתין לאישור','לא שולם',CURRENT_DATE + 5,250,'עכו','07:00','08:00',NULL,false);
+  ('20000000-0000-4000-8000-000000000022','ממתין לאישור','לא שולם',CURRENT_DATE + 5,250,'עכו','07:00','08:00',NULL,false),
+  ('20000000-0000-4000-8000-000000000023','ממתין לאישור','לא שולם',CURRENT_DATE + 5,250,'עכו','06:00','07:00',NULL,false),
+  ('20000000-0000-4000-8000-000000000024','ממתין לאישור','לא שולם',CURRENT_DATE + 5,250,'עכו','05:00','06:00',NULL,false);
+INSERT INTO public.order_confirmation_revisions VALUES('20000000-0000-4000-8000-000000000023');
+INSERT INTO public.order_delivery_attempts VALUES('20000000-0000-4000-8000-000000000024');
 UPDATE public.orders SET order_number='TEST-011' WHERE id='20000000-0000-4000-8000-000000000011';
 UPDATE public.orders SET order_number='TEST-022' WHERE id='20000000-0000-4000-8000-000000000022';
 INSERT INTO public.quotes(id,converted_to_order_id) VALUES
@@ -209,7 +215,9 @@ DO $$ DECLARE target uuid; expected text; BEGIN
     ('20000000-0000-4000-8000-000000000018'::uuid,'order_archive_instructor_commitment'),
     ('20000000-0000-4000-8000-000000000020'::uuid,'order_archive_financial_dependency'),
     ('20000000-0000-4000-8000-000000000021'::uuid,'order_archive_financial_dependency'),
-    ('20000000-0000-4000-8000-000000000022'::uuid,'order_archive_financial_dependency')) v(id,reason)
+    ('20000000-0000-4000-8000-000000000022'::uuid,'order_archive_financial_dependency'),
+    ('20000000-0000-4000-8000-000000000023'::uuid,'order_archive_confirmation_history'),
+    ('20000000-0000-4000-8000-000000000024'::uuid,'order_archive_confirmation_history')) v(id,reason)
   LOOP
     BEGIN
       PERFORM public.archive_order(target,true);
