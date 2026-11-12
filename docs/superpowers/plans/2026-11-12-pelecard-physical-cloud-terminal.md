@@ -23,6 +23,7 @@
 ## Accounting and POS
 
 - [ ] In the atomic sale finalizer, make only the verified physical payment eligible for the existing Payper pipeline. Add a physical Payper adapter with credentials and terminal scope confirmed by Pelecard. Use the existing one-shot ledger and document uniqueness constraints; do not change the continuous worker configuration.
+- [ ] Issue the eligible physical payment as `invoice-receipt` automatically, set provider email delivery to the verified customer address, persist the document number and URL, and reconcile uncertain creation or delivery without blind reissuance.
 - [ ] Add the flag-gated `תשלום במסופון פיזי` POS choice, workstation default and pending/recovery view. Keep hosted and manual external-credit actions intact.
 - [ ] Mock concurrent starts, duplicate requests, provider timeout, offline device, cancellation race, browser recovery, mismatched approval, duplicate sale and duplicate document.
 - [ ] Verify the hosted payment regression suite and full build. Seek explicit approval before any real charge, invoice, production migration or deployment.
