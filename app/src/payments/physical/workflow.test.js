@@ -61,7 +61,15 @@ describe('physical terminal workflow', () => {
     const deps = dependencies();
     const workflow = createPhysicalWorkflow(deps);
     await workflow.verify('intent-1');
+    expect(deps.provider.inspect).toHaveBeenCalledWith(expect.objectContaining({ id: 'intent-1', register: '003', amountMinor: 2400 }));
     expect(deps.finalize).toHaveBeenCalledWith('intent-1', expect.objectContaining({ transactionId: 'trx-1', amountMinor: 2400 }));
+  });
+  test('lookup failure leaves the outcome uncertain and creates no sale', async () => {
+    const deps = dependencies();
+    deps.provider.inspect.mockRejectedValue(new Error('offline'));
+    const result = await createPhysicalWorkflow(deps).verify('intent-1');
+    expect(result.state).toBe('uncertain');
+    expect(deps.finalize).not.toHaveBeenCalled();
   });
   test.each([{ amountMinor: 1 }, { register: '006' }, { merchantTerminal: 'other' }, { intentId: 'other' }, { status: 'declined' }, { transactionId: '' }])('mismatched or unapproved result cannot finalize: %j', async patch => {
     const deps = dependencies();

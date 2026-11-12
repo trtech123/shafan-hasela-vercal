@@ -17,6 +17,7 @@
 - [ ] Add an isolated migration for workstation mapping, immutable physical intents, unique request keys and one in-flight intent per register. No production migration without approval.
 - [ ] In the server reservation, read catalog prices and validate discounts and total in agorot. Reject client amounts and register overrides.
 - [ ] Claim dispatch atomically, persist the provider correlation before allowing any second action, and reconcile unknown outcomes with lookup only.
+- [ ] Verify the final provider result through Pelecard's authoritative status API. Require matching merchant terminal, register, amount, intent reference, transaction ID and approved status before any sale.
 - [ ] Add approval verification and an atomic one-sale finalizer with unique provider transaction identity.
 
 ## Accounting and POS
