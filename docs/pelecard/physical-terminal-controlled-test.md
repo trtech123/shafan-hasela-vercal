@@ -1,6 +1,6 @@
 # Physical Pelecard CT20: deployment and controlled-test checklist
 
-Development branch: `feature/pelecard-physical-cloud-terminal`. This document does not authorize a financial request, production migration, invoice, or deployment.
+Development branch: `feature/pelecard-physical-cloud-terminal`. Release candidate: `release/physical-terminal-prep-20261112`, based on the production deployment source `e89b564`. This document does not authorize a financial request, invoice, or deployment.
 
 ## Runtime boundaries
 
@@ -10,7 +10,7 @@ Development branch: `feature/pelecard-physical-cloud-terminal`. This document do
 - `app/Dockerfile.physical-worker` packages only the worker runtime and its locked production dependencies. Build with `docker build -f app/Dockerfile.physical-worker -t shafan-pelecard-physical-worker app`. No image was built or deployed in this session because Docker is unavailable in the workspace.
 - The container health check runs `node scripts/physical-terminal-worker.mjs --check`. This checks the physical database RPC and enabled assignments only; it never calls `DebitRegularType`. For the first test, require `ready: true` **and** `register004: true`. Health does not prove device-to-provider routing or credential authorization.
 - The host must keep one worker process running continuously, permit at least 360 seconds of shutdown grace for an in-flight J4 call, inject secrets at runtime, and retain structured logs. It needs TLS access to the physical database and HTTPS egress to gateway21; if Pelecard requires IP allowlisting, provision a stable egress IP before testing. If a process dies during a charge, its claimed intent remains locked for read-only reconciliation. Do not schedule this worker as a short request or cron job.
-- The local SQL migrations create the physical device settings, one-shot intent/register lock, idempotent sale finalization, physical UID storage, Payper billing snapshot, and a blocked entry in the existing one-document ledger. They have **not** been applied to Production.
+- The approved physical migrations `202611120001` and `202611120002` were applied to Production on November 12, 2026. Register `004` is assigned to active cash register `GENERAL` and enabled; `003`, `005`, and `006` remain disabled. Migration `202611120003` adds admin-only matching of an accountant-approved manual Payper document to a verified physical `source_blocked` hold; it remains staged pending separate approval.
 
 ## Separate physical configuration
 
@@ -40,7 +40,7 @@ The administrator assigns an enabled device to an active named cash register on 
 ## First controlled test, after explicit authorization and deployment approval
 
 1. The CT20 currently shows `מוכן להפעלה`, terminal `2814926015`, register `4`, app version `3.1.6`, and Ethernet connectivity; the earlier connection error has disappeared. This establishes local device readiness, not J4 credential authorization or Cloud Agent applicability. If there is a cloud or communication status screen, send its screenshot with secrets and card details obscured; menu names vary by app version, so inspect the visible menu before choosing a path.
-2. After separate migration and deployment approval, apply the physical migrations, configure the separate secrets, assign register `004` to the test workstation, and enable that device. Keep `PELECARD_PHYSICAL_DISPATCH_ENABLED=false` throughout this preparation.
+2. After separate approval for migration `202611120003` and the production release, apply that migration and configure the separate physical secrets. The approved device migrations and register `004` assignment are already in place. Keep `PELECARD_PHYSICAL_DISPATCH_ENABLED=false` throughout preparation.
 3. Start the long-running worker with dispatch off and run `npm run physical:check` (or the container health check). Require `ready: true`, `register004: true`, and `dispatchEnabled: false`. For a no-charge rehearsal, enable the separate physical reservation and browser visibility flags, confirm the POS can list `004`, reserve a test cart without a J4 request, and **cancel that still-reserved intent** to release the register before the financial test.
 4. After explicit authorization for a **specific amount and payment method**, enable the physical dispatch gate for the controlled window. Reserve exactly one intent from the POS. Do not click a second payment button if the terminal or browser is slow.
 5. Report the device's displayed amount, card-presentation prompt, result message, and the POS state. An uncertain state stays locked while the provider result is reconciled; do not retry the charge blindly.
