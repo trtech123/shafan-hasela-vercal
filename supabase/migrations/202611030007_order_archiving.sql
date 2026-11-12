@@ -1,6 +1,8 @@
 -- Order archiving is independent of business cancellation and payment state.
 -- Apply before deploying the Orders UI. No existing rows are changed.
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '2min';
 
 ALTER TABLE public.orders
   ADD COLUMN archived_at timestamptz,

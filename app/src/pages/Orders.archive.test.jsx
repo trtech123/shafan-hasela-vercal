@@ -55,6 +55,10 @@ beforeEach(() => {
     const row = state.rows.find(item => item.id === p_order_id);
     if (name === 'archive_order') row.archived_at = '2026-11-04T00:00:00Z';
     if (name === 'restore_order') row.archived_at = null;
+    if (name === 'delete_order') {
+      state.rows = state.rows.filter(item => item.id !== p_order_id);
+      return { data: { id: p_order_id, deleted: true }, error: null };
+    }
     return { data: { ...row }, error: null };
   });
 });
@@ -101,6 +105,32 @@ test('archives, hides after refresh, preserves the order in history and restores
   unsubscribe();
 });
 
+test('deletes an eligible order only after the database confirms deletion', async () => {
+  render(<Orders />);
+  fireEvent.click((await screen.findAllByRole('button', { name: 'מחיקת הזמנה לצמיתות' }))[0]);
+  const dialog = await screen.findByRole('alertdialog');
+  const confirm = within(dialog).getByRole('button', { name: 'מחק לצמיתות' });
+  expect(confirm).toBeDisabled();
+  fireEvent.click(within(dialog).getByRole('checkbox'));
+  fireEvent.click(confirm);
+  await waitFor(() => expect(state.success).toHaveBeenCalledWith('ההזמנה נמחקה ממסד הנתונים'));
+  expect(state.rpc).toHaveBeenCalledWith('delete_order', { p_order_id: 'order-1', p_confirm_no_external_commitments: true });
+  expect(state.rows).toHaveLength(0);
+  expect(screen.queryByText('ORD-TEST-1')).not.toBeInTheDocument();
+});
+
+test('retains the order and shows a Hebrew error when deletion is blocked', async () => {
+  state.rpc.mockResolvedValue({ data: null, error: { message: 'order_delete_financial_dependency' } });
+  render(<Orders />);
+  fireEvent.click((await screen.findAllByRole('button', { name: 'מחיקת הזמנה לצמיתות' }))[0]);
+  const dialog = await screen.findByRole('alertdialog');
+  fireEvent.click(within(dialog).getByRole('checkbox'));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'מחק לצמיתות' }));
+  await waitFor(() => expect(within(dialog).getByRole('alert')).toHaveTextContent('תשלום'));
+  expect(state.rows).toHaveLength(1);
+  expect(state.success).not.toHaveBeenCalled();
+});
+
 test('archives a pending unpaid order without changing its business status or amount', async () => {
   state.rows = [{ ...order, status: 'ממתין לאישור', total_price: 250, activity_date: '2026-11-10' }];
   render(<Orders />);
@@ -136,6 +166,7 @@ test('does not offer archive or restore to operations staff', async () => {
   await screen.findAllByText('ORD-TEST-1');
   expect(screen.queryByRole('button', { name: 'העברת הזמנה לארכיון' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'ארכיון' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'מחיקת הזמנה לצמיתות' })).not.toBeInTheDocument();
   expect(state.rpc).not.toHaveBeenCalled();
 });
 

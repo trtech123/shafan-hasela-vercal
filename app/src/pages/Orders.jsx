@@ -3,7 +3,7 @@ import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Pencil, Archive, RotateCcw, Mail, FileText, CheckCircle2, Link2, Lock, CalendarClock } from "lucide-react";
+import { Plus, Search, Pencil, Archive, RotateCcw, Trash2, Mail, FileText, CheckCircle2, Link2, Lock, CalendarClock } from "lucide-react";
 import InstructorEmailDialog from "../components/orders/InstructorEmailDialog";
 import InstructorDailyDialog from "../components/orders/InstructorDailyDialog";
 import OrderConfirmationPDF from "../components/orders/OrderConfirmationPDF";
@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { orderPaymentPath } from "@/payments/orderPayments";
 import { toast } from "sonner";
 import { orderArchiveError } from "@/components/orders/orderArchiveError";
+import { deleteOrder, orderDeleteError } from "@/lib/deleteOrder";
 import { publishOrderChange } from "@/lib/orderEvents";
 
 const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
@@ -141,28 +142,33 @@ export default function Orders() {
 
   const handleArchiveAction = async () => {
     if (!isAdmin || !pendingAction || actionInFlight.current ||
-        (pendingAction.action === 'archive' && !externalConfirmed)) return;
+        (pendingAction.action !== 'restore' && !externalConfirmed)) return;
     actionInFlight.current = true;
     setActionBusy(true);
     const { order, action } = pendingAction;
     try {
-      const { data, error } = await supabase.rpc(
-        action === 'archive' ? 'archive_order' : 'restore_order',
-        action === 'archive'
-          ? { p_order_id: order.id, p_confirm_no_external_commitments: externalConfirmed }
-          : { p_order_id: order.id }
-      );
-      if (error) throw error;
-      if (data?.id !== order.id || (action === 'archive' ? !data.archived_at : !!data.archived_at)) {
+      const data = action === 'delete'
+        ? await deleteOrder(supabase, order.id)
+        : await (async () => {
+          const result = await supabase.rpc(
+            action === 'archive' ? 'archive_order' : 'restore_order',
+            action === 'archive'
+              ? { p_order_id: order.id, p_confirm_no_external_commitments: externalConfirmed }
+              : { p_order_id: order.id }
+          );
+          if (result.error) throw result.error;
+          return result.data;
+        })();
+      if (data?.id !== order.id || (action === 'archive' ? !data.archived_at : action === 'restore' ? !!data.archived_at : data.deleted !== true)) {
         throw new Error('פעולת הארכוב לא אושרה על ידי מסד הנתונים');
       }
       setOrders(prev => prev.filter(item => item.id !== order.id));
       publishOrderChange();
       setPendingAction(null);
       setActionError(null);
-      toast.success(action === 'archive' ? 'ההזמנה הועברה לארכיון' : 'ההזמנה שוחזרה לרשימת ההזמנות');
+      toast.success(action === 'archive' ? 'ההזמנה הועברה לארכיון' : action === 'delete' ? 'ההזמנה נמחקה ממסד הנתונים' : 'ההזמנה שוחזרה לרשימת ההזמנות');
     } catch (error) {
-      const message = orderArchiveError(error);
+      const message = pendingAction.action === 'delete' ? orderDeleteError(error) : orderArchiveError(error);
       setActionError(message);
       toast.error(message);
     } finally {
@@ -399,6 +405,7 @@ export default function Orders() {
                   {isAdmin && <button aria-label={archiveView ? 'שחזור הזמנה' : 'העברת הזמנה לארכיון'} onClick={() => openArchiveAction(order, archiveView ? 'restore' : 'archive')} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     {archiveView ? <RotateCcw className="w-4 h-4 text-primary" /> : <Archive className="w-4 h-4 text-muted-foreground" />}
                   </button>}
+                  {isAdmin && !archiveView && <button aria-label="מחיקת הזמנה לצמיתות" onClick={() => openArchiveAction(order, 'delete')} className="p-2 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4 text-destructive" /></button>}
                 </div>
               </div>
             </div>
@@ -488,6 +495,7 @@ export default function Orders() {
                         {isAdmin && <button aria-label={archiveView ? 'שחזור הזמנה' : 'העברת הזמנה לארכיון'} onClick={() => openArchiveAction(order, archiveView ? 'restore' : 'archive')} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                           {archiveView ? <RotateCcw className="w-4 h-4 text-primary" /> : <Archive className="w-4 h-4 text-muted-foreground" />}
                         </button>}
+                        {isAdmin && !archiveView && <button aria-label="מחיקת הזמנה לצמיתות" onClick={() => openArchiveAction(order, 'delete')} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4 text-destructive" /></button>}
                       </div>
                     </td>
                   </tr>
@@ -538,20 +546,22 @@ export default function Orders() {
       <AlertDialog open={!!pendingAction} onOpenChange={() => { if (!actionInFlight.current) { setPendingAction(null); setActionError(null); } }}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>{pendingAction?.action === 'restore' ? 'שחזור הזמנה' : 'העברת הזמנה לארכיון'}</AlertDialogTitle>
+            <AlertDialogTitle>{pendingAction?.action === 'restore' ? 'שחזור הזמנה' : pendingAction?.action === 'delete' ? 'מחיקת הזמנה לצמיתות' : 'העברת הזמנה לארכיון'}</AlertDialogTitle>
             <AlertDialogDescription>{pendingAction?.action === 'restore'
               ? 'האם לשחזר את ההזמנה לרשימת ההזמנות הפעילות?'
-              : 'ההזמנה תועבר לארכיון ותוסר מהרשימה הפעילה. פרטי ההזמנה והקשרים ההיסטוריים יישמרו. ארכוב אינו מבטל פעילות או תשלום.'}</AlertDialogDescription>
+              : pendingAction?.action === 'delete'
+                ? 'ההזמנה תימחק לצמיתות רק אם אין לה תשלומים, מסמכים, אישורים או קשרים המחייבים שימור. אחרת יש להשתמש בארכיון.'
+                : 'ההזמנה תועבר לארכיון ותוסר מהרשימה הפעילה. פרטי ההזמנה והקשרים ההיסטוריים יישמרו. ארכוב אינו מבטל פעילות או תשלום.'}</AlertDialogDescription>
           </AlertDialogHeader>
-          {pendingAction?.action === 'archive' && <label className="flex items-start gap-2 text-sm leading-6">
+          {pendingAction?.action !== 'restore' && <label className="flex items-start gap-2 text-sm leading-6">
             <input type="checkbox" checked={externalConfirmed} onChange={event => setExternalConfirmed(event.target.checked)} disabled={actionBusy} className="mt-1" />
-            <span>בדקתי שאין ללקוח אישור שנשלח או התחייבות חיצונית פתוחה, ואני מאשר/ת להעביר את ההזמנה לארכיון.</span>
+            <span>{pendingAction?.action === 'delete' ? 'בדקתי שאין התחייבות חיצונית המחייבת שימור, ואני מאשר/ת למחוק את ההזמנה לצמיתות.' : 'אני מאשר/ת להעביר את ההזמנה לארכיון תוך שמירת כל הרשומות הקשורות.'}</span>
           </label>}
           {actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}
           <AlertDialogFooter className="flex-row-reverse gap-2">
             <AlertDialogCancel disabled={actionBusy}>ביטול</AlertDialogCancel>
-            <AlertDialogAction disabled={actionBusy || (pendingAction?.action === 'archive' && !externalConfirmed)} onClick={event => { event.preventDefault(); handleArchiveAction(); }}>
-              {actionBusy ? 'מבצע...' : pendingAction?.action === 'restore' ? 'שחזר' : 'העבר לארכיון'}
+            <AlertDialogAction disabled={actionBusy || (pendingAction?.action !== 'restore' && !externalConfirmed)} onClick={event => { event.preventDefault(); handleArchiveAction(); }}>
+              {actionBusy ? 'מבצע...' : pendingAction?.action === 'restore' ? 'שחזר' : pendingAction?.action === 'delete' ? 'מחק לצמיתות' : 'העבר לארכיון'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
