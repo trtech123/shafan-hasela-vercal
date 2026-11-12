@@ -113,7 +113,7 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
         String(detail.retailer ?? '') !== terminalNumber)
         throw new Error('physical_result_unverified');
       return { status: 'approved', intentId: intent.id, merchantTerminal: terminalNumber,
-        register: intent.register, amountMinor: intent.amountMinor, transactionId: providerTransactionId, approvalId };
+        register: intent.register, amountMinor: intent.amountMinor, transactionId: providerTransactionId, approvalId, uid };
     },
   };
 }

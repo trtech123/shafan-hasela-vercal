@@ -31,6 +31,7 @@ export default function CashRegister() {
   // null = standalone sale; else { id, order_number, client_name, client_phone, organization }
   const [linkedOrder, setLinkedOrder] = useState(null);
   const posCheckoutId = useRef(null);
+  const physicalCheckoutId = useRef(null);
   const manualSaleSubmitted = useRef(false);
   const [manualSaleSaving, setManualSaleSaving] = useState(false);
 
@@ -169,9 +170,19 @@ export default function CashRegister() {
     }
   };
 
+  const handlePhysicalStart = () => {
+    if (!canPayOrder || linkedOrder?.id || !canHostedCart) return;
+    physicalCheckoutId.current ||= crypto.randomUUID();
+    navigate('/payment/physical', { state: { checkoutId: physicalCheckoutId.current, cart: {
+      lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
+      discount: discount ? { type: discount.type, mode: discount.mode, value: Number(discount.value) } : null,
+    } } });
+  };
+
   const handleNewSale = () => {
     manualSaleSubmitted.current = false;
     posCheckoutId.current = null;
+    physicalCheckoutId.current = null;
     setCartItems([]);
     setScreen("menu");
     setPaymentMethod(null);
@@ -200,7 +211,9 @@ export default function CashRegister() {
         onConfirm={handlePaymentConfirm}
         manualSaleSaving={manualSaleSaving}
         onPelecard={handlePelecardStart}
+        onPhysicalTerminal={handlePhysicalStart}
         physicalTerminalVisible={import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true'}
+        physicalTerminalEnabled={Boolean(canPayOrder && canHostedCart && !linkedOrder?.id)}
         pelecardEnabled={canPayOrder && (Boolean(linkedOrder?.id)||canHostedCart)}
         pelecardHint={linkedOrder?.id?'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה':
           canHostedCart?'מחירי הקטלוג והסכום יאומתו בשרת לפני מעבר לפלאקארד':

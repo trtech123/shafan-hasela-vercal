@@ -38,6 +38,8 @@ try {
       provider_transaction_id text,approval_id text,sale_id uuid);
     CREATE TABLE public.payper_document_ledger(payment_id uuid UNIQUE,sale_id uuid UNIQUE,order_id uuid,
       state text,reconciliation_code text);
+    CREATE TABLE public.payper_payment_billing_snapshots(payment_id uuid PRIMARY KEY,order_id uuid,
+      customer_kind text,billing_name text,billing_identity text,billing_email text,vat_applicable boolean);
     CREATE FUNCTION public.finalize_pelecard_payment(p_payment_id uuid,p_provider_transaction_id text,
       p_approval_id text,p_provider_status_code text,p_amount numeric,p_currency text)
       RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
@@ -61,8 +63,9 @@ try {
   const actor = '10000000-0000-4000-8000-000000000001';
   const key = randomUUID();
   const snapshot = { items: [{ id: actor, name: 'Ticket', qty: 1, customPrice: 24 }] };
+  const billing = { kind: 'person', name: 'Test Customer', identity: '123456782', email: 'test@example.com' };
   const reserve = () => client.query('SELECT public.reserve_physical_payment($1,$2,$3,$4,$5,$6) AS result',
-    [actor,key,'FRONT',2400,snapshot,{}]);
+    [actor,key,'FRONT',2400,snapshot,billing]);
   const first = (await reserve()).rows[0].result;
   assert.equal(first.registerNumber,'004');
   assert.equal((await reserve()).rows[0].result.paymentId,first.paymentId);
@@ -70,24 +73,35 @@ try {
     [actor,key])).rows[0].result.paymentId,first.paymentId);
   assert.equal((await client.query('SELECT public.get_physical_worker_intent($1) AS result',
     [first.paymentId])).rows[0].result.register,'004');
+  assert.equal((await client.query('SELECT public.list_physical_worker_intents() AS result')).rows[0].result[0].paymentId,first.paymentId);
   await assert.rejects(client.query('SELECT public.reserve_physical_payment($1,$2,$3,$4,$5,$6)',
-    [actor,randomUUID(),'FRONT',2400,snapshot,{}]), /physical_one_unresolved_per_register/);
+    [actor,randomUUID(),'FRONT',2400,snapshot,billing]), /physical_one_unresolved_per_register/);
   await assert.rejects(client.query('SELECT public.reserve_physical_payment($1,$2,$3,$4,$5,$6)',
-    [actor,randomUUID(),'FRONT',2500,snapshot,{}]), /physical_amount_mismatch/);
+    [actor,randomUUID(),'FRONT',2500,snapshot,billing]), /physical_amount_mismatch/);
   assert.equal((await client.query('SELECT public.claim_physical_dispatch($1) AS claimed',[first.paymentId])).rows[0].claimed,true);
   assert.equal((await client.query('SELECT public.claim_physical_dispatch($1) AS claimed',[first.paymentId])).rows[0].claimed,false);
+  assert.equal((await client.query('SELECT public.cancel_physical_reserved($1,$2) AS result',[actor,key])).rows[0].result,false);
   await assert.rejects(client.query('SELECT public.finalize_physical_payment($1)',[first.paymentId]), /physical_approval_required/);
   await client.query('SELECT public.mark_physical_uncertain($1)',[first.paymentId]);
   const approved = { intentId:first.paymentId,merchantTerminal:'2814926015',register:'004',
-    amountMinor:2400,status:'approved',transactionId:'trx-1',approvalId:'approval-1' };
+    amountMinor:2400,status:'approved',transactionId:'trx-1',approvalId:'approval-1',uid:'uid-1' };
   await assert.rejects(client.query('SELECT public.observe_physical_result($1,$2)',
     [first.paymentId,{...approved,register:'005'}]), /physical_result_mismatch/);
   await client.query('SELECT public.observe_physical_result($1,$2)',[first.paymentId,approved]);
+  assert.equal((await client.query('SELECT public.get_physical_worker_intent($1) AS result',
+    [first.paymentId])).rows[0].result.uid,'uid-1');
   const finalized = (await client.query('SELECT public.finalize_physical_payment($1) AS result',[first.paymentId])).rows[0].result;
   assert.equal(finalized.state,'succeeded');
   assert.equal((await client.query('SELECT public.finalize_physical_payment($1) AS result',[first.paymentId])).rows[0].result.saleId,finalized.saleId);
+  const canceledKey = randomUUID();
+  const canceled = (await client.query('SELECT public.reserve_physical_payment($1,$2,$3,$4,$5,$6) AS result',
+    [actor,canceledKey,'FRONT',2400,snapshot,billing])).rows[0].result;
+  assert.equal((await client.query('SELECT public.cancel_physical_reserved($1,$2) AS result',
+    [actor,canceledKey])).rows[0].result,true);
+  assert.equal((await client.query('SELECT public.claim_physical_dispatch($1) AS result',
+    [canceled.paymentId])).rows[0].result,false);
   const declined = (await client.query('SELECT public.reserve_physical_payment($1,$2,$3,$4,$5,$6) AS result',
-    [actor,randomUUID(),'FRONT',2400,snapshot,{}])).rows[0].result;
+    [actor,randomUUID(),'FRONT',2400,snapshot,billing])).rows[0].result;
   await client.query('SELECT public.claim_physical_dispatch($1)',[declined.paymentId]);
   await client.query('SELECT public.observe_physical_result($1,$2)',[declined.paymentId,{
     intentId:declined.paymentId,merchantTerminal:'2814926015',register:'004',amountMinor:2400,
@@ -95,6 +109,8 @@ try {
   }]);
   await assert.rejects(client.query('SELECT public.finalize_physical_payment($1)',[declined.paymentId]), /physical_approval_required/);
   await client.query('RESET ROLE');
+  assert.equal((await client.query('SELECT billing_email FROM public.payper_payment_billing_snapshots WHERE payment_id=$1',
+    [first.paymentId])).rows[0].billing_email,'test@example.com');
   assert.equal((await client.query('SELECT count(*)::integer AS n FROM public.sales')).rows[0].n,1);
   const accounting = (await client.query('SELECT payment_id,sale_id,state,reconciliation_code FROM public.payper_document_ledger')).rows;
   assert.deepEqual(accounting,[{payment_id:first.paymentId,sale_id:finalized.saleId,

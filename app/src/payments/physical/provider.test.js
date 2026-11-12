@@ -72,7 +72,7 @@ describe('physical Pelecard provider boundary', () => {
         retailer: '2814926015', track2: 'secret' } }), { status: 200 }));
     expect(await provider(fetcher).inspect({ id: 'intent-1', register: '004', amountMinor: 2400 })).toEqual({
       status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926015',
-      register: '004', amountMinor: 2400, transactionId: 'trx-1', approvalId: 'approved-1',
+      register: '004', amountMinor: 2400, transactionId: 'trx-1', approvalId: 'approved-1', uid: 'uid-1',
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({ Uid: 'uid-1', debitTrxId: '' });

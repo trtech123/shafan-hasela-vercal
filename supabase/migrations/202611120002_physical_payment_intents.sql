@@ -13,16 +13,17 @@ CREATE TABLE public.physical_payment_intents (
   checkout_snapshot jsonb NOT NULL CHECK (jsonb_typeof(checkout_snapshot)='object'),
   billing_snapshot jsonb NOT NULL CHECK (jsonb_typeof(billing_snapshot)='object'),
   state text NOT NULL DEFAULT 'reserved' CHECK (state IN
-    ('reserved','dispatching','pending','uncertain','approved','declined','succeeded')),
+    ('reserved','dispatching','pending','uncertain','approved','declined','canceled','succeeded')),
   dispatch_started_at timestamptz,
   provider_transaction_id text UNIQUE,
+  provider_uid text UNIQUE,
   approval_id text,
   sale_id uuid UNIQUE REFERENCES public.sales(id) ON DELETE RESTRICT,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   CHECK (dispatch_started_at IS NULL OR state<>'reserved'),
   CHECK (state NOT IN ('approved','succeeded') OR
-    (provider_transaction_id IS NOT NULL AND approval_id IS NOT NULL)),
+    (provider_transaction_id IS NOT NULL AND provider_uid IS NOT NULL AND approval_id IS NOT NULL)),
   CHECK (state<>'succeeded' OR sale_id IS NOT NULL)
 );
 CREATE UNIQUE INDEX physical_one_unresolved_per_register
@@ -44,6 +45,7 @@ BEGIN
     OLD.billing_snapshot,OLD.created_at) OR
     (OLD.dispatch_started_at IS NOT NULL AND NEW.dispatch_started_at IS DISTINCT FROM OLD.dispatch_started_at) OR
     (OLD.provider_transaction_id IS NOT NULL AND NEW.provider_transaction_id IS DISTINCT FROM OLD.provider_transaction_id) OR
+    (OLD.provider_uid IS NOT NULL AND NEW.provider_uid IS DISTINCT FROM OLD.provider_uid) OR
     (OLD.approval_id IS NOT NULL AND NEW.approval_id IS DISTINCT FROM OLD.approval_id) OR
     (OLD.sale_id IS NOT NULL AND NEW.sale_id IS DISTINCT FROM OLD.sale_id) OR
     (OLD.state='succeeded' AND NEW.state<>'succeeded')
@@ -112,6 +114,10 @@ BEGIN
     register_number,terminal_number,amount_minor,checkout_snapshot,billing_snapshot)
   VALUES(payment_id,p_request_key,p_actor_id,p_workstation_code,d.register_number,
     '2814926015',p_amount_minor,p_checkout_snapshot,p_billing_snapshot);
+  INSERT INTO public.payper_payment_billing_snapshots(payment_id,order_id,customer_kind,
+    billing_name,billing_identity,billing_email,vat_applicable)
+  VALUES(payment_id,NULL,p_billing_snapshot->>'kind',p_billing_snapshot->>'name',
+    p_billing_snapshot->>'identity',p_billing_snapshot->>'email',true);
   RETURN jsonb_build_object('paymentId',payment_id,'state','reserved','registerNumber',d.register_number);
 END $$;
 REVOKE ALL ON FUNCTION public.reserve_physical_payment(uuid,uuid,text,integer,jsonb,jsonb)
@@ -133,6 +139,24 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.claim_physical_dispatch(uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.claim_physical_dispatch(uuid) TO service_role;
+
+-- A cashier may release only a reservation that has never been claimed for J4.
+-- Once dispatch starts, cancellation is never assumed to reverse a charge.
+CREATE FUNCTION public.cancel_physical_reserved(p_actor_id uuid,p_request_key uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE canceled_id uuid;
+BEGIN
+  IF coalesce(auth.role(),'')<>'service_role' THEN RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
+  UPDATE public.physical_payment_intents SET state='canceled',updated_at=clock_timestamp()
+    WHERE created_by=p_actor_id AND request_key=p_request_key AND state='reserved'
+      AND dispatch_started_at IS NULL
+    RETURNING payment_id INTO canceled_id;
+  IF canceled_id IS NULL THEN RETURN false; END IF;
+  UPDATE public.payment_transactions SET status='failed' WHERE id=canceled_id AND status='initiated';
+  RETURN true;
+END $$;
+REVOKE ALL ON FUNCTION public.cancel_physical_reserved(uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.cancel_physical_reserved(uuid,uuid) TO service_role;
 
 CREATE FUNCTION public.mark_physical_uncertain(p_payment_id uuid)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
@@ -159,7 +183,7 @@ GRANT EXECUTE ON FUNCTION public.mark_physical_pending(uuid) TO service_role;
 CREATE FUNCTION public.observe_physical_result(p_payment_id uuid,p_result jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE i public.physical_payment_intents%ROWTYPE; p public.payment_transactions%ROWTYPE;
-  provider_id text; approval text; result_status text;
+  provider_id text; result_uid text; approval text; result_status text;
 BEGIN
   IF coalesce(auth.role(),'')<>'service_role' THEN RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
   SELECT * INTO STRICT i FROM public.physical_payment_intents WHERE payment_id=p_payment_id FOR UPDATE;
@@ -173,16 +197,21 @@ BEGIN
   THEN RAISE EXCEPTION 'physical_result_mismatch' USING ERRCODE='23514'; END IF;
   result_status:=p_result->>'status';
   provider_id:=p_result->>'transactionId';
+  result_uid:=p_result->>'uid';
   approval:=p_result->>'approvalId';
   IF result_status NOT IN ('approved','declined') OR provider_id IS NULL OR
     provider_id !~ '^[A-Za-z0-9_-]{1,100}$' OR
-    (result_status='approved' AND (approval IS NULL OR approval !~ '^[A-Za-z0-9_-]{1,100}$'))
+    (result_status='approved' AND (approval IS NULL OR approval !~ '^[A-Za-z0-9_-]{1,100}$' OR
+      result_uid IS NULL OR result_uid !~ '^[A-Za-z0-9_-]{1,100}$'))
   THEN RAISE EXCEPTION 'physical_result_invalid' USING ERRCODE='23514'; END IF;
   IF i.provider_transaction_id IS NOT NULL AND i.provider_transaction_id IS DISTINCT FROM provider_id
+  THEN RAISE EXCEPTION 'physical_result_conflict' USING ERRCODE='23514'; END IF;
+  IF i.provider_uid IS NOT NULL AND i.provider_uid IS DISTINCT FROM result_uid
   THEN RAISE EXCEPTION 'physical_result_conflict' USING ERRCODE='23514'; END IF;
   IF i.state='approved' AND result_status<>'approved'
   THEN RAISE EXCEPTION 'physical_result_conflict' USING ERRCODE='23514'; END IF;
   UPDATE public.physical_payment_intents SET state=result_status,provider_transaction_id=provider_id,
+    provider_uid=CASE WHEN result_status='approved' THEN result_uid ELSE NULL END,
     approval_id=CASE WHEN result_status='approved' THEN approval ELSE NULL END,
     updated_at=clock_timestamp() WHERE payment_id=p_payment_id;
   IF result_status='declined' THEN
@@ -295,9 +324,24 @@ BEGIN
   IF NOT FOUND THEN RETURN NULL; END IF;
   RETURN jsonb_build_object('id',i.payment_id,'state',i.state,'register',i.register_number,
     'amountMinor',i.amount_minor,'merchantTerminal',i.terminal_number,
-    'transactionId',i.provider_transaction_id,'saleId',i.sale_id);
+    'transactionId',i.provider_transaction_id,'uid',i.provider_uid,'saleId',i.sale_id);
 END $$;
 REVOKE ALL ON FUNCTION public.get_physical_worker_intent(uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.get_physical_worker_intent(uuid) TO service_role;
+
+CREATE FUNCTION public.list_physical_worker_intents()
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE result jsonb;
+BEGIN
+  IF coalesce(auth.role(),'')<>'service_role' THEN RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
+  SELECT coalesce(jsonb_agg(jsonb_build_object('paymentId',payment_id,'state',state)
+    ORDER BY created_at),'[]'::jsonb) INTO result
+  FROM (SELECT payment_id,state,created_at FROM public.physical_payment_intents
+    WHERE state IN ('reserved','dispatching','pending','uncertain','approved')
+    ORDER BY created_at LIMIT 40) pending;
+  RETURN result;
+END $$;
+REVOKE ALL ON FUNCTION public.list_physical_worker_intents() FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.list_physical_worker_intents() TO service_role;
 
 COMMIT;

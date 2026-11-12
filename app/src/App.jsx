@@ -29,6 +29,7 @@ import PosPayment from './pages/PosPayment';
 import ChatbotHandoffs from './pages/ChatbotHandoffs';
 import AccountingOperations from './pages/AccountingOperations';
 import PhysicalTerminalSettings from './pages/PhysicalTerminalSettings';
+import PhysicalPayment from './pages/PhysicalPayment';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import DataDeletion from './pages/DataDeletion';
 
@@ -72,6 +73,7 @@ const AuthenticatedApp = () => {
         <Route path="/cashregister" element={<CashRegister />} />
         <Route path="/payment/order" element={<OrderPayment />} />
         <Route path="/payment/pos" element={<PosPayment />} />
+        <Route path="/payment/physical" element={<PhysicalPayment />} />
         <Route path="/payment/return" element={<PaymentReturnRoute />} />
         <Route path="/sales-report" element={<DailySalesReport />} />
         <Route path="/pricing" element={<Pricing />} />

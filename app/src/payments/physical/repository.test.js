@@ -34,4 +34,12 @@ describe('physical database adapter', () => {
       expect.stringContaining('observe_physical_result'), expect.stringContaining('finalize_physical_payment'),
     ]);
   });
+  test('rejects invalid person identity before reserving an invoice-linked payment', async () => {
+    const database = { query: vi.fn() };
+    await expect(createPhysicalRepository(database).reserve({ actorId: actor, workstationId: 'FRONT', requestKey,
+      register: '004', amountMinor: 2400, items: [{ id: actor, name: 'Ticket', qty: 1, customPrice: 24 }],
+      discount: null, billing: { kind: 'person', name: 'Customer', identity: '123456789', email: 'a@example.com' } }))
+      .rejects.toThrow('physical_billing_invalid');
+    expect(database.query).not.toHaveBeenCalled();
+  });
 });

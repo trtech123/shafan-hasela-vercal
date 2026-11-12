@@ -16,13 +16,18 @@ vi.mock('@/api/supabaseClient',()=>({supabase:{from:table=>({select:()=>({eq:asy
 vi.mock('@/components/cashregister/ActivityGrid',()=>({default:({activities,onAdd})=><div>{activities.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add service</button>)}</div>}));
 vi.mock('@/components/cashregister/ProductGrid',()=>({default:({products,onAdd})=><div>{products.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add product</button>)}</div>}));
 vi.mock('@/components/cashregister/Cart',()=>({default:({onCheckout,onLinkOrder})=><div><button onClick={onCheckout}>checkout</button><button onClick={()=>onLinkOrder({id:orderId,order_number:'ORD-1'})}>link order</button></div>}));
-vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled})=><button disabled={!pelecardEnabled} onClick={onPelecard}>Pelecard</button>}));
+vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalEnabled})=><><button disabled={!pelecardEnabled} onClick={onPelecard}>Pelecard</button><button disabled={!physicalTerminalEnabled} onClick={onPhysicalTerminal}>Physical</button></>}));
 vi.mock('@/components/cashregister/ReceiptScreen',()=>({default:()=>null}));
 vi.mock('sonner',()=>({toast:{error:vi.fn()}}));
 import CashRegister from './CashRegister';
 
 afterEach(()=>{cleanup();state.navigate.mockReset();state.role='admin'});
 describe('Cash Register hosted routes',()=>{
+  test('physical cart reaches its own review route without a client amount',async()=>{
+    render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Physical'));
+    expect(state.navigate).toHaveBeenCalledWith('/payment/physical',{state:{checkoutId:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}}});
+  });
   test('standalone product cart reaches POS review without a client amount',async()=>{
     render(<CashRegister/>);await screen.findByText('add service');
     fireEvent.click(screen.getByText('מוצרים'));fireEvent.click(screen.getByText('add product'));
