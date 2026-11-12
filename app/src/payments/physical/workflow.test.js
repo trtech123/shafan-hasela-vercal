@@ -64,6 +64,21 @@ describe('physical terminal workflow', () => {
     expect(deps.provider.inspect).toHaveBeenCalledWith(expect.objectContaining({ id: 'intent-1', register: '003', amountMinor: 2400 }));
     expect(deps.finalize).toHaveBeenCalledWith('intent-1', expect.objectContaining({ transactionId: 'trx-1', amountMinor: 2400 }));
   });
+  test('repeated status checks return the existing sale without a second finalization', async () => {
+    const deps = dependencies();
+    const originalFinalize = deps.finalize;
+    deps.finalize = vi.fn(async (...args) => {
+      const result = await originalFinalize(...args);
+      deps.status.mockResolvedValue({ id: 'intent-1', state: 'succeeded', saleId: result.saleId });
+      return result;
+    });
+    const workflow = createPhysicalWorkflow(deps);
+    const first = await workflow.verify('intent-1');
+    const second = await workflow.verify('intent-1');
+    expect(first.saleId).toBe('sale-1');
+    expect(second.saleId).toBe('sale-1');
+    expect(deps.finalize).toHaveBeenCalledTimes(1);
+  });
   test('lookup failure leaves the outcome uncertain and creates no sale', async () => {
     const deps = dependencies();
     deps.provider.inspect.mockRejectedValue(new Error('offline'));
