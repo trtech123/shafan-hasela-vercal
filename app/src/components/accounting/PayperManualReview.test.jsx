@@ -59,6 +59,16 @@ test('shows an accountant-managed paid sale as an actionable manual obligation',
   expect(screen.queryByText(/מסמך שהופק/)).not.toBeInTheDocument();
 });
 
+test('offers a dedicated manual reconciliation action only for a physical provider hold', async () => {
+  query.mockReturnValue({ select: () => ({ in: () => ({ order: () => ({ limit: () => Promise.resolve({
+    data: [{ payment_id: 'physical-payment', sale_id: 'physical-sale', amount: 4,
+      state: 'source_blocked', reconciliation_code: 'physical_provider_confirmation_required' }], error: null,
+  }) }) }) }) });
+  render(<PayperManualReview />);
+  expect(await screen.findByText(/physical-payment/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /רישום מסמך ידני מאומת/ })).toBeInTheDocument();
+});
+
 test('warns the administrator that a provider timeout cannot be retried automatically', async () => {
   query.mockReturnValue({ select: () => ({ in: () => ({ order: () => ({ limit: () => Promise.resolve({
     data: [{ payment_id: 'payment-3', order_id: 'order-3', state: 'reconciliation_required',

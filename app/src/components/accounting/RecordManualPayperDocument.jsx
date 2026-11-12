@@ -5,7 +5,8 @@ const reference = (value) => /^[A-Za-z0-9:/._-]{8,120}$/.test(value);
 const payperUrl = (value) => /^https:\/\/app\.payper\.co\.il\/public\/invoice_show\/[1-9][0-9]*(?:\?ak=[A-Za-z0-9_-]{16,128})?$/.test(value);
 
 /** Records an already-issued portal document. This component never calls an issuance endpoint. */
-export default function RecordManualPayperDocument({ paymentId, amount, onRecorded }) {
+export default function RecordManualPayperDocument({ paymentId, amount, onRecorded,
+  reconciliationRpc = 'record_payper_manual_document' }) {
   const [open, setOpen] = useState(false);
   const [number, setNumber] = useState('');
   const [url, setUrl] = useState('');
@@ -24,7 +25,7 @@ export default function RecordManualPayperDocument({ paymentId, amount, onRecord
     if (!ready || busy) return;
     setBusy(true); setError(false);
     try {
-      const { error: rpcError } = await supabase.rpc('record_payper_manual_document', {
+      const { error: rpcError } = await supabase.rpc(reconciliationRpc, {
         p_payment_id: paymentId, p_document_number: number, p_document_url: url,
         p_issued_at: new Date(issuedAt).toISOString(), p_amount: Number(amount),
         p_provider_confirmation_ref: providerRef, p_accountant_approval_ref: accountantRef,

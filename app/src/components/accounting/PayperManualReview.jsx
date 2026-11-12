@@ -3,6 +3,7 @@ import { supabase } from '@/api/supabaseClient';
 import RecordManualPayperDocument from './RecordManualPayperDocument';
 
 const reasons = {
+  physical_provider_confirmation_required: 'תשלום במסופון פיזי אומת; נדרש מסמך Payper ידני באישור רואה חשבון והתאמתו לתשלום.',
   eligible: 'ממתין לעיבוד אוטומטי של Payper',
   source_frozen: 'ממתין לעיבוד אוטומטי של Payper',
   dispatch_reserved: 'בקשת הפקה נשלחה; יש לבדוק את מצבה אם היא מתעכבת',
@@ -90,6 +91,11 @@ export default function PayperManualReview() {
           : 'התשלום נשמר. אין להפיק מסמך חוזר אוטומטית או דרך Rivhit.'}</span>
         {row.state === 'reconciliation_required' && row.provider_trx_record_id && row.amount != null &&
           <RecordManualPayperDocument paymentId={row.payment_id} amount={row.amount}
+            onRecorded={() => setRows(current => current.filter(item => item.payment_id !== row.payment_id))} />}
+        {row.state === 'source_blocked' && row.reconciliation_code === 'physical_provider_confirmation_required' &&
+          row.sale_id && row.amount != null &&
+          <RecordManualPayperDocument paymentId={row.payment_id} amount={row.amount}
+            reconciliationRpc="record_physical_payper_manual_document"
             onRecorded={() => setRows(current => current.filter(item => item.payment_id !== row.payment_id))} />}
       </li>)}</ul>}
   </section>;
