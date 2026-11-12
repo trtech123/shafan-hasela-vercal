@@ -200,6 +200,7 @@ export default function CashRegister() {
         onConfirm={handlePaymentConfirm}
         manualSaleSaving={manualSaleSaving}
         onPelecard={handlePelecardStart}
+        physicalTerminalVisible={import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true'}
         pelecardEnabled={canPayOrder && (Boolean(linkedOrder?.id)||canHostedCart)}
         pelecardHint={linkedOrder?.id?'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה':
           canHostedCart?'מחירי הקטלוג והסכום יאומתו בשרת לפני מעבר לפלאקארד':

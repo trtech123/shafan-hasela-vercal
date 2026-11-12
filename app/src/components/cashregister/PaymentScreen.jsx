@@ -52,6 +52,9 @@ export default function PaymentScreen({
   cartItems,
   onConfirm,
   onPelecard = () => {},
+  onPhysicalTerminal = () => {},
+  physicalTerminalVisible = false,
+  physicalTerminalEnabled = false,
   onBack,
   pelecardBusy = false,
   pelecardEnabled = false,
@@ -296,6 +299,15 @@ export default function PaymentScreen({
             </div>
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>
+          {physicalTerminalVisible && (
+            <button type="button" onClick={onPhysicalTerminal}
+              disabled={!physicalTerminalEnabled || pelecardBusy || manualSaleSaving}
+              className="w-full bg-gradient-to-l from-indigo-600 to-indigo-700 rounded-2xl p-5 flex items-center gap-4 text-right disabled:opacity-60 disabled:cursor-not-allowed">
+              <CreditCard className="w-8 h-8 text-white" />
+              <span><strong className="block text-lg">תשלום במסופון פיזי</strong>
+                <small className="text-white/70">{physicalTerminalEnabled ? 'שליחת הסכום למסופון המשויך לקופה' : 'ממתין להפעלת ממשק המסופונים על ידי פלאקארד'}</small></span>
+            </button>
+          )}
           {PAYMENT_METHODS.map(method => {
             const Icon = method.icon;
             return (
