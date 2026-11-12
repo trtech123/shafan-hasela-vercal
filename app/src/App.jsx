@@ -28,6 +28,7 @@ import OrderPayment from './pages/OrderPayment';
 import PosPayment from './pages/PosPayment';
 import ChatbotHandoffs from './pages/ChatbotHandoffs';
 import AccountingOperations from './pages/AccountingOperations';
+import PhysicalTerminalSettings from './pages/PhysicalTerminalSettings';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import DataDeletion from './pages/DataDeletion';
 
@@ -80,6 +81,7 @@ const AuthenticatedApp = () => {
         <Route path="/templates" element={<Templates />} />
         <Route path="/chatbot-handoffs" element={<ChatbotHandoffs />} />
         <Route path="/accounting-operations" element={<AccountingOperations />} />
+        <Route path="/physical-terminal-settings" element={<PhysicalTerminalSettings />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>

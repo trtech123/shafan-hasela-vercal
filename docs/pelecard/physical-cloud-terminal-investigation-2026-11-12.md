@@ -6,6 +6,12 @@
 - Register `003`: N86. Registers `004`, `005`, `006`: CT20.
 - The Pelecard app on each device sets its register number. These are merchant facts, not a published API contract.
 
+## Admin-controlled physical device settings
+
+The dedicated `/physical-terminal-settings` page manages four fixed rows: `003` N86 and `004`–`006` CT20. An admin can edit the device label, assign one existing named `cash_registers` workstation, and mark the device enabled or disabled. An admin can create a named cash register from the same page. Device numbers and models are immutable in the admin API; one workstation cannot be assigned to two devices. All devices start disabled. The database RPCs require the authenticated admin role, while the service role has read-only access for the future physical adapter. No API user, password, card details, or digital terminal settings appear on the page or in the new table. Physical API credentials remain separate server secrets.
+
+Device `enabled` is an assignment readiness setting. It cannot override the independent `PELECARD_PHYSICAL_ENABLED` runtime gate, which remains closed until Pelecard's cloud contract is implemented. The physical resolver reads only an enabled device assigned to an active named cash register; it never accepts a register number from the browser. The page does not yet bind a browser to a named cash register, and the live checkout still cannot dispatch. The new migration has been exercised only in disposable local PostgreSQL; it has not been applied to Production.
+
 ## Official documentation reviewed
 
 | Source | What it establishes | Limit |

@@ -14,6 +14,8 @@
 
 ## Durable payment path
 
+- [x] Add four fixed, disabled physical-device settings with admin-only label, enabled state and named cash register assignment; enforce one device per workstation. Rehearse the migration in disposable PostgreSQL.
+- [ ] Bind each cashier browser/workstation to its named cash register in a server-verifiable way before enabling automatic device selection.
 - [ ] Add an isolated migration for workstation mapping, immutable physical intents, unique request keys and one in-flight intent per register. No production migration without approval.
 - [ ] In the server reservation, read catalog prices and validate discounts and total in agorot. Reject client amounts and register overrides.
 - [ ] Claim dispatch atomically, persist the provider correlation before allowing any second action, and reconcile unknown outcomes with lookup only.
