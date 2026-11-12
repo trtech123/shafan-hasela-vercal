@@ -11,7 +11,7 @@ const safeFields = new Set([
   'StatusCode', 'OriginaTrxId', 'TerminalNumber', 'termNo', 'PelecardTransactionId',
   'ShvaResult', 'ShvaResultEmv', 'DebitTotal', 'Amount', 'DebitCurrency', 'currency',
   'DebitApproveNumber', 'AuthNo', 'UID', 'Uid', 'AdditionalDetailsParamX', 'JParam',
-  'ParameterJ', 'VoucherId', 'status', 'ErrorCode',
+  'ParameterJ', 'VoucherId', 'status', 'ErrorCode', 'retailer', 'amount', 'uid',
 ]);
 
 function object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
@@ -76,6 +76,12 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
       const body = await post(DETAILS, { debitTrxId, Uid: '', UserKey: '', AuthNo: '', token: '' });
       return { ...safeProjection(body.ResultData ?? body.Output ?? body), StatusCode: statusCode(body.StatusCode) };
     },
+    async getTransactionDetailsByUid(uid) {
+      if (typeof uid !== 'string' || !transactionId.test(uid))
+        throw new Error('physical_uid_invalid');
+      const body = await post(DETAILS, { debitTrxId: '', Uid: uid, UserKey: '', AuthNo: '', token: '' });
+      return { ...safeProjection(body.ResultData ?? body.Output ?? body), StatusCode: statusCode(body.StatusCode) };
+    },
     async inspect(intent) {
       if (!intent || typeof intent.id !== 'string' || !reference.test(intent.id) ||
         !registerNumber.test(intent.register) || !Number.isSafeInteger(intent.amountMinor))
@@ -89,12 +95,22 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
       const row = found.records[0];
       const approvalId = String(row.DebitApproveNumber ?? '');
       const providerTransactionId = String(row.PelecardTransactionId ?? '');
+      const uid = String(row.UID ?? row.Uid ?? '');
       if (String(row.TerminalNumber ?? '') !== terminalNumber ||
-        String(row.termNo ?? '') !== intent.register ||
         String(row.DebitTotal ?? '') !== String(intent.amountMinor) ||
         row.AdditionalDetailsParamX !== intent.id ||
         String(row.ShvaResult ?? '') !== '000' ||
-        !transactionId.test(providerTransactionId) || !approvalId)
+        !transactionId.test(providerTransactionId) || !transactionId.test(uid) ||
+        !transactionId.test(approvalId))
+        throw new Error('physical_result_unverified');
+      // CheckGoodParamXEMV's output guide does not include a register field.
+      // Resolve the UID through GetTransDetailsEMV and correlate termNo there.
+      const detail = await this.getTransactionDetailsByUid(uid);
+      if (detail.StatusCode !== '000' ||
+        String(detail.UID ?? detail.Uid ?? detail.uid ?? '') !== uid ||
+        String(detail.termNo ?? '') !== intent.register ||
+        String(detail.Amount ?? detail.amount ?? '') !== String(intent.amountMinor) ||
+        String(detail.retailer ?? '') !== terminalNumber)
         throw new Error('physical_result_unverified');
       return { status: 'approved', intentId: intent.id, merchantTerminal: terminalNumber,
         register: intent.register, amountMinor: intent.amountMinor, transactionId: providerTransactionId, approvalId };
