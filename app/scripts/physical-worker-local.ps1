@@ -1,18 +1,27 @@
 param(
   [ValidateSet('check', 'run')][string]$Mode = 'check',
-  [Parameter(Mandatory = $true)][string]$CertificatePath,
+  [string]$CertificatePath,
   [string]$ServiceRoleEnvFile = (Join-Path $PSScriptRoot '..\..\..\..\app\.env.local')
 )
 
 $ErrorActionPreference = 'Stop'
+$vaultPath = Join-Path $env:LOCALAPPDATA 'ShafanHasela\physical-worker-secrets.xml'
+$vault = if (Test-Path -LiteralPath $vaultPath) { Import-Clixml -LiteralPath $vaultPath } else { $null }
+if (-not $CertificatePath) { $CertificatePath = $vault.CertificatePath }
+if (-not $CertificatePath) { throw 'physical_database_ca_path_required' }
 $certificate = Get-Content -LiteralPath $CertificatePath -Raw
 if ($certificate -notmatch '-----BEGIN CERTIFICATE-----') { throw 'physical_database_ca_invalid' }
 
 function Read-Secret([string]$prompt) {
   $secure = Read-Host $prompt -AsSecureString
+  try { return Convert-Secret $secure }
+  finally { $secure.Dispose() }
+}
+
+function Convert-Secret([Security.SecureString]$secure) {
   $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
   try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
-  finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer); $secure.Dispose() }
+  finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
 }
 
 $serviceRoleLine = Get-Content -LiteralPath $ServiceRoleEnvFile |
@@ -22,9 +31,9 @@ $serviceRole = ($serviceRoleLine -split '=', 2)[1].Trim().Trim('"', "'")
 if (-not $serviceRole) { throw 'supabase_service_role_key_missing' }
 
 $env:PELECARD_PHYSICAL_TERMINAL = '2814926015'
-$env:PELECARD_PHYSICAL_USER = Read-Secret 'Physical J4 username'
-$env:PELECARD_PHYSICAL_PASSWORD = Read-Secret 'Physical J4 password'
-$env:PELECARD_PHYSICAL_DATABASE_URL = Read-Secret 'Supabase session-pooler database URL'
+$env:PELECARD_PHYSICAL_USER = if ($vault) { Convert-Secret $vault.User } else { Read-Secret 'Physical J4 username' }
+$env:PELECARD_PHYSICAL_PASSWORD = if ($vault) { Convert-Secret $vault.Password } else { Read-Secret 'Physical J4 password' }
+$env:PELECARD_PHYSICAL_DATABASE_URL = if ($vault) { Convert-Secret $vault.DatabaseUrl } else { Read-Secret 'Supabase session-pooler database URL' }
 $env:PELECARD_PHYSICAL_DATABASE_CA = $certificate
 $env:SUPABASE_URL = 'https://divzxsynczeifkpnpupl.supabase.co'
 $env:SUPABASE_SERVICE_ROLE_KEY = $serviceRole
