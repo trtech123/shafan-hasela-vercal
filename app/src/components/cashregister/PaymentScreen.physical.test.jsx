@@ -33,4 +33,5 @@ test('physical action stays separate from hosted checkout when explicitly enable
   fireEvent.click(screen.getByRole('button', { name: /תשלום במסופון פיזי/ }));
   expect(onPhysical).toHaveBeenCalledTimes(1);
   expect(onDigital).not.toHaveBeenCalled();
+  expect(screen.getByText('הסכום נשלח אוטומטית למסופון המשויך לקופה')).toBeInTheDocument();
 });

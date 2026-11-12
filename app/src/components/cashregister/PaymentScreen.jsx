@@ -305,7 +305,7 @@ export default function PaymentScreen({
               className="w-full bg-gradient-to-l from-indigo-600 to-indigo-700 rounded-2xl p-5 flex items-center gap-4 text-right disabled:opacity-60 disabled:cursor-not-allowed">
               <CreditCard className="w-8 h-8 text-white" />
               <span><strong className="block text-lg">תשלום במסופון פיזי</strong>
-                <small className="text-white/70">{physicalTerminalEnabled ? 'שליחת הסכום למסופון המשויך לקופה' : 'ממתין להפעלת ממשק המסופונים על ידי פלאקארד'}</small></span>
+                <small className="text-white/70">{physicalTerminalEnabled ? 'הסכום נשלח אוטומטית למסופון המשויך לקופה' : 'ממתין להפעלת ממשק המסופונים על ידי פלאקארד'}</small></span>
             </button>
           )}
           {PAYMENT_METHODS.map(method => {
