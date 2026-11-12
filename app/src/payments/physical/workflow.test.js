@@ -29,7 +29,9 @@ describe('physical terminal workflow', () => {
     const deps = dependencies();
     const result = await createPhysicalWorkflow(deps).start({ workstationId: 'w1', requestKey: 'key-1', cart, amountMinor: 1, register: '006' });
     expect(deps.reserve).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 2400, register: '003' }));
-    expect(deps.provider.send).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 2400, register: '003', merchantTerminal: '2814926' }));
+    expect(deps.provider.send).toHaveBeenCalledWith({
+      amountMinor: 2400, register: '003', merchantTerminal: '2814926', intentId: 'intent-1',
+    });
     expect(result.state).toBe('pending');
     expect(deps.finalize).not.toHaveBeenCalled();
   });
