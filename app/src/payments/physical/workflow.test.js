@@ -6,6 +6,7 @@ function dependencies(overrides = {}) {
   const intent = { id: 'intent-1', amountMinor: 2400, register: '003', state: 'reserved' };
   return {
     enabled: true,
+    dispatchEnabled: true,
     registerForWorkstation: vi.fn(async () => '003'),
     calculateCart: vi.fn(async () => ({ amountMinor: 2400, items: [{ id: 'p1', qty: 2, unitMinor: 1200 }] })),
     reserve: vi.fn(async () => intent),
@@ -26,6 +27,12 @@ describe('physical terminal workflow', () => {
   test('disabled by default and never dispatches', async () => {
     const deps = dependencies({ enabled: false });
     await expect(createPhysicalWorkflow(deps).start({ workstationId: 'w1', requestKey: 'key-1', cart })).rejects.toThrow('physical_disabled');
+    expect(deps.provider.send).not.toHaveBeenCalled();
+  });
+  test('financial dispatch requires its own explicit gate', async () => {
+    const deps = dependencies({ dispatchEnabled: false });
+    await expect(createPhysicalWorkflow(deps).dispatch('intent-1')).rejects.toThrow('physical_dispatch_disabled');
+    expect(deps.claimDispatch).not.toHaveBeenCalled();
     expect(deps.provider.send).not.toHaveBeenCalled();
   });
   test('reserves server-calculated amount without waiting for device response', async () => {

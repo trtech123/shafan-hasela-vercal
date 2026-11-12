@@ -1,5 +1,5 @@
-// Provider-neutral physical terminal orchestration. The production transport is
-// deliberately absent until Pelecard confirms its cloud-device API contract.
+// Provider-neutral physical terminal orchestration. Financial dispatch requires
+// a separate physical-only gate and a worker that can wait for the PINPAD.
 // Support supplied merchant prefix. The device displays a different full
 // terminal number; only a separately configured physical terminal can be sent.
 export const PHYSICAL_MERCHANT_PREFIX = '2814926';
@@ -48,6 +48,7 @@ export function createPhysicalWorkflow(deps) {
     },
     async dispatch(intentId) {
       if (deps.enabled !== true) throw new Error('physical_disabled');
+      if (deps.dispatchEnabled !== true) throw new Error('physical_dispatch_disabled');
       if (typeof merchantTerminal !== 'string' || !/^\d{10}$/.test(merchantTerminal))
         throw new Error('physical_terminal_required');
       const intent = await deps.status(intentId);

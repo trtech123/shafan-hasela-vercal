@@ -8,13 +8,17 @@ describe('physical configuration', () => {
   test('never falls back to hosted credentials', () => {
     expect(() => readPhysicalConfig({ PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_LIVE_USER: 'hosted', PELECARD_LIVE_PASSWORD: 'hosted' })).toThrow('physical_credentials_required');
   });
-  test('requires provider contract activation in addition to credentials', () => {
-    expect(() => readPhysicalConfig({ PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_PHYSICAL_USER: 'user', PELECARD_PHYSICAL_PASSWORD: 'pass', PELECARD_PHYSICAL_TERMINAL: '2814926015' })).toThrow('physical_provider_contract_unconfirmed');
+  test('requires a second explicit financial dispatch gate', () => {
+    expect(readPhysicalConfig({ PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_PHYSICAL_USER: 'user', PELECARD_PHYSICAL_PASSWORD: 'pass', PELECARD_PHYSICAL_TERMINAL: '2814926015' }).dispatchEnabled).toBe(false);
   });
   test('the physical terminal number must be independently configured', () => {
     expect(() => readPhysicalConfig({ PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_PHYSICAL_USER: 'user', PELECARD_PHYSICAL_PASSWORD: 'pass', PELECARD_LIVE_TERMINAL: '2814926015' })).toThrow('physical_terminal_required');
   });
-  test('photo evidence does not silently authorize a live transport', () => {
-    expect(() => readPhysicalConfig({ PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_PHYSICAL_USER: 'user', PELECARD_PHYSICAL_PASSWORD: 'pass', PELECARD_PHYSICAL_TERMINAL: '2814926015' })).toThrow('physical_provider_contract_unconfirmed');
+  test('live transport needs explicit approval and a long-lived worker', () => {
+    const base = { PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_PHYSICAL_USER: 'user', PELECARD_PHYSICAL_PASSWORD: 'pass', PELECARD_PHYSICAL_TERMINAL: '2814926015', PELECARD_PHYSICAL_DISPATCH_ENABLED: 'true' };
+    expect(() => readPhysicalConfig(base)).toThrow('physical_worker_duration_required');
+    expect(readPhysicalConfig({ ...base, PELECARD_PHYSICAL_WORKER_MAX_MS: '330000' })).toMatchObject({
+      enabled: true, dispatchEnabled: true, terminalNumber: '2814926015', workerMaxMs: 330000,
+    });
   });
 });

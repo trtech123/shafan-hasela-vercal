@@ -5,10 +5,29 @@ const config = { terminalNumber: '2814926015', user: 'physical-user', password: 
 function provider(fetcher) { return createPhysicalPelecardProvider({ ...config, fetcher }); }
 
 describe('physical Pelecard provider boundary', () => {
-  test('never dispatches an undocumented card-read command', async () => {
+  test('serializes Appendix D PINPAD J4 with empty card fields and five-minute timeout', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ StatusCode: '000', PelecardTransactionId: '12345',
+      ShvaResult: '000', DebitTotal: '2400', AdditionalDetailsParamX: 'intent-1', CreditCardNumber: 'masked', shvaOutput: 'private' }), { status: 200 }));
+    const result = await provider(fetcher).send({ merchantTerminal: '2814926015', register: '004', amountMinor: 2400, intentId: 'intent-1' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const [url, options] = fetcher.mock.calls[0];
+    expect(url).toBe('https://gateway21.pelecard.biz/services/DebitRegularType');
+    expect(options.headers['Content-Type']).toBe('application/x-www-form-urlencoded; charset=UTF-8');
+    expect(JSON.parse(options.body)).toEqual({ ...config, shopNumber: '004', creditCard: '', creditCardDateMmYy: '',
+      token: '', total: '2400', currency: '1', cvv2: '', id: '', authorizationNumber: '', paramX: 'intent-1',
+      QAResultStatus: '', eci: '', xid: '', cavv: '' });
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+    expect(timeout).toHaveBeenCalledWith(300_000);
+    timeout.mockRestore();
+    expect(result).toEqual({ StatusCode: '000', PelecardTransactionId: '12345', ShvaResult: '000',
+      DebitTotal: '2400', AdditionalDetailsParamX: 'intent-1' });
+    expect(JSON.stringify(result)).not.toMatch(/masked|private/);
+  });
+  test('rejects malformed dispatch before network access', async () => {
     const fetcher = vi.fn();
-    await expect(provider(fetcher).send({ register: '004', amountMinor: 2400, intentId: 'intent-1' }))
-      .rejects.toThrow('physical_device_dispatch_contract_required');
+    await expect(provider(fetcher).send({ merchantTerminal: '2814926015', register: '4', amountMinor: 2400, intentId: 'intent-1' }))
+      .rejects.toThrow('physical_dispatch_invalid');
     expect(fetcher).not.toHaveBeenCalled();
   });
   test('uses the documented EMV ParamX lookup with physical credentials', async () => {
@@ -43,5 +62,27 @@ describe('physical Pelecard provider boundary', () => {
     const result = await provider(fetcher).lookupByParamX('physical-intent-1');
     expect(result).toEqual({ StatusCode: null, records: [] });
     expect(JSON.stringify(result)).not.toMatch(/4111111111111111|secret/);
+  });
+  test('independently accepts only a fully correlated EMV approval', async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ StatusCode: '000', UserData: [{
+      TerminalNumber: '2814926015', termNo: '004', DebitTotal: '2400',
+      AdditionalDetailsParamX: 'intent-1', PelecardTransactionId: 'trx-1',
+      ShvaResult: '000', DebitApproveNumber: 'approved-1', pan: '4111111111111111',
+    }] }), { status: 200 }));
+    expect(await provider(fetcher).inspect({ id: 'intent-1', register: '004', amountMinor: 2400 })).toEqual({
+      status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926015',
+      register: '004', amountMinor: 2400, transactionId: 'trx-1', approvalId: 'approved-1',
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  test('missing register or conflicting lookup rows remain uncertain', async () => {
+    const record = { TerminalNumber: '2814926015', DebitTotal: '2400', AdditionalDetailsParamX: 'intent-1',
+      PelecardTransactionId: 'trx-1', ShvaResult: '000', DebitApproveNumber: 'approved-1' };
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ StatusCode: '000', UserData: [record] }), { status: 200 }));
+    await expect(provider(fetcher).inspect({ id: 'intent-1', register: '004', amountMinor: 2400 })).rejects.toThrow('physical_result_unverified');
+    fetcher.mockImplementation(async () => new Response(JSON.stringify({ StatusCode: '000', UserData: [
+      { ...record, termNo: '004' }, { ...record, termNo: '004', PelecardTransactionId: 'trx-2' },
+    ] }), { status: 200 }));
+    await expect(provider(fetcher).inspect({ id: 'intent-1', register: '004', amountMinor: 2400 })).rejects.toThrow('physical_result_unverified');
   });
 });

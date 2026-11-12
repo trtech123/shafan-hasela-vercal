@@ -9,10 +9,13 @@ export function readPhysicalConfig(env) {
   const terminal = env.PELECARD_PHYSICAL_TERMINAL;
   if (typeof terminal !== 'string' || !/^\d{10}$/.test(terminal))
     throw new Error('physical_terminal_required');
-  // Pelecard named DebitRegularType J4 and the CT20 shop number, but its public
-  // request schema requires raw card/expiry fields and does not document the
-  // card-present device-read variant or final-state response. Fail closed.
-  throw new Error('physical_provider_contract_unconfirmed');
+  // Appendix D documents the PINPAD J4 request. Financial dispatch has a
+  // second gate so device readiness cannot authorize a charge by itself.
+  const dispatchEnabled = env.PELECARD_PHYSICAL_DISPATCH_ENABLED === 'true';
+  const workerMaxMs = Number(env.PELECARD_PHYSICAL_WORKER_MAX_MS || 0);
+  if (dispatchEnabled && (!Number.isSafeInteger(workerMaxMs) || workerMaxMs < 330_000))
+    throw new Error('physical_worker_duration_required');
+  return { enabled: true, dispatchEnabled, terminalNumber: terminal, user, password, workerMaxMs };
 }
 
 export const physicalMerchantPrefix = PHYSICAL_MERCHANT_PREFIX;

@@ -1,11 +1,12 @@
-// Read-only portions of Pelecard's documented Services API. DebitRegularType
-// remains blocked: its public J4 schema requires card and expiry inputs and
-// does not document how a cloud device initiates card reading without them.
+// Pelecard Services API. Appendix D documents the card-present PINPAD J4
+// variant with empty card fields and a five-minute response window.
 const BASE = 'https://gateway21.pelecard.biz/services/';
+const DEBIT = `${BASE}DebitRegularType`;
 const LOOKUP = `${BASE}CheckGoodParamXEMV`;
 const DETAILS = `${BASE}GetTransDetailsEMV`;
 const reference = /^[A-Za-z0-9_-]{1,100}$/;
 const transactionId = /^[A-Za-z0-9_-]{1,100}$/;
+const registerNumber = /^(003|004|005|006)$/;
 const safeFields = new Set([
   'StatusCode', 'OriginaTrxId', 'TerminalNumber', 'termNo', 'PelecardTransactionId',
   'ShvaResult', 'ShvaResultEmv', 'DebitTotal', 'Amount', 'DebitCurrency', 'currency',
@@ -29,11 +30,13 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
     typeof password !== 'string' || !password) throw new Error('physical_credentials_required');
   const credentials = { terminalNumber, user, password };
 
-  async function post(url, body) {
+  async function post(url, body, timeoutMs = 10_000) {
     const response = await fetcher(url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      // The official request builder POSTs raw JSON using jQuery's default
+      // form content type; Appendix D's sample does the same.
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
       body: JSON.stringify({ ...credentials, ...body }), redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) throw new Error('physical_lookup_unavailable');
     const raw = await response.text();
@@ -45,8 +48,20 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
   }
 
   return {
-    async send() {
-      throw new Error('physical_device_dispatch_contract_required');
+    async send({ merchantTerminal, register, amountMinor, intentId }) {
+      if (merchantTerminal !== terminalNumber || !registerNumber.test(register) ||
+        !Number.isSafeInteger(amountMinor) || amountMinor < 1 || amountMinor > 2_147_483_647 ||
+        typeof intentId !== 'string' || !reference.test(intentId))
+        throw new Error('physical_dispatch_invalid');
+      // All fields in Appendix D's J4 example are serialized. In particular,
+      // card number and expiry are present as empty strings, never as raw data.
+      const body = await post(DEBIT, {
+        shopNumber: register, creditCard: '', creditCardDateMmYy: '', token: '',
+        total: String(amountMinor), currency: '1', cvv2: '', id: '',
+        authorizationNumber: '', paramX: intentId, QAResultStatus: '',
+        eci: '', xid: '', cavv: '',
+      }, 300_000);
+      return { ...safeProjection(body), StatusCode: statusCode(body.StatusCode) };
     },
     async lookupByParamX(paramX) {
       if (typeof paramX !== 'string' || !reference.test(paramX))
@@ -60,6 +75,29 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
         throw new Error('physical_transaction_id_invalid');
       const body = await post(DETAILS, { debitTrxId, Uid: '', UserKey: '', AuthNo: '', token: '' });
       return { ...safeProjection(body.ResultData ?? body.Output ?? body), StatusCode: statusCode(body.StatusCode) };
+    },
+    async inspect(intent) {
+      if (!intent || typeof intent.id !== 'string' || !reference.test(intent.id) ||
+        !registerNumber.test(intent.register) || !Number.isSafeInteger(intent.amountMinor))
+        throw new Error('physical_intent_invalid');
+      const found = await this.lookupByParamX(intent.id);
+      // A successful transport/status lookup alone cannot establish approval.
+      // Until Pelecard supplies concrete EMV examples, accept only one row with
+      // every correlation field and an explicit approved Shva result.
+      if (found.StatusCode !== '000' || found.records.length !== 1)
+        throw new Error('physical_result_unverified');
+      const row = found.records[0];
+      const approvalId = String(row.DebitApproveNumber ?? '');
+      const providerTransactionId = String(row.PelecardTransactionId ?? '');
+      if (String(row.TerminalNumber ?? '') !== terminalNumber ||
+        String(row.termNo ?? '') !== intent.register ||
+        String(row.DebitTotal ?? '') !== String(intent.amountMinor) ||
+        row.AdditionalDetailsParamX !== intent.id ||
+        String(row.ShvaResult ?? '') !== '000' ||
+        !transactionId.test(providerTransactionId) || !approvalId)
+        throw new Error('physical_result_unverified');
+      return { status: 'approved', intentId: intent.id, merchantTerminal: terminalNumber,
+        register: intent.register, amountMinor: intent.amountMinor, transactionId: providerTransactionId, approvalId };
     },
   };
 }
