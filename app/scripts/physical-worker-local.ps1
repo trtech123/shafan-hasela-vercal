@@ -22,7 +22,7 @@ $serviceRole = ($serviceRoleLine -split '=', 2)[1].Trim().Trim('"', "'")
 if (-not $serviceRole) { throw 'supabase_service_role_key_missing' }
 
 $env:PELECARD_PHYSICAL_TERMINAL = '2814926015'
-$env:PELECARD_PHYSICAL_USER = Read-Host 'Physical J4 username (not digital checkout configuration)'
+$env:PELECARD_PHYSICAL_USER = Read-Secret 'Physical J4 username'
 $env:PELECARD_PHYSICAL_PASSWORD = Read-Secret 'Physical J4 password'
 $env:PELECARD_PHYSICAL_DATABASE_URL = Read-Secret 'Supabase session-pooler database URL'
 $env:PELECARD_PHYSICAL_DATABASE_CA = $certificate

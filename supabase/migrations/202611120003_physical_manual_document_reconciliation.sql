@@ -2,6 +2,17 @@
 -- change the digital Payper worker, its cutoff, or its automatic dispatch.
 BEGIN;
 
+-- A manually issued physical document has no verified Payper trxRecordId yet.
+-- Preserve the requirement for every automatic or pending Payper dispatch.
+ALTER TABLE public.payper_document_ledger
+  DROP CONSTRAINT payper_reserved_requires_trx_record;
+ALTER TABLE public.payper_document_ledger
+  ADD CONSTRAINT payper_reserved_requires_trx_record CHECK (
+    state NOT IN ('dispatch_reserved','reconciliation_required','succeeded')
+    OR provider_trx_record_id IS NOT NULL
+    OR (state='succeeded' AND document_origin='manual')
+  );
+
 CREATE FUNCTION public.record_physical_payper_manual_document(
   p_payment_id uuid, p_document_number text, p_document_url text,
   p_issued_at timestamptz, p_amount numeric,
