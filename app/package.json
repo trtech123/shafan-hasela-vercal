@@ -11,7 +11,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
-    "physical:worker": "node scripts/physical-terminal-worker.mjs"
+    "physical:worker": "node scripts/physical-terminal-worker.mjs",
+    "physical:check": "node scripts/physical-terminal-worker.mjs --check"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.29",

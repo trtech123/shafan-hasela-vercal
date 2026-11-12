@@ -1,0 +1,16 @@
+FROM node:24-bookworm-slim
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+COPY server/pelecard-physical ./server/pelecard-physical
+COPY scripts/physical-terminal-worker.mjs ./scripts/physical-terminal-worker.mjs
+COPY src/payments/payperBilling.js ./src/payments/payperBilling.js
+
+USER node
+HEALTHCHECK --interval=60s --timeout=20s --start-period=30s --retries=8 \
+  CMD node scripts/physical-terminal-worker.mjs --check || exit 1
+CMD ["node", "scripts/physical-terminal-worker.mjs"]
