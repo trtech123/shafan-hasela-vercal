@@ -239,6 +239,27 @@ END $$;
 REVOKE ALL ON FUNCTION public.finalize_physical_payment(uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.finalize_physical_payment(uuid) TO service_role;
 
+-- Reserve the existing one-document ledger identity for every verified physical
+-- sale. The source remains blocked until Pelecard confirms card-present Payper
+-- compatibility, transaction record mapping, and credential scope. The
+-- continuous digital Payper worker and its activation settings are untouched.
+CREATE FUNCTION public.capture_physical_payper_hold() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  IF NEW.status='succeeded' AND NEW.sale_id IS NOT NULL AND
+    OLD.status IS DISTINCT FROM 'succeeded' AND
+    EXISTS(SELECT 1 FROM public.physical_payment_intents WHERE payment_id=NEW.id)
+  THEN
+    INSERT INTO public.payper_document_ledger(payment_id,order_id,sale_id,state,reconciliation_code)
+    VALUES(NEW.id,NULL,NEW.sale_id,'source_blocked','physical_provider_confirmation_required')
+    ON CONFLICT(payment_id) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER capture_physical_payper_hold AFTER UPDATE OF status ON public.payment_transactions
+  FOR EACH ROW EXECUTE FUNCTION public.capture_physical_payper_hold();
+REVOKE ALL ON FUNCTION public.capture_physical_payper_hold() FROM PUBLIC,anon,authenticated,service_role;
+
 CREATE FUNCTION public.get_physical_payment(p_actor_id uuid,p_payment_id uuid)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
 DECLARE i public.physical_payment_intents%ROWTYPE;

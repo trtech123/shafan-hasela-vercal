@@ -13,10 +13,11 @@ function dependencies(overrides = {}) {
     markDispatched: vi.fn(async () => {}),
     markUncertain: vi.fn(async () => {}),
     markDeclined: vi.fn(async () => {}),
-    status: vi.fn(async () => intent),
+    status: vi.fn(async () => ({ ...intent, state: 'pending' })),
     merchantTerminal: '2814926015',
     provider: { send: vi.fn(async () => ({ requestId: 'provider-1' })), inspect: vi.fn(async () => ({ status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926015', amountMinor: 2400, register: '003', transactionId: 'trx-1', approvalId: 'ok' })) },
     finalize: vi.fn(async () => ({ saleId: 'sale-1', documentState: 'eligible' })),
+    finishApproved: vi.fn(async () => ({ saleId: 'sale-1', documentState: 'eligible' })),
     ...overrides,
   };
 }
@@ -106,6 +107,31 @@ describe('physical terminal workflow', () => {
     const result = await createPhysicalWorkflow(deps).verify('intent-1');
     expect(result.state).toBe('uncertain');
     expect(deps.finalize).not.toHaveBeenCalled();
+  });
+  test('recovers a persisted approval after worker interruption without repeating provider lookup', async () => {
+    const deps = dependencies({ status: vi.fn(async () => ({
+      id: 'intent-1', amountMinor: 2400, register: '003', state: 'approved',
+    })) });
+    const result = await createPhysicalWorkflow(deps).verify('intent-1');
+    expect(result).toMatchObject({ state: 'succeeded', saleId: 'sale-1' });
+    expect(deps.finishApproved).toHaveBeenCalledWith('intent-1');
+    expect(deps.provider.inspect).not.toHaveBeenCalled();
+  });
+  test('a reserved intent cannot be verified before dispatch', async () => {
+    const deps = dependencies({ status: vi.fn(async () => ({
+      id: 'intent-1', amountMinor: 2400, register: '003', state: 'reserved',
+    })) });
+    const result = await createPhysicalWorkflow(deps).verify('intent-1');
+    expect(result.state).toBe('reserved');
+    expect(deps.provider.inspect).not.toHaveBeenCalled();
+  });
+  test('an interrupted dispatch can be inspected and remains locked if lookup fails', async () => {
+    const deps = dependencies({ status: vi.fn(async () => ({
+      id: 'intent-1', amountMinor: 2400, register: '003', state: 'dispatching',
+    })) });
+    deps.provider.inspect.mockRejectedValue(new Error('offline'));
+    expect((await createPhysicalWorkflow(deps).verify('intent-1')).state).toBe('uncertain');
+    expect(deps.markUncertain).toHaveBeenCalledWith('intent-1');
   });
   test.each([{ amountMinor: 1 }, { register: '006' }, { merchantTerminal: 'other' }, { intentId: 'other' }, { status: 'declined' }, { transactionId: '' }])('mismatched or unapproved result cannot finalize: %j', async patch => {
     const deps = dependencies();

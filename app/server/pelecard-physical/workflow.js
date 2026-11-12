@@ -74,15 +74,25 @@ export function createPhysicalWorkflow(deps) {
       const intent = await deps.status(intentId);
       if (!intent) throw new Error('physical_intent_missing');
       if (intent.state === 'succeeded') return intent;
-      if (!['reserved', 'pending', 'uncertain'].includes(intent.state)) return intent;
+      if (intent.state === 'approved') {
+        const finalized = await deps.finishApproved(intent.id);
+        return { id: intent.id, state: 'succeeded', ...finalized };
+      }
+      if (!['dispatching', 'pending', 'uncertain'].includes(intent.state)) return intent;
       let result;
       try { result = await deps.provider.inspect(intent); }
-      catch { return { id: intent.id, state: 'uncertain' }; }
+      catch {
+        await deps.markUncertain(intent.id);
+        return { id: intent.id, state: 'uncertain' };
+      }
       if (result?.status === 'declined' && validCorrelation(result, intent, merchantTerminal)) {
         await deps.markDeclined(intent.id, result);
         return { id: intent.id, state: 'declined' };
       }
-      if (!validApproval(result, intent, merchantTerminal)) return { id: intent.id, state: 'uncertain' };
+      if (!validApproval(result, intent, merchantTerminal)) {
+        await deps.markUncertain(intent.id);
+        return { id: intent.id, state: 'uncertain' };
+      }
       // finalize must use a unique provider transaction ID and an atomic
       // payment + sale + accounting eligibility transaction in the database.
       const finalized = await deps.finalize(intent.id, result);

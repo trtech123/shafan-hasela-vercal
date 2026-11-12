@@ -22,6 +22,12 @@ function single(result) {
 
 /** Service-role database adapter. No browser input is used as an amount or register. */
 export function createPhysicalRepository(database) {
+  async function finishApproved(intentId) {
+    const final = single(await database.query(
+      'SELECT public.finalize_physical_payment($1::uuid) AS result', [intentId]));
+    if (final?.state !== 'succeeded' || !final.saleId) throw new Error('physical_finalization_failed');
+    return { saleId: final.saleId, documentState: 'provider_confirmation_required' };
+  }
   return {
     registerForWorkstation: createPhysicalRegisterResolver(database),
     calculateCart: (cart, actorRole) => createPhysicalCartCalculator(database, actorRole)(cart),
@@ -64,11 +70,9 @@ export function createPhysicalRepository(database) {
     },
     async finalize(intentId, result) {
       await database.query('SELECT public.observe_physical_result($1::uuid,$2::jsonb)', [intentId, result]);
-      const final = single(await database.query(
-        'SELECT public.finalize_physical_payment($1::uuid) AS result', [intentId]));
-      if (final?.state !== 'succeeded' || !final.saleId) throw new Error('physical_finalization_failed');
-      return { saleId: final.saleId, documentState: 'provider_confirmation_required' };
+      return finishApproved(intentId);
     },
+    finishApproved,
     async viewByRequest(actorId, requestKey) {
       if (!uuid.test(actorId) || !uuid.test(requestKey)) throw new Error('physical_request_invalid');
       return single(await database.query(

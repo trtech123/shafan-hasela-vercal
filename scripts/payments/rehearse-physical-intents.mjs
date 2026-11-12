@@ -36,6 +36,8 @@ try {
     CREATE TABLE public.payment_transactions(id uuid PRIMARY KEY,provider text,operation text,order_id uuid,
       amount numeric,currency text,status text,idempotency_key text,checkout_snapshot jsonb,created_by uuid,
       provider_transaction_id text,approval_id text,sale_id uuid);
+    CREATE TABLE public.payper_document_ledger(payment_id uuid UNIQUE,sale_id uuid UNIQUE,order_id uuid,
+      state text,reconciliation_code text);
     CREATE FUNCTION public.finalize_pelecard_payment(p_payment_id uuid,p_provider_transaction_id text,
       p_approval_id text,p_provider_status_code text,p_amount numeric,p_currency text)
       RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
@@ -94,13 +96,22 @@ try {
   await assert.rejects(client.query('SELECT public.finalize_physical_payment($1)',[declined.paymentId]), /physical_approval_required/);
   await client.query('RESET ROLE');
   assert.equal((await client.query('SELECT count(*)::integer AS n FROM public.sales')).rows[0].n,1);
+  const accounting = (await client.query('SELECT payment_id,sale_id,state,reconciliation_code FROM public.payper_document_ledger')).rows;
+  assert.deepEqual(accounting,[{payment_id:first.paymentId,sale_id:finalized.saleId,
+    state:'source_blocked',reconciliation_code:'physical_provider_confirmation_required'}]);
   console.log('PASS physical intents: one register lock, one dispatch, correlated approval, one sale');
 } finally {
   if (client) await client.end();
   // embedded-postgres stop() waits forever for a child exit event on Windows.
   // Terminate this script's disposable child, then remove only its verified temp dir.
-  if (pg.process?.pid) spawnSync('taskkill', ['/PID', String(pg.process.pid), '/T', '/F']);
+  if (pg.process?.pid) {
+    const stopped = spawnSync('taskkill', ['/PID', String(pg.process.pid), '/T', '/F'], { timeout: 5000 });
+    if (stopped.error) console.error('Embedded PostgreSQL shutdown:', stopped.error.message);
+  }
   const target = resolve(databaseDir);
   if (target.startsWith(resolve(tmpdir()) + sep) && basename(target).startsWith('shafan-physical-intents-'))
-    await rm(target, { recursive: true, force: true });
+    await rm(target, { recursive: true, force: true, maxRetries: 2, retryDelay: 200 });
 }
+// The Windows embedded-postgres package retains a child-process handle after
+// shutdown. Reaching this line means every assertion and cleanup succeeded.
+process.exit(0);

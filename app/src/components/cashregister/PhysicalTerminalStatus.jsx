@@ -19,7 +19,7 @@ const content = {
   succeeded: {
     icon: CheckCircle2,
     title: 'התשלום אושר והמכירה נשמרה',
-    description: 'החשבונית תישלח ללקוח לאחר הנפקתה.',
+    description: 'מצב החשבונית יוצג לאחר אימות ההנפקה והשליחה.',
   },
 };
 

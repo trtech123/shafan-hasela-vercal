@@ -9,8 +9,9 @@ export function readPhysicalConfig(env) {
   const terminal = env.PELECARD_PHYSICAL_TERMINAL;
   if (typeof terminal !== 'string' || !/^\d{10}$/.test(terminal))
     throw new Error('physical_terminal_required');
-  // The public gateway documentation does not identify the cloud-device
-  // command, authentication, status, or cancellation contract. Fail closed.
+  // Pelecard named DebitRegularType J4 and the CT20 shop number, but its public
+  // request schema requires raw card/expiry fields and does not document the
+  // card-present device-read variant or final-state response. Fail closed.
   throw new Error('physical_provider_contract_unconfirmed');
 }
 
