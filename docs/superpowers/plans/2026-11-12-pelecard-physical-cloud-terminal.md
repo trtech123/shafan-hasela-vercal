@@ -8,20 +8,20 @@
 
 ## Provider contract gate
 
-- [ ] Obtain Pelecard's written cloud endpoint, authentication, register routing, callback/lookup/cancel and Payper transaction-ID contract described in `docs/pelecard/physical-cloud-terminal-investigation-2026-11-12.md`.
+- [ ] Obtain Pelecard's card-present J4 sample request/response, empty-card device-read semantics, maximum response time, authentication activation, final-state lookup shape and Payper transaction-ID contract described in `docs/pelecard/physical-cloud-terminal-investigation-2026-11-12.md`. Support confirmed the J4 method, full terminal and `shopNumber` routing, but the official builder requires card fields.
 - [x] Record photo evidence for CT20 app `3.1.6`, full terminal `2814926015`, display register `4`, and require a separately configured ten-digit physical terminal value in the mocked workflow.
-- [ ] Add contract tests from official examples and implement the physical transport, keeping its credentials separate. Automatically push the validated cart total to the assigned terminal, with no cashier amount entry on the device. Verify the provider's device acknowledgement and exact amount shown.
+- [x] Add read-only `CheckGoodParamXEMV` and `GetTransDetailsEMV` transports with physical credentials, fixed URLs, response projection and mocked tests. Financial `DebitRegularType` dispatch stays blocked until Pelecard supplies its card-present form without raw card input.
 - [ ] Verify the customer can tap or insert a card on the device and that the POS request, result and storage contain no raw card details.
 
 ## Durable payment path
 
 - [x] Add four fixed, disabled physical-device settings with admin-only label, enabled state and named cash register assignment; enforce one device per workstation. Rehearse the migration in disposable PostgreSQL.
 - [ ] Bind each cashier browser/workstation to its named cash register in a server-verifiable way before enabling automatic device selection.
-- [ ] Add an isolated migration for workstation mapping, immutable physical intents, unique request keys and one in-flight intent per register. No production migration without approval.
-- [ ] In the server reservation, read catalog prices and validate discounts and total in agorot. Reject client amounts and register overrides.
-- [ ] Claim dispatch atomically, persist the provider correlation before allowing any second action, and reconcile unknown outcomes with lookup only.
+- [x] Add an isolated migration for physical intents, unique request keys and one in-flight intent per register. No production migration without approval.
+- [x] Add server catalog repricing and admin discount validation in agorot. Reject client amounts and register overrides; the reservation RPC also checks snapshot arithmetic.
+- [x] Claim dispatch atomically and never permit a second claim after an uncertain outcome. The checkout request ends after reservation; a separate worker will dispatch when the provider contract is confirmed.
 - [ ] Verify the final provider result through Pelecard's authoritative status API. Require matching merchant terminal, register, amount, intent reference, transaction ID and approved status before any sale.
-- [ ] Add approval verification and an atomic one-sale finalizer with unique provider transaction identity and a unique sale-to-intent relationship. Repeated or concurrent verification must return the existing sale.
+- [x] Add a correlated approval observation RPC and atomic one-sale finalizer with unique provider transaction identity and sale-to-intent relationship. Disposable PostgreSQL tests prove repeated finalization returns the same sale. Provider response mapping remains unconfirmed, so live verification is closed.
 
 ## Accounting and POS
 

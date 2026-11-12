@@ -1,5 +1,21 @@
 # Physical cloud terminal investigation — 2026-11-12
 
+## Follow-up: official Services request builder and Pelecard support
+
+Pelecard support confirmed J4 `DebitRegularType`, full terminal `2814926015`, and `shopNumber: "004"` as the route to the photographed CT20. The [official Services builder, method 61](https://gateway21.pelecard.biz/SandboxServices?selectedMethodId=61) shows `POST /services/DebitRegularType`. Its hidden URL uses `gateway20.pelecard.biz`; the builder JavaScript replaces that host with its current `gateway21.pelecard.biz` host. The JSON example uses `terminalNumber`, `user`, `password`, `shopNumber`, `creditCard`, `creditCardDateMmYy`, `token`, `total`, `currency`, `cvv2`, `id`, `authorizationNumber`, `paramX`, `QAResultStatus`, `eci`, `xid`, and `cavv`. `total` is in agorot; currency `1` is ILS. The output guide lists `StatusCode`, `PelecardTransactionId`, `ShvaResult`, `ShvaResultEmv`, `DebitTotal`, `DebitApproveNumber`, `AdditionalDetailsParamX`, `UID`, and other fields, including masked card information.
+
+**Dispatch blocker:** The same official builder marks `creditCard` and `creditCardDateMmYy` as required. It does not show a device-read mode, an empty-card sentinel, a wait/ack response, or a callback for this cloud CT20 workflow. We cannot infer that omitting those fields sends the amount to the device. The physical provider's financial `send()` therefore remains disabled; it never collects raw card details or makes a charge. Pelecard must provide an exact card-present sample request/response and expected maximum response time for `2814926015` / `004`, plus confirmation that separate physical credentials are active.
+
+Read-only recovery methods in the same official builder:
+
+| Method | Endpoint on gateway21 | Documented request | Current limit |
+| --- | --- | --- | --- |
+| [Check Good ParamX EMV, method 105](https://gateway21.pelecard.biz/SandboxServices?selectedMethodId=105) | `POST /services/CheckGoodParamXEMV` | `terminalNumber`, `user`, `password`, `paramX`, `shvaSuccessOnly`, `ShowJ5Reversal` | The output guide lists EMV transaction fields, but does not provide a concrete JSON response or state codes for pending, offline, decline and unknown. The local adapter makes this lookup with physical credentials and projects a strict allowlist; it does not treat an unknown shape as approval. |
+| [Get Trans Details EMV, method 127](https://gateway21.pelecard.biz/SandboxServices?selectedMethodId=127) | `POST /services/GetTransDetailsEMV` | `terminalNumber`, `user`, `password`, `debitTrxId`, `Uid`, `UserKey`, `AuthNo`, `token` | The documented output contains sensitive fields such as `pan` and `track2`. The local adapter discards them and returns only safe correlation fields. Pelecard must confirm which ID from J4 maps to `debitTrxId`, which output field proves register `004`, and the approved/declined response semantics. |
+| [Create Payper Invoice, method 144](https://gateway21.pelecard.biz/SandboxServices?selectedMethodId=144) | `POST /services/CreatePayperInvoice` | `terminalNumber`, `user`, `password`, `trxRecordId`, `Uid`, `PayperParameters` | Pelecard has not confirmed whether this card-present J4 transaction is eligible, how to derive `trxRecordId` and `Uid`, or whether the existing Payper account accepts dedicated physical credentials. Physical invoice dispatch remains disabled. |
+
+The branch now contains isolated server-side catalog repricing, a one-shot physical intent table and register lock, read-only EMV lookup transport, and a mock-verified finalizer that uses the existing sale infrastructure only after a correlated provider approval. The browser reservation no longer waits for the device: a separately invoked worker must claim and dispatch the intent. The financial dispatch worker and physical Payper worker cannot be connected to the documented API safely until Pelecard resolves the gaps above. The migration was rehearsed against disposable PostgreSQL only.
+
 ## Merchant facts supplied by Pelecard support
 
 - Physical merchant terminal: `2814926`.

@@ -27,14 +27,16 @@ describe('physical terminal workflow', () => {
     await expect(createPhysicalWorkflow(deps).start({ workstationId: 'w1', requestKey: 'key-1', cart })).rejects.toThrow('physical_disabled');
     expect(deps.provider.send).not.toHaveBeenCalled();
   });
-  test('sends the server-calculated amount to the assigned register for display', async () => {
+  test('reserves server-calculated amount without waiting for device response', async () => {
     const deps = dependencies();
     const result = await createPhysicalWorkflow(deps).start({ workstationId: 'w1', requestKey: 'key-1', cart, amountMinor: 1, register: '006' });
     expect(deps.reserve).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 2400, register: '003' }));
+    expect(deps.provider.send).not.toHaveBeenCalled();
+    expect(result.state).toBe('reserved');
+    await createPhysicalWorkflow(deps).dispatch(result.id);
     expect(deps.provider.send).toHaveBeenCalledWith({
       amountMinor: 2400, register: '003', merchantTerminal: '2814926015', intentId: 'intent-1',
     });
-    expect(result.state).toBe('pending');
     expect(deps.finalize).not.toHaveBeenCalled();
   });
   test('same request never dispatches twice', async () => {
@@ -42,19 +44,20 @@ describe('physical terminal workflow', () => {
     deps.claimDispatch.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     const workflow = createPhysicalWorkflow(deps);
     await workflow.start({ workstationId: 'w1', requestKey: 'key-1', cart });
-    await workflow.start({ workstationId: 'w1', requestKey: 'key-1', cart });
+    await workflow.dispatch('intent-1');
+    await workflow.dispatch('intent-1');
     expect(deps.provider.send).toHaveBeenCalledTimes(1);
   });
   test('busy device is held without dispatch', async () => {
     const deps = dependencies({ claimDispatch: vi.fn(async () => false) });
-    const result = await createPhysicalWorkflow(deps).start({ workstationId: 'w1', requestKey: 'key-1', cart });
+    const result = await createPhysicalWorkflow(deps).dispatch('intent-1');
     expect(result.state).toBe('pending');
     expect(deps.provider.send).not.toHaveBeenCalled();
   });
   test('transport timeout stays uncertain and never retries', async () => {
     const deps = dependencies();
     deps.provider.send.mockRejectedValue(new Error('offline'));
-    const result = await createPhysicalWorkflow(deps).start({ workstationId: 'w1', requestKey: 'key-1', cart });
+    const result = await createPhysicalWorkflow(deps).dispatch('intent-1');
     expect(result.state).toBe('uncertain');
     expect(deps.markUncertain).toHaveBeenCalledWith('intent-1');
     expect(deps.provider.send).toHaveBeenCalledTimes(1);

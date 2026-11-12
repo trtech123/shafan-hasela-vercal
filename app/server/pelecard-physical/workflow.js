@@ -25,27 +25,40 @@ function validApproval(result, intent, merchantTerminal) {
 export function createPhysicalWorkflow(deps) {
   const merchantTerminal = deps.merchantTerminal;
   return {
-    async start({ workstationId, requestKey, cart }) {
+    async start({ actorId, actorRole, workstationId, requestKey, cart, billing }) {
       if (deps.enabled !== true) throw new Error('physical_disabled');
       if (typeof merchantTerminal !== 'string' || !/^\d{10}$/.test(merchantTerminal))
         throw new Error('physical_terminal_required');
       if (!workstationId || !requestKey || !cart) throw new Error('physical_request_invalid');
       const register = await deps.registerForWorkstation(workstationId);
       if (!PHYSICAL_REGISTERS.includes(register)) throw new Error('physical_register_unassigned');
-      const calculated = await deps.calculateCart(cart);
+      const calculated = await deps.calculateCart(cart, actorRole);
       if (!validAmount(calculated?.amountMinor) || !Array.isArray(calculated.items) || !calculated.items.length)
         throw new Error('physical_cart_invalid');
       // reserve must be durable and unique by request key. claimDispatch must
       // atomically lock the register and return true only once for this intent.
-      const intent = await deps.reserve({ workstationId, requestKey, register,
-        amountMinor: calculated.amountMinor, items: calculated.items });
+      const intent = await deps.reserve({ actorId, workstationId, requestKey, register,
+        amountMinor: calculated.amountMinor, items: calculated.items,
+        discount: calculated.discount ?? null, billing });
       if (intent.register !== register || intent.amountMinor !== calculated.amountMinor)
         throw new Error('physical_intent_conflict');
+      // The browser request ends after reservation. A separate worker claims
+      // and dispatches; a slow terminal never holds the browser connection.
+      return { id: intent.id, state: intent.state ?? 'reserved' };
+    },
+    async dispatch(intentId) {
+      if (deps.enabled !== true) throw new Error('physical_disabled');
+      if (typeof merchantTerminal !== 'string' || !/^\d{10}$/.test(merchantTerminal))
+        throw new Error('physical_terminal_required');
+      const intent = await deps.status(intentId);
+      if (!intent) throw new Error('physical_intent_missing');
+      if (!PHYSICAL_REGISTERS.includes(intent.register) || !validAmount(intent.amountMinor))
+        throw new Error('physical_intent_invalid');
       if (!(await deps.claimDispatch(intent.id))) return { id: intent.id, state: 'pending' };
       let state = 'pending';
       try {
         const result = await deps.provider.send({ merchantTerminal,
-          register, amountMinor: intent.amountMinor, intentId: intent.id });
+          register: intent.register, amountMinor: intent.amountMinor, intentId: intent.id });
         await deps.markDispatched(intent.id, result);
       } catch {
         // Even a broken connection can follow a completed charge. A second send
