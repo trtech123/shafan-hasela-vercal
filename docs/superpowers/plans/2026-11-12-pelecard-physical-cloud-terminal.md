@@ -9,7 +9,7 @@
 ## Provider contract gate
 
 - [ ] Obtain Pelecard's written cloud endpoint, authentication, register routing, callback/lookup/cancel and Payper transaction-ID contract described in `docs/pelecard/physical-cloud-terminal-investigation-2026-11-12.md`.
-- [ ] Add contract tests from official examples and implement the physical transport, keeping its credentials separate.
+- [ ] Add contract tests from official examples and implement the physical transport, keeping its credentials separate. Verify the provider's device acknowledgement and exact amount shown on the assigned terminal.
 
 ## Durable payment path
 
