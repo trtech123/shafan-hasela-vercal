@@ -60,9 +60,10 @@ describe('physical terminal workflow', () => {
   test('only verified matching approval finalizes one sale', async () => {
     const deps = dependencies();
     const workflow = createPhysicalWorkflow(deps);
-    await workflow.verify('intent-1');
+    const verified = await workflow.verify('intent-1');
     expect(deps.provider.inspect).toHaveBeenCalledWith(expect.objectContaining({ id: 'intent-1', register: '003', amountMinor: 2400 }));
     expect(deps.finalize).toHaveBeenCalledWith('intent-1', expect.objectContaining({ transactionId: 'trx-1', amountMinor: 2400 }));
+    expect(verified).toMatchObject({ saleId: 'sale-1', documentState: 'eligible' });
   });
   test('repeated status checks return the existing sale without a second finalization', async () => {
     const deps = dependencies();
