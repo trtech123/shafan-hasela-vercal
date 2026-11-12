@@ -26,7 +26,7 @@ describe('saving physical device settings', () => {
       p_cash_register_code: 'COUNTER_1',
     });
   });
-  test.each(['002', '007', 'abc'])('rejects unknown device %s', async registerNumber => {
+  test.each(['002', '007', 'abc', 3])('rejects unknown or numeric device %s', async registerNumber => {
     const client = { rpc: vi.fn() };
     await expect(savePhysicalTerminalSetting(client, { registerNumber, label: 'Desk', enabled: false })).rejects.toThrow('physical_setting_invalid');
     expect(client.rpc).not.toHaveBeenCalled();

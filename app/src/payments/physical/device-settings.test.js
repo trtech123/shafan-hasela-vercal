@@ -5,6 +5,7 @@ test('resolves only the admin-assigned active device from the server database', 
   const database = { query: vi.fn(async () => ({ rows: [{ register_number: '003' }] })) };
   const register = await createPhysicalRegisterResolver(database)('FRONT');
   expect(register).toBe('003');
+  expect(typeof register).toBe('string');
   expect(database.query).toHaveBeenCalledWith(expect.stringContaining('physical_terminal_devices'), ['FRONT']);
   expect(database.query.mock.calls[0][0]).toContain('c.active');
 });
