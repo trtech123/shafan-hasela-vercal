@@ -25,6 +25,18 @@ test('flag exposes separate physical action but cannot dispatch without provider
   expect(onDigital).not.toHaveBeenCalled();
 });
 
+test('uncertain physical state offers status lookup without another charge', () => {
+  const onPhysical = vi.fn();
+  const onCheck = vi.fn();
+  render(<PaymentScreen total={24} cartItems={[{ id: 'p1' }]} onConfirm={vi.fn()} onBack={vi.fn()}
+    onPhysicalTerminal={onPhysical} onPhysicalStatusCheck={onCheck}
+    physicalTerminalState="uncertain" physicalDeviceName="CT20 004" physicalTerminalVisible />);
+  expect(screen.getByText(/ייתכן שהחיוב בוצע/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'בדיקת מצב העסקה' }));
+  expect(onCheck).toHaveBeenCalledTimes(1);
+  expect(onPhysical).not.toHaveBeenCalled();
+});
+
 test('physical action stays separate from hosted checkout when explicitly enabled', () => {
   const onPhysical = vi.fn();
   const onDigital = vi.fn();

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowRight, CreditCard, Banknote, Smartphone, Building2, Receipt, FileText, Split, Plus, Trash2, ShieldCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import PhysicalTerminalStatus from './PhysicalTerminalStatus.jsx';
 
 const PAYMENT_METHODS = [
   { key: "מזומן",       label: "מזומן",         icon: Banknote,     color: "from-emerald-600 to-emerald-700", hint: "קבל מזומן וסמן ידנית" },
@@ -55,6 +56,9 @@ export default function PaymentScreen({
   onPhysicalTerminal = () => {},
   physicalTerminalVisible = false,
   physicalTerminalEnabled = false,
+  physicalTerminalState = null,
+  physicalDeviceName = '',
+  onPhysicalStatusCheck = () => {},
   onBack,
   pelecardBusy = false,
   pelecardEnabled = false,
@@ -134,6 +138,13 @@ export default function PaymentScreen({
     };
     onConfirm(CHECK_METHOD, details);
   };
+
+  if (physicalTerminalState) {
+    return <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+      <PhysicalTerminalStatus state={physicalTerminalState} deviceName={physicalDeviceName}
+        amount={total} onCheckStatus={onPhysicalStatusCheck} onBack={onBack} />
+    </div>;
+  }
 
   if (detailFor === SPLIT_METHOD) {
     return (

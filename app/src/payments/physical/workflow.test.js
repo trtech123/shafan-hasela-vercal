@@ -12,8 +12,10 @@ function dependencies(overrides = {}) {
     claimDispatch: vi.fn(async () => true),
     markDispatched: vi.fn(async () => {}),
     markUncertain: vi.fn(async () => {}),
+    markDeclined: vi.fn(async () => {}),
     status: vi.fn(async () => intent),
-    provider: { send: vi.fn(async () => ({ requestId: 'provider-1' })), inspect: vi.fn(async () => ({ status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926', amountMinor: 2400, register: '003', transactionId: 'trx-1', approvalId: 'ok' })) },
+    merchantTerminal: '2814926015',
+    provider: { send: vi.fn(async () => ({ requestId: 'provider-1' })), inspect: vi.fn(async () => ({ status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926015', amountMinor: 2400, register: '003', transactionId: 'trx-1', approvalId: 'ok' })) },
     finalize: vi.fn(async () => ({ saleId: 'sale-1', documentState: 'eligible' })),
     ...overrides,
   };
@@ -30,7 +32,7 @@ describe('physical terminal workflow', () => {
     const result = await createPhysicalWorkflow(deps).start({ workstationId: 'w1', requestKey: 'key-1', cart, amountMinor: 1, register: '006' });
     expect(deps.reserve).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 2400, register: '003' }));
     expect(deps.provider.send).toHaveBeenCalledWith({
-      amountMinor: 2400, register: '003', merchantTerminal: '2814926', intentId: 'intent-1',
+      amountMinor: 2400, register: '003', merchantTerminal: '2814926015', intentId: 'intent-1',
     });
     expect(result.state).toBe('pending');
     expect(deps.finalize).not.toHaveBeenCalled();
@@ -52,10 +54,25 @@ describe('physical terminal workflow', () => {
   test('transport timeout stays uncertain and never retries', async () => {
     const deps = dependencies();
     deps.provider.send.mockRejectedValue(new Error('offline'));
-    await createPhysicalWorkflow(deps).start({ workstationId: 'w1', requestKey: 'key-1', cart });
+    const result = await createPhysicalWorkflow(deps).start({ workstationId: 'w1', requestKey: 'key-1', cart });
+    expect(result.state).toBe('uncertain');
     expect(deps.markUncertain).toHaveBeenCalledWith('intent-1');
     expect(deps.provider.send).toHaveBeenCalledTimes(1);
     expect(deps.finalize).not.toHaveBeenCalled();
+  });
+  test('authoritative decline releases the device without creating a sale', async () => {
+    const deps = dependencies({ markDeclined: vi.fn(async () => ({ state: 'declined' })) });
+    deps.provider.inspect.mockResolvedValue({ status: 'declined', intentId: 'intent-1', merchantTerminal: '2814926015', register: '003', amountMinor: 2400, transactionId: 'trx-1' });
+    const result = await createPhysicalWorkflow(deps).verify('intent-1');
+    expect(result.state).toBe('declined');
+    expect(deps.markDeclined).toHaveBeenCalledWith('intent-1', expect.objectContaining({ transactionId: 'trx-1' }));
+    expect(deps.finalize).not.toHaveBeenCalled();
+  });
+  test('a decline without full correlation remains uncertain', async () => {
+    const deps = dependencies({ markDeclined: vi.fn() });
+    deps.provider.inspect.mockResolvedValue({ status: 'declined', intentId: 'intent-1', merchantTerminal: '2814926015', register: '006', amountMinor: 2400, transactionId: 'trx-1' });
+    expect((await createPhysicalWorkflow(deps).verify('intent-1')).state).toBe('uncertain');
+    expect(deps.markDeclined).not.toHaveBeenCalled();
   });
   test('only verified matching approval finalizes one sale', async () => {
     const deps = dependencies();
@@ -89,7 +106,7 @@ describe('physical terminal workflow', () => {
   });
   test.each([{ amountMinor: 1 }, { register: '006' }, { merchantTerminal: 'other' }, { intentId: 'other' }, { status: 'declined' }, { transactionId: '' }])('mismatched or unapproved result cannot finalize: %j', async patch => {
     const deps = dependencies();
-    deps.provider.inspect.mockResolvedValue({ status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926', amountMinor: 2400, register: '003', transactionId: 'trx-1', approvalId: 'ok', ...patch });
+    deps.provider.inspect.mockResolvedValue({ status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926015', amountMinor: 2400, register: '003', transactionId: 'trx-1', approvalId: 'ok', ...patch });
     await createPhysicalWorkflow(deps).verify('intent-1');
     expect(deps.finalize).not.toHaveBeenCalled();
   });
