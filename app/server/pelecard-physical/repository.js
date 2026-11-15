@@ -14,7 +14,8 @@ function billingSnapshot(value) {
     typeof value.email !== 'string' || value.email.length > 320 ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email))
     throw new Error('physical_billing_invalid');
-  return { kind: value.kind, name: value.name.trim(), identity: value.identity, email: value.email };
+  return { kind: value.kind, name: value.name.trim(), identity: value.identity,
+    email: value.email, vatApplicable: true };
 }
 
 function single(result) {
