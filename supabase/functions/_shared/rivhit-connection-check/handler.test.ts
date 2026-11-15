@@ -182,4 +182,17 @@ describe('Rivhit read-only connection check', () => {
     expect(JSON.stringify(body)).not.toContain('private');
     expect(names).toEqual(['Company.Details', 'Customer.List', 'Customer.JournalReport']);
   });
+
+  test('matches a payment reference supplied only at runtime', async () => {
+    const paymentId = '11111111-1111-4111-8111-111111111112';
+    const fetchImpl = vi.fn(async (url: string) => url.endsWith('Company.Details')
+      ? ok({ name: 'Shafan', company_id: 123 })
+      : ok({ journals_report: [{ reference2: paymentId, total_amount: 4,
+        journal_id: 1, journal_year: 2026, journal_month: 11 }] }));
+    const handler = createConnectionCheckHandler({ apiToken: 'private-token',
+      pilotPaymentId: paymentId, fetchImpl: fetchImpl as unknown as typeof fetch });
+    const response = await handler(makeRequest({ mode: 'journal', expected_company_id: 123,
+      date: '2026-11-08' }));
+    expect((await response.json()).document_200002.match_count).toBe(1);
+  });
 });

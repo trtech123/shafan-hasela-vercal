@@ -3,4 +3,5 @@ import { createConnectionCheckHandler } from '../_shared/rivhit-connection-check
 
 Deno.serve(createConnectionCheckHandler({
   apiToken: Deno.env.get('RIVHIT_API_TOKEN'),
+  pilotPaymentId: Deno.env.get('RIVHIT_PROBE_PAYMENT_ID'),
 }));

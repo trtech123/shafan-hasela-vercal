@@ -8,7 +8,7 @@ The only deployed artifact was the temporary `rivhit-connection-check` Edge Func
 
 * `Company.Details` succeeded using the existing token and identified **שפן הסלע מצוקי רמים בע״מ** (company ID checked; omitted from public summary). This establishes a working read connection and matching company name; Anat should confirm the legal entity if the name alone is insufficient.
 * `Accounting.SortCodeList` succeeded and returned 79 codes. Narrow candidates for the pilot: `7` תשלום בכרטיס אשראי, `100` הכנסות/מכירות, `107` הכנסות פודטראק ברקו, `110` הכנסות מקופה רושמת. `150` הכנסות/מכירות-פטורות and `160` הכנסות פטורות מקופה רושמת are present, but tax treatment is unconfirmed. These are *sort codes*, not verified general-ledger account cards or an approved posting map.
-* `Accounting.JournalsReport` succeeded for 2026-11-01 through 2026-11-08 and 2026-11-10 through 2026-11-15. The probe found zero rows with either reference field containing Payper document `200002` or payment ID `PRODUCTION_PAYMENT_ID_REDACTED` **and** total amount exactly 4.00. The 2026-11-09 report returned a server error and was not searched successfully. Other reference fields, aggregated postings, and periods outside the tested range remain unexcluded. Therefore absence from Rivhit is *not proven*.
+* `Accounting.JournalsReport` succeeded for 2026-11-01 through 2026-11-08 and 2026-11-10 through 2026-11-15. The probe found zero rows with either reference field containing Payper document `200002` or the linked Production payment ID **and** total amount exactly 4.00. The 2026-11-09 report returned a server error and was not searched successfully. Other reference fields, aggregated postings, and periods outside the tested range remain unexcluded. Therefore absence from Rivhit is *not proven*.
 * `Customer.List` exceeded the function's 2 MB response limit. No account cards were returned. This does not establish a permissions failure, and it does not verify that `Customer.List` is the complete chart of accounts. Direct report read permission was demonstrated by the journal calls; permission for every report type was not tested.
 * The Production Payper issuance ledger records document number `200002`, succeeded state, amount 4.00 ILS, a `sale` source, payment creation on 2026-11-08 02:38 UTC and a sale date of 2026-11-08. Its item snapshot identifies one `טרופית` at 4.00. The exact Payper document issue timestamp and document type have not been read from the issued document.
 
@@ -17,7 +17,7 @@ The only deployed artifact was the temporary `rivhit-connection-check` Edge Func
 | Field | Proposed value | Evidence/status |
 |---|---|---|
 | External document reference | Payper `200002` | Verified in Production issuance ledger |
-| Source payment identity | `PRODUCTION_PAYMENT_ID_REDACTED` | Verified in Production ledger |
+| Source payment identity | Stored in Production; omitted from Git documentation | Verified in Production ledger |
 | Gross amount and currency | 4.00 ILS | Verified in Production ledger |
 | Source date | 2026-11-08 | Verified sale/payment date; accounting posting date requires approval |
 | Item | טרופית, quantity 1 | Verified source snapshot |

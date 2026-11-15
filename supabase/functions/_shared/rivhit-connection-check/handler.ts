@@ -1,7 +1,6 @@
 const baseUrl = 'https://api.rivhit.co.il/online/RivhitOnlineAPI.svc/';
 const operations = ['Company.Details', 'Accounting.SortCodeList',
   'Customer.List', 'Accounting.JournalsReport', 'Customer.JournalReport'] as const;
-const pilotPaymentId = 'PRODUCTION_PAYMENT_ID_REDACTED';
 const pilotSaleReference = 'RCP-1026';
 type Operation = typeof operations[number];
 
@@ -73,7 +72,7 @@ async function readBounded(response: Response): Promise<string> {
 }
 
 export function createConnectionCheckHandler(options: {
-  apiToken: string | undefined; fetchImpl?: typeof fetch;
+  apiToken: string | undefined; pilotPaymentId?: string; fetchImpl?: typeof fetch;
 }) {
   async function call(operation: Operation, extra: Record<string, unknown> = {}) {
     let response: Response;
@@ -175,7 +174,8 @@ export function createConnectionCheckHandler(options: {
         const matches = report.customer_journal.filter((item: unknown) => {
           const row = record(item);
           return row && [row.reference1, row.reference2, row.details].some(value =>
-            String(value ?? '').includes('200002') || String(value ?? '').includes(pilotPaymentId)
+            String(value ?? '').includes('200002')
+            || (Boolean(options.pilotPaymentId) && String(value ?? '').includes(options.pilotPaymentId!))
             || String(value ?? '').includes(pilotSaleReference));
         });
         return json(200, { company: identity,
@@ -212,7 +212,8 @@ export function createConnectionCheckHandler(options: {
       const referenceMatches = report.journals_report.filter((item: unknown) => {
         const row = record(item);
         return row && [row.reference1, row.reference2, row.details].some(value =>
-          String(value ?? '').includes('200002') || String(value ?? '').includes(pilotPaymentId)
+          String(value ?? '').includes('200002')
+          || (Boolean(options.pilotPaymentId) && String(value ?? '').includes(options.pilotPaymentId!))
           || String(value ?? '').includes(pilotSaleReference));
       });
       const matches = referenceMatches.slice(0, 20).map((item: unknown) => {

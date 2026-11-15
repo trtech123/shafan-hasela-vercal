@@ -9,7 +9,7 @@ import { createRequestReference } from "./identity.ts";
 const source = {
   accountNamespace: "test-account", sourceSystem: "payper" as const,
   sourceDocumentId: "invoice-200002", documentNumber: "200002",
-  paymentId: "PRODUCTION_PAYMENT_ID_REDACTED",
+  paymentId: "11111111-1111-4111-8111-111111111112",
   saleId: "11111111-1111-4111-8111-111111111111",
   documentType: "invoice_receipt", issuedAt: "2026-11-08T02:41:00Z",
   grossMinor: 400, currency: "ILS",

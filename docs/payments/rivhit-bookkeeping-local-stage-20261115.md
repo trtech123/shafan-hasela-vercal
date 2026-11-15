@@ -22,7 +22,7 @@ a future authorized server-side probe are `Company.Details`, `Customer.List`,
 `Accounting.PnLReport` / `Accounting.VatReport`. A secret holder must execute
 these without returning the token or sensitive rows to logs. The existing
 Production Payper ledger establishes a successful Payper document 200002 for
-payment `PRODUCTION_PAYMENT_ID_REDACTED`, 4.00 ILS; it proves no
+the linked Production payment, 4.00 ILS; it proves no
 Rivhit journal posting.
 
 ## New local components
