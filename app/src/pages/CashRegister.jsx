@@ -41,6 +41,21 @@ export default function CashRegister() {
   const manualSaleSubmitted = useRef(false);
   const checkRequestKey = useRef(null);
   const [manualSaleSaving, setManualSaleSaving] = useState(false);
+  const [noncardEnabled, setNoncardEnabled] = useState({ cash: false, check: false });
+
+  useEffect(() => {
+    if (collectionOrderId || screen !== 'payment' || !canPayOrder || !supabase.functions?.invoke) return;
+    let active = true;
+    supabase.functions.invoke('payper-noncard-collection', { body: { action: 'capabilities' } })
+      .then(({ data, error }) => {
+        if (active && !error) setNoncardEnabled({
+          cash: data?.collectionEnabled?.cash === true,
+          check: data?.collectionEnabled?.check === true,
+        });
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [collectionOrderId, screen, canPayOrder]);
 
   useEffect(() => {
     if (collectionOrderId) return;
@@ -124,6 +139,12 @@ export default function CashRegister() {
       return;
     }
     if (method === "צ'ק" || method === "מזומן") {
+      if (!(method === "צ'ק" ? noncardEnabled.check : noncardEnabled.cash)) {
+        toast.error('אמצעי התשלום הזה עדיין לא הופעל לקופה זו. בחרו אמצעי תשלום זמין.');
+        manualSaleSubmitted.current = false;
+        setManualSaleSaving(false);
+        return;
+      }
       checkRequestKey.current ||= crypto.randomUUID();
       const { billing, document_type: documentType, reference_document_id: referenceDocumentId,
         ...check } = paymentDetails || {};
@@ -293,6 +314,7 @@ export default function CashRegister() {
         cartItems={cartItems}
         onConfirm={handlePaymentConfirm}
         manualSaleSaving={manualSaleSaving}
+        noncardEnabled={noncardEnabled}
         onPelecard={handlePelecardStart}
         pelecardBusy={digitalBusy}
         onPhysicalTerminal={handlePhysicalStart}

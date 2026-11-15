@@ -31,3 +31,20 @@ test('payment repair requires complete card billing before linking the existing 
   }));
   expect(onLinked).toHaveBeenCalledOnce();
 });
+
+test('existing customer contact email is valid when optional accounting email is blank', async () => {
+  const onLinked = vi.fn();
+  state.rpc.mockResolvedValue({ data: { customer_snapshot_id: 'snapshot-2' }, error: null });
+  render(<OrderCustomerLink order={{ id: 'order-2', customer_record_version: 3 }}
+    requirePaymentReady onLinked={onLinked} />);
+  state.choose({ id: 'customer-2', customer_kind: 'person', display_name: 'Test',
+    billing_name: 'Test', billing_company_id: '000000018', email: 'contact@example.invalid',
+    billing_accounting_email: '', vat_applicable: true });
+  const save = await screen.findByRole('button', { name: /אישור לקוח ופרטי חיוב להזמנה/ });
+  expect(save).toBeEnabled();
+  fireEvent.click(save);
+  await waitFor(() => expect(state.rpc).toHaveBeenCalledWith('link_order_customer', {
+    p_order_id: 'order-2', p_customer_id: 'customer-2', p_expected_version: 3,
+  }));
+  expect(onLinked).toHaveBeenCalledOnce();
+});

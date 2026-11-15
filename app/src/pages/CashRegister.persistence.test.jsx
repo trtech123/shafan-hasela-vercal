@@ -14,7 +14,7 @@ vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: failur
 vi.mock('@/components/cashregister/ActivityGrid', () => ({ default: () => null }));
 vi.mock('@/components/cashregister/ProductGrid', () => ({ default: ({ products, onAdd }) => <button onClick={() => onAdd(products[0])}>add product</button> }));
 vi.mock('@/components/cashregister/Cart', () => ({ default: ({ onCheckout }) => <button onClick={onCheckout}>checkout</button> }));
-vi.mock('@/components/cashregister/PaymentScreen', () => ({ default: ({ onConfirm }) => <button onClick={() => onConfirm('מזומן', {
+vi.mock('@/components/cashregister/PaymentScreen', () => ({ default: ({ onConfirm, noncardEnabled }) => <button data-ready={noncardEnabled.cash} onClick={() => onConfirm('מזומן', {
   billing: { kind: 'organization', name: 'Club', identity: '123456789', email: 'club@example.com' },
   document_type: 'invoice-receipt', reference_document_id: null,
 })}>pay cash</button> }));
@@ -23,11 +23,14 @@ import CashRegister from './CashRegister';
 
 afterEach(() => { cleanup(); failure.toast.mockReset(); failure.insert.mockReset(); failure.invoke.mockReset(); });
 test('a failed accounting collection never shows a paid receipt or a fabricated reference', async () => {
-  failure.invoke.mockResolvedValue({ data: null, error: new Error('db unavailable') });
+  failure.invoke.mockImplementation((_name, { body }) => Promise.resolve(body.action === 'capabilities'
+    ? { data: { collectionEnabled: { cash: true, check: false } }, error: null }
+    : { data: null, error: new Error('db unavailable') }));
   render(<CashRegister />);
   fireEvent.click(await screen.findByText('מוצרים'));
   fireEvent.click(await screen.findByText('add product'));
   fireEvent.click(screen.getByText('checkout'));
+  await waitFor(() => expect(screen.getByText('pay cash')).toHaveAttribute('data-ready', 'true'));
   fireEvent.click(screen.getByText('pay cash'));
   await waitFor(() => expect(failure.toast).toHaveBeenCalledWith(expect.stringContaining('אינה ודאית')));
   expect(screen.queryByText('receipt shown')).not.toBeInTheDocument();
@@ -36,14 +39,17 @@ test('a failed accounting collection never shows a paid receipt or a fabricated 
 
 test('two rapid confirmations of one cash checkout submit one idempotent collection', async () => {
   let complete = (_result) => {};
-  failure.invoke.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  failure.invoke.mockImplementation((_name, { body }) => body.action === 'capabilities'
+    ? Promise.resolve({ data: { collectionEnabled: { cash: true, check: false } }, error: null })
+    : new Promise(resolve => { complete = resolve; }));
   render(<CashRegister />);
   fireEvent.click(await screen.findByText('מוצרים'));
   fireEvent.click(await screen.findByText('add product'));
   fireEvent.click(screen.getByText('checkout'));
+  await waitFor(() => expect(screen.getByText('pay cash')).toHaveAttribute('data-ready', 'true'));
   fireEvent.click(screen.getByText('pay cash'));
   fireEvent.click(screen.getByText('pay cash'));
-  expect(failure.invoke).toHaveBeenCalledTimes(1);
+  expect(failure.invoke).toHaveBeenCalledTimes(2);
   expect(failure.invoke).toHaveBeenCalledWith('payper-noncard-collection', {
     body: expect.objectContaining({ method: 'cash', documentType: 'invoice-receipt',
       requestKey: expect.any(String) }),

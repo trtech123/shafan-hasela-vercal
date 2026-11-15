@@ -69,6 +69,7 @@ export default function PaymentScreen({
   pelecardEnabled = false,
   pelecardHint,
   manualSaleSaving = false,
+  noncardEnabled = { cash: false, check: false },
 }) {
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
   const [detailFor, setDetailFor] = useState(null);
@@ -77,6 +78,9 @@ export default function PaymentScreen({
   const [check, setCheck] = useState({ ...emptyCheck, amount: String(total) });
   const [checkBilling, setCheckBilling] = useState({ kind: 'person', name: '', identity: '', email: '' });
   const [cashReceived, setCashReceived] = useState(String(total));
+  const selectedUnavailable = (selectedMethod === CASH_METHOD && !noncardEnabled.cash) ||
+    (selectedMethod === CHECK_METHOD && !noncardEnabled.check) ||
+    (selectedMethod === SPLIT_METHOD && !noncardEnabled.cash);
   // Split builder: starts with the full total on a single cash line.
   const [lines, setLines] = useState([makeLine("מזומן", total)]);
 
@@ -101,6 +105,8 @@ export default function PaymentScreen({
       return onPhysicalTerminal(checkBilling);
     }
     if (selectedMethod === SPLIT_METHOD) return enterSplit();
+    if (selectedMethod === CASH_METHOD && !noncardEnabled.cash) return;
+    if (selectedMethod === CHECK_METHOD && !noncardEnabled.check) return;
     if (selectedMethod) return handleMethodClick(selectedMethod);
   };
 
@@ -406,12 +412,14 @@ export default function PaymentScreen({
           )}
           {PAYMENT_METHODS.map(method => {
             const Icon = method.icon;
+            const disabled = (method.key === CASH_METHOD && !noncardEnabled.cash) ||
+              (method.key === CHECK_METHOD && !noncardEnabled.check);
             return (
               <button
                 key={method.key}
                 onClick={() => setSelectedMethod(method.key)}
                 aria-pressed={selectedMethod === method.key}
-                disabled={manualSaleSaving}
+                disabled={manualSaleSaving || disabled}
                 className={`w-full bg-gradient-to-l ${method.color} rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right ${selectedMethod === method.key ? 'ring-4 ring-white' : ''}`}
               >
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -419,7 +427,7 @@ export default function PaymentScreen({
                 </div>
                 <div>
                   <p className="font-bold text-lg">{method.label}</p>
-                  <p className="text-white/60 text-sm">{method.hint}</p>
+                  <p className="text-white/60 text-sm">{disabled ? 'אמצעי תשלום זה עדיין לא פעיל בקופה' : method.hint}</p>
                 </div>
                 <div className="mr-auto text-white/40 text-2xl">←</div>
               </button>
@@ -430,7 +438,7 @@ export default function PaymentScreen({
           <button
             onClick={() => setSelectedMethod(SPLIT_METHOD)}
             aria-pressed={selectedMethod === SPLIT_METHOD}
-            disabled={manualSaleSaving}
+            disabled={manualSaleSaving || !noncardEnabled.cash}
             className={`w-full mt-2 border border-dashed border-slate-600 rounded-2xl p-4 flex items-center gap-4 hover:bg-slate-800 active:scale-[0.98] transition-all text-right ${selectedMethod === SPLIT_METHOD ? 'ring-4 ring-white' : ''}`}
           >
             <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
@@ -438,11 +446,11 @@ export default function PaymentScreen({
             </div>
             <div>
               <p className="font-bold text-lg">תשלום מפוצל</p>
-              <p className="text-white/60 text-sm">חלק את התשלום בין כמה אמצעים</p>
+              <p className="text-white/60 text-sm">{noncardEnabled.cash ? 'חלק את התשלום בין כמה אמצעים' : 'תשלום מפוצל עדיין לא פעיל בקופה'}</p>
             </div>
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>
-          <Button onClick={paySelected} disabled={!selectedMethod || pelecardBusy || manualSaleSaving || physicalTerminalBusy}
+          <Button onClick={paySelected} disabled={!selectedMethod || selectedUnavailable || pelecardBusy || manualSaleSaving || physicalTerminalBusy}
             className="w-full h-14 text-lg font-bold" data-testid="cashier-pay">
             {pelecardBusy || manualSaleSaving ? 'מעבד תשלום…' : 'שלם'}
           </Button>

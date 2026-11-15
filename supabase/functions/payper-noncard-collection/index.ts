@@ -36,6 +36,11 @@ Deno.serve(async request => {
       if (result.error) throw new PaymentHttpError(409, "collection_review_required");
       return result.data;
     };
+    if (body.action === "capabilities")
+      return paymentJson({ collectionEnabled: {
+        cash: noncardCollectionAllowed("cash", actorId, name => Deno.env.get(name)),
+        check: noncardCollectionAllowed("check", actorId, name => Deno.env.get(name)),
+      } }, 200, cors);
     if (body.action === "status") {
       if (typeof body.orderId !== "string" || !uuid.test(body.orderId))
         throw new PaymentHttpError(400, "order_id_invalid");

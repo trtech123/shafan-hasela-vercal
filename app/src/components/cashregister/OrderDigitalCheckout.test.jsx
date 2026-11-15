@@ -36,6 +36,25 @@ test('eligible scheduled order initializes once for the server balance and redir
     expectedAmountMinor: 1500, previousPaymentId: null, billing: defaults });
 });
 
+test('linked customer email clears billing review and continues direct digital checkout', async () => {
+  let linked = false;
+  const onStatus = vi.fn(() => { linked = true; });
+  state.request.mockImplementation(async (_client, body) => body.action === 'status'
+    ? linked ? base : { ...base, billingDefaults: { ...defaults, email: '' },
+      eligibilityIssues: ['billing_email_required'] }
+    : { ...base, payment: { canResume: true },
+      redirectUrl: 'https://gateway20.pelecard.biz/PaymentGW?transactionId=11111111-1111-4111-8111-111111111111',
+      hostedDeadlineMs: performance.now() + 60000 });
+  render(<OrderDigitalCheckout orderId={orderId} balanceMinor={1500} onStatus={onStatus} />);
+  fireEvent.click(screen.getByRole('button', { name: 'שלם באשראי דיגיטלי' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'save billing' }));
+  expect(onStatus).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'שלם באשראי דיגיטלי' }));
+  await waitFor(() => expect(state.redirect).toHaveBeenCalledTimes(1));
+  expect(state.request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(1);
+  expect(state.request.mock.calls.at(-1)[1].billing).toEqual(defaults);
+});
+
 test('missing VAT opens billing dialog and never initializes', async () => {
   state.request.mockResolvedValue({ ...base, canInitialize: false, billingDefaults: null,
     eligibilityIssues: ['vat_required'] });

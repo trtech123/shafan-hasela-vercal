@@ -64,7 +64,7 @@ try {
   await db.query(`INSERT INTO public.customers(id,customer_kind,display_name,contact_name,phone,email,
     organization_name,vat_applicable,billing_name,billing_company_id,billing_accounting_email)
     VALUES($1,'organization','Test Group','Group Contact','0500000000',
-    'billing@example.invalid','Test Group',true,'Test Group','123456789','billing@example.invalid')`, [customer]);
+    'billing@example.invalid','Test Group',true,'Test Group','123456789','')`, [customer]);
   await db.query('SELECT public.link_order_customer($1,$2,0)', [order, customer]);
   const initial = (await db.query('SELECT public.get_payper_order_collection($1,$2) AS value',
     [cashier, order])).rows[0].value;
@@ -76,6 +76,10 @@ try {
   catch (error) { forbidden = /order_collection_forbidden/.test(error.message); }
   assert.equal(forbidden, true, 'instructor must not access POS collection');
   const billing = { kind: 'organization', name: 'Test Group', identity: '123456789', email: 'billing@example.invalid' };
+  const savedBilling = (await db.query('SELECT public.get_payper_billing_defaults($1,$2) AS value',
+    [order, cashier])).rows[0].value;
+  assert.deepEqual(savedBilling, billing,
+    'a blank optional accounting email must use the linked customer contact email');
   current = 'digital order eligibility and immutable invoice source';
   const digitalOrder = '00000000-0000-4000-8000-000000000010';
   await db.query('UPDATE public.payper_dispatch_control SET activation_cutoff_utc=statement_timestamp() WHERE singleton');
@@ -84,8 +88,12 @@ try {
     VALUES($1,'Test Group','0500000000','billing@example.invalid','Test Group',
       $2,current_date,1,1000,'לא שולם')`, [digitalOrder, activity]);
   await db.query('SELECT public.link_order_customer($1,$2,0)', [digitalOrder, customer]);
+  const linkedDigitalBilling = (await db.query(
+    'SELECT public.get_payper_billing_defaults($1,$2) AS value',
+    [digitalOrder, cashier])).rows[0].value;
+  assert.deepEqual(linkedDigitalBilling, billing);
   const issues = (await db.query('SELECT public.digital_order_payment_issues($1,$2,$3) AS value',
-    [digitalOrder, cashier, JSON.stringify(billing)])).rows[0].value;
+    [digitalOrder, cashier, JSON.stringify(linkedDigitalBilling)])).rows[0].value;
   assert.deepEqual(issues, []);
   const missing = (await db.query('SELECT public.digital_order_payment_issues($1,$2,$3) AS value',
     [digitalOrder, cashier, JSON.stringify({ ...billing, identity: '', email: '' })])).rows[0].value;
@@ -99,7 +107,7 @@ try {
   assert.equal((await db.query('SELECT count(*)::int AS n FROM public.payment_transactions WHERE order_id=$1',
     [digitalOrder])).rows[0].n, 0);
   const digital = (await db.query('SELECT public.reserve_pelecard_live_order($1,$2,100000,NULL,$3) AS value',
-    [digitalOrder, cashier, JSON.stringify(billing)])).rows[0].value;
+    [digitalOrder, cashier, JSON.stringify(linkedDigitalBilling)])).rows[0].value;
   assert.equal(digital.created, true);
   const frozen = (await db.query(`SELECT p.amount,p.checkout_snapshot,b.billing_name,b.billing_identity,
     b.billing_email,b.vat_applicable FROM public.payment_transactions p
@@ -302,6 +310,11 @@ try {
     const physical = (await db.query(`SELECT public.reserve_physical_order_payment(
       $1,gen_random_uuid(),'GENERAL',$2,60000) AS value`, [cashier, physicalOrder])).rows[0].value;
     assert.equal(physical.amountMinor, 60000);
+    const physicalBilling = (await db.query(
+      'SELECT billing_snapshot FROM public.physical_payment_intents WHERE payment_id=$1',
+      [physical.paymentId])).rows[0].billing_snapshot;
+    assert.equal(physicalBilling.email, billing.email,
+      'physical EMV must use the saved contact email when accounting email is blank');
     if (hostedIncluded) {
       current = 'hosted EMV exact payment and document association on combined schema';
       const hostedOrder = '00000000-0000-4000-8000-000000000012';

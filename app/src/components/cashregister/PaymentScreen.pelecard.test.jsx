@@ -15,6 +15,7 @@ function renderPayment(overrides = {}) {
     onPelecard: vi.fn(),
     onBack: vi.fn(),
     pelecardBusy: false,
+    noncardEnabled: { cash: true, check: false },
     ...overrides,
   };
   render(<PaymentScreen {...props} />);
@@ -22,6 +23,12 @@ function renderPayment(overrides = {}) {
 }
 
 describe("PaymentScreen payment-method separation", () => {
+  test("explains disabled cash and check before confirmation", () => {
+    const props = renderPayment({ noncardEnabled: { cash: false, check: false } });
+    expect(screen.getByRole('button', { name: /מזומן.*עדיין לא פעיל/s })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /צ'ק.*עדיין לא פעיל/s })).toBeDisabled();
+    expect(props.onConfirm).not.toHaveBeenCalled();
+  });
   test("records received cash with billing for the required Invoice-Receipt", () => {
     const props = renderPayment();
     fireEvent.click(screen.getByRole("button", { name: /מזומן/ }));
