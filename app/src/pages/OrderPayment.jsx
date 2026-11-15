@@ -7,6 +7,16 @@ import { requestOrderPayment, redirectOrderPayment, validOrderId } from '@/payme
 import { billingReviewIssues } from '@/payments/payperBilling';
 
 const labels = { initiated: 'ממתין לתשלום', pending_provider: 'ממתין לתוצאת תשלום', expired: 'הניסיון הקודם פג ונסגר ללא תשלום', failed: 'התשלום לא אושר', timed_out: 'תוצאת התשלום עדיין לא ידועה', succeeded: 'שולם במלואו' };
+const issueLabels = {
+  order_not_found: 'ההזמנה לא נמצאה.', order_not_payable: 'ההזמנה אינה זמינה לתשלום.',
+  vat_required: 'יש לקבוע את חבות המע״מ בכרטיס הלקוח ולעדכן את ההזמנה לפני תשלום.',
+  invoice_lines_required: 'חסר תיאור פעילות תקין לשורת החשבונית בהזמנה.',
+  billing_identity_required: 'יש להשלים שם ומספר זיהוי תקין לחיוב.',
+  billing_email_required: 'יש להשלים כתובת דוא״ל תקינה למסמך.',
+  accounting_review_required: 'קיים מסמך חשבונאי המחייב בדיקה לפני חיוב נוסף.',
+  digital_partial_unsupported: 'בהזמנה זו קיימת גבייה קודמת או יתרה לא ודאית. אין לפתוח חיוב דיגיטלי על הסכום המקורי; יש לבדוק את היתרה עם מנהל.'
+};
+const billingIssueCodes = ['billing_identity_required', 'billing_email_required'];
 
 export default function OrderPayment() {
   const { user } = useAuth();
@@ -27,6 +37,9 @@ export default function OrderPayment() {
   const canPayOrder = user?.role === 'admin' || user?.role === 'קופאי';
   const locallyExpired = Number.isFinite(view?.hostedDeadlineMs) && view.hostedDeadlineMs <= performance.now();
   const canResume = view?.payment?.canResume && Number.isFinite(view?.hostedDeadlineMs) && !locallyExpired;
+  const billingIssues = billingReviewIssues(billing);
+  const sourceIssues = (view?.eligibilityIssues || []).filter(issue => !billingIssueCodes.includes(issue));
+  const readyToInitialize = view?.canInitialize && sourceIssues.length === 0 && billingIssues.length === 0;
   useEffect(() => {
     if (!Number.isFinite(view?.hostedDeadlineMs)) return;
     const delay = view.hostedDeadlineMs - performance.now();
@@ -81,9 +94,12 @@ export default function OrderPayment() {
       if (generation.current !== current) return;
       setView(result);
       if ((action === 'resume' || action === 'initialize') && result.redirectUrl && !result.paid && result.payment?.canResume && Number.isFinite(result.hostedDeadlineMs) && result.hostedDeadlineMs > performance.now()) redirectOrderPayment(result.redirectUrl);
-    } catch {
+    } catch (reason) {
       if (generation.current !== current) return;
-      setError('תוצאת התשלום אינה ודאית. יש לבדוק את מצב התשלום הקיים.');
+      if (reason?.message === 'order_billing_incomplete') {
+        setInitializationAttempted(false);
+        setError(reason.issues.map(issue => issueLabels[issue]).filter(Boolean).join(' ') || 'יש להשלים את פרטי ההזמנה והחיוב לפני תשלום.');
+      } else setError('תוצאת התשלום אינה ודאית. יש לבדוק את מצב התשלום הקיים.');
       if (action !== 'status') {
         try {
           const saved = await requestOrderPayment(supabase, { action: 'status', orderId });
@@ -108,9 +124,10 @@ export default function OrderPayment() {
       {!view.paid && view.verification?.approved === false && <p className="text-amber-800">{view.verification.resolution === 'unknown' ? 'לא התקבלה הוכחה סופית לתוצאת התשלום. הניסיון הקיים נשמר לבירור, ללא ניסיון חיוב נוסף.' : 'התשלום לא אושר בבדיקה האחרונה. יש לבדוק את התשלום הקיים לפני ניסיון נוסף.'}</p>}
       {view.paid && <p>אמצעי תשלום: אשראי — פלאקארד</p>}
       {view.accountingHeld && <p className="text-amber-800">לא יופק מסמך חשבונאי אוטומטי עבור תשלום זה.</p>}
+      {!view.paid && sourceIssues.length>0 && <div role="alert" className="rounded-md bg-amber-50 p-3 text-sm text-amber-950">{sourceIssues.map(issue => <p key={issue}>{issueLabels[issue] || 'יש לבדוק את פרטי ההזמנה לפני תשלום.'}</p>)}<Link className="underline" to={`/orders?billingOrderId=${encodeURIComponent(orderId)}`}>פתחו את פרטי החיוב של ההזמנה לקישור לקוח ועדכון מע״מ</Link></div>}
       {view.canInitialize && <section aria-label="פרטי חיוב לפני התשלום" className="space-y-3 rounded-xl border bg-slate-50 p-4">
         <h3 className="font-semibold">פרטי חיוב לפני מעבר לתשלום</h3>
-        <p className="text-sm text-slate-600">נא לבדוק את הפרטים. אפשר לשלם גם בלי מספר זהות; במקרה כזה המסמך יועבר לבדיקה ידנית.</p>
+        <p className="text-sm text-slate-600">יש להשלים פרטי חיוב תקינים לפני פתיחת דף התשלום. הפרטים יישמרו עם התשלום וישמשו למסמך הרשמי.</p>
         <label className="block text-sm">סוג לקוח
           <select className="mt-1 w-full rounded-md border bg-white p-2" value={billing.kind} onChange={event => setBilling({ ...billing, kind: event.target.value })}>
             <option value="person">יחיד</option><option value="organization">חברה</option>
@@ -126,13 +143,13 @@ export default function OrderPayment() {
         <label className="block text-sm">כתובת דוא״ל למסמך
           <input dir="ltr" className="mt-1 w-full rounded-md border bg-white p-2" type="email" maxLength={320} autoComplete="email" value={billing.email} onChange={event => setBilling({ ...billing, email: event.target.value })} />
         </label>
-        {billingReviewIssues(billing).length>0 && <p role="note" className="text-sm text-amber-900">חלק מפרטי החיוב חסרים או לא תקינים. התשלום יישמר, והפקת המסמך תועבר לבדיקה ידנית.</p>}
+        {billingIssues.length>0 && <p role="note" className="text-sm text-amber-900">יש להשלים שם לחיוב, מספר זיהוי ודוא״ל תקינים לפני תשלום.</p>}
       </section>}
       {view.paid && view.payment?.saleId && <Link className="block text-primary underline" to="/sales-report">דוח קופה — צפייה במכירה המקושרת</Link>}
       {!view.paid && <div className="flex flex-wrap gap-3">
         {canResume && <Button disabled={busy} onClick={() => act('resume')}>המשך לתשלום הקיים</Button>}
         {view.payment?.canVerify && <Button variant="outline" disabled={busy} onClick={() => act('verify')}>בדוק תוצאת תשלום</Button>}
-        {view.canInitialize && <Button disabled={busy || initializationAttempted} onClick={() => act('initialize')}>{view.payment ? 'צור ניסיון תשלום חדש' : 'התחל תשלום באשראי'}</Button>}
+        {view.canInitialize && <Button disabled={busy || initializationAttempted || !readyToInitialize} onClick={() => act('initialize')}>{view.payment ? 'צור ניסיון תשלום חדש' : 'התחל תשלום באשראי'}</Button>}
         {!view.canInitialize && !view.payment && <p>פתיחת תשלום חדש אינה זמינה כרגע.</p>}
       </div>}
     </section>}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/api/supabaseClient';
+import { BRAND } from '@/lib/orderDocText';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -47,7 +48,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div className="text-center mb-2">
               <h1 className="text-xl font-bold text-slate-800">כניסה למערכת</h1>
-              <p className="text-sm text-slate-500 mt-1">אדוונצ׳ר — מערכת ניהול פעילויות</p>
+              <p className="text-sm text-slate-500 mt-1">{BRAND.name} — מערכת ניהול פעילויות</p>
             </div>
 
             <div className="space-y-1">

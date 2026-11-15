@@ -5,6 +5,7 @@ import { Download, Send, MessageCircle, X, Loader2, CheckCircle, AlertCircle } f
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { supabase } from "@/api/supabaseClient";
+import { BRAND } from "@/lib/orderDocText";
 
 const statusLabels = {
   "טיוטה": { label: "טיוטה", color: "#94a3b8" },
@@ -58,7 +59,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
       const htmlBody = `
         <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #1a4a2e, #2d7a4f); padding: 32px; border-radius: 12px 12px 0 0;">
-            <h1 style="color: white; margin: 0;">אדוונצ׳ר</h1>
+            <h1 style="color: white; margin: 0;">${BRAND.name}</h1>
             <p style="color: rgba(255,255,255,0.7); margin: 4px 0 0;">${title}</p>
           </div>
           <div style="background: #f8fafc; padding: 32px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0;">
@@ -72,7 +73,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
             <p style="font-size: 18px; font-weight: bold; color: #1a4a2e;">סה״כ לתשלום: ${(quote.final_price || 0).toLocaleString()}₪</p>
             ${quote.notes ? `<p>הערות: ${quote.notes}</p>` : ""}
             <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-            <p style="color: #94a3b8; font-size: 12px; text-align: center;">אדוונצ׳ר — חוויות טבע ואתגר בגליל</p>
+            <p style="color: #94a3b8; font-size: 12px; text-align: center;">${BRAND.name} — חוויות טבע ואתגר בגליל</p>
           </div>
         </div>
       `;
@@ -81,7 +82,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
       const { error: fnError } = await supabase.functions.invoke("send-quote-email", {
         body: {
           to:       quote.client_email,
-          subject:  `${title} מאדוונצ׳ר — ${quote.client_name}`,
+          subject:  `${title} מ${BRAND.name} — ${quote.client_name}`,
           htmlBody,
           pdfBase64,
           fileName: `${title}_${docNumber || "מסמך"}.pdf`,
@@ -99,7 +100,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
 
   const getWhatsAppText = () => {
     const lines = [
-      `*${title} - אדוונצ׳ר*`,
+      `*${title} - ${BRAND.name}*`,
       `מספר: ${docNumber || "—"}`,
       `לקוח: ${quote.client_name}`,
       quote.organization ? `ארגון: ${quote.organization}` : "",
@@ -121,7 +122,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
   };
 
   const getEmailHref = () => {
-    const subject = encodeURIComponent(`${title} מאדוונצ׳ר — ${quote.client_name}`);
+    const subject = encodeURIComponent(`${title} מ${BRAND.name} — ${quote.client_name}`);
     const body = decodeURIComponent(getWhatsAppText()).replace(/\*/g, "");
     return `mailto:${quote.client_email || ""}?subject=${subject}&body=${encodeURIComponent(body)}`;
   };

@@ -14,6 +14,8 @@ export function commercialRuntime():CommercialDependencies {
    if(!row||(row.payment_id&&row.can_replace!==true))return row;
    const billing=await rpc('get_payper_billing_defaults',{p_order_id:orderId,p_actor_id:actorId});
    return {...row,billing_defaults:billing};},
+  async eligibility(orderId,actorId,billing){const issues=await rpc('digital_order_payment_issues',{p_order_id:orderId,p_actor_id:actorId,p_billing:billing});
+   if(!Array.isArray(issues)||issues.some(issue=>typeof issue!=='string'))throw Error('payment_database_unavailable');return issues;},
   reserve:(orderId,actorId,amount,previous,billing)=>rpc('reserve_pelecard_live_order',{p_order_id:orderId,p_actor_id:actorId,p_expected_amount_minor:amount,p_previous_payment_id:previous,p_billing:billing}),
   async get(id){const data=await rpc('get_pelecard_live_attempt',{p_payment_id:id});return Array.isArray(data)&&data.length===1?data[0]:null;},
   observe:(id,state,status,transaction,correlation)=>rpc('observe_pelecard_live_attempt',{p_payment_id:id,p_hosted_state:state,p_lookup_status:status,p_transaction_status:transaction,p_correlation_valid:correlation}),

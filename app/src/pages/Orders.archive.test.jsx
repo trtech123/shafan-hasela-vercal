@@ -33,7 +33,10 @@ vi.mock('../components/orders/OrderFormDialog', () => ({ default: () => null }))
 vi.mock('../components/orders/InstructorEmailDialog', () => ({ default: () => null }));
 vi.mock('../components/orders/InstructorDailyDialog', () => ({ default: () => null }));
 vi.mock('../components/orders/OrderConfirmationPDF', () => ({ default: () => null }));
-vi.mock('@/components/customers/OrderCustomerLink', () => ({ default: () => null }));
+vi.mock('@/components/customers/OrderCustomerLink', () => ({ default: ({ order, requirePaymentReady, onLinked }) =>
+  <button onClick={() => onLinked({ ...order, customer_snapshot_id: 'snapshot-1' })}>
+    {requirePaymentReady ? 'link billing for payment' : 'link billing'}
+  </button> }));
 
 import Orders from './Orders';
 import { subscribeOrderChanges } from '@/lib/orderEvents';
@@ -62,7 +65,17 @@ beforeEach(() => {
     return { data: { ...row }, error: null };
   });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); window.history.replaceState(null, '', '/orders'); });
+
+test('billing deep link opens the existing order and returns to eligibility after linking', async () => {
+  const id = 'a0000000-0000-4000-8000-000000000001';
+  state.rows = [{ ...order, id, order_number: 'ORD-TEST-42', status: 'מאושר', total_price: 98 }];
+  window.history.replaceState(null, '', `/orders?billingOrderId=${id}`);
+  render(<Orders />);
+  fireEvent.click(await screen.findByRole('button', { name: 'link billing for payment' }, { timeout: 10000 }));
+  expect(await screen.findByRole('link', { name: 'חזרה לבדיקת זכאות ולתשלום הדיגיטלי' }, { timeout: 10000 }))
+    .toHaveAttribute('href', `/payment/order?orderId=${id}`);
+}, 15000);
 
 const confirmArchive = (dialog) => {
   const button = within(dialog).getByRole('button', { name: 'העבר לארכיון' });

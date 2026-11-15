@@ -12,6 +12,7 @@ import { calculateCheckoutTotals } from "@/payments/pelecardPayments";
 import { orderPaymentPath } from "@/payments/orderPayments";
 import { buildStandaloneCheckout } from "@/payments/standaloneCart";
 import { useAuth } from "@/lib/AuthContext";
+import { BRAND } from "@/lib/orderDocText";
 
 // SCREENS: menu | payment | receipt
 export default function CashRegister() {
@@ -271,7 +272,7 @@ export default function CashRegister() {
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-lg">א</div>
           <div>
-            <h1 className="text-xl font-bold">אדוונצ׳ר — קופה</h1>
+            <h1 className="text-xl font-bold">{BRAND.name} — קופה</h1>
             <p className="text-slate-400 text-sm">בחר פעילות או מוצר להוספה לסל</p>
           </div>
         </div>

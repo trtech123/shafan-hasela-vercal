@@ -6,6 +6,16 @@ export async function requestOrderPayment(client, body) {
   if (!validOrderId(body.orderId)) throw new Error('invalid_order');
   const startedAt = performance.now();
   const { data, error } = await client.functions.invoke('pelecard-order-payment', { body });
+  if (error && error.context?.json) {
+    try {
+      const details = await error.context.json();
+      if (details?.error?.code === 'order_billing_incomplete' && Array.isArray(details.error.issues)) {
+        const rejected = new Error('order_billing_incomplete');
+        rejected.issues = details.error.issues.filter(issue => typeof issue === 'string');
+        throw rejected;
+      }
+    } catch (reason) { if (reason?.message === 'order_billing_incomplete') throw reason; }
+  }
   if (error || !data || data.orderId !== body.orderId || !Number.isSafeInteger(data.amountMinor) || data.amountMinor < 0 || data.currency !== 'ILS' || data.mode !== 'live' || typeof data.paid !== 'boolean' || typeof data.canInitialize !== 'boolean') {
     throw new Error('payment_status_unavailable');
   }

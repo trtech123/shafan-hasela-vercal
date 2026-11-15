@@ -18,7 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/AuthContext";
-import { orderPaymentPath } from "@/payments/orderPayments";
+import { orderPaymentPath, validOrderId } from "@/payments/orderPayments";
 import { toast } from "sonner";
 import { orderArchiveError } from "@/components/orders/orderArchiveError";
 import { deleteOrder, orderDeleteError } from "@/lib/deleteOrder";
@@ -47,6 +47,7 @@ export default function Orders() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [billingOrder, setBillingOrder] = useState(null);
+  const [returnPaymentOrderId, setReturnPaymentOrderId] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [externalConfirmed, setExternalConfirmed] = useState(false);
@@ -99,6 +100,25 @@ export default function Orders() {
   };
 
   useEffect(() => { setLoading(true); loadData(archiveView); }, [archiveView]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('billingOrderId');
+    if (loading || !validOrderId(orderId) || !['admin', 'קופאי'].includes(user?.role)) return;
+    let active = true;
+    const openBilling = async () => {
+      const known = orders.find(item => item.id === orderId && !item.archived_at);
+      const result = known ? { data: known, error: null } : await supabase.from('orders').select('*').eq('id', orderId).single();
+      if (!active || result.error || !result.data || result.data.archived_at) return;
+      setSearch(result.data.order_number);
+      setBillingOrder(result.data);
+      setReturnPaymentOrderId(orderId);
+      params.delete('billingOrderId');
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`);
+    };
+    openBilling();
+    return () => { active = false; };
+  }, [loading, orders, user?.role]);
 
   const getActivityName = (activityId) => {
     const act = activities.find(a => a.id === activityId);
@@ -511,7 +531,8 @@ export default function Orders() {
       <Dialog open={!!billingOrder} onOpenChange={() => setBillingOrder(null)}>
         <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto">
           <DialogTitle>פרטי חיוב להזמנה</DialogTitle>
-          {billingOrder && <OrderCustomerLink order={billingOrder} onLinked={() => { setBillingOrder(null); loadData(); }} />}
+          {billingOrder && <OrderCustomerLink order={billingOrder} requirePaymentReady={returnPaymentOrderId === billingOrder.id} onLinked={(saved) => { setBillingOrder(returnPaymentOrderId ? saved : null); loadData(); }} />}
+          {billingOrder && returnPaymentOrderId === billingOrder.id && billingOrder.customer_snapshot_id && <a className="text-primary underline" href={orderPaymentPath(billingOrder.id)}>חזרה לבדיקת זכאות ולתשלום הדיגיטלי</a>}
         </DialogContent>
       </Dialog>
 

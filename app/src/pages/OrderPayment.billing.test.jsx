@@ -40,15 +40,13 @@ describe('admin-assisted Pelecard billing step', () => {
     expect(window.location.search).not.toContain('000000018');
   });
 
-  test('allows empty identity to reach the existing reservation request', async () => {
+  test('blocks an empty identity before opening checkout', async () => {
     render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
     const identity = await screen.findByLabelText('מספר תעודת זהות');
     fireEvent.change(identity, { target: { value: '' } });
-    expect(screen.getByRole('note')).toHaveTextContent('בדיקה ידנית');
-    fireEvent.click(screen.getByRole('button', { name: 'התחל תשלום באשראי' }));
-    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      action: 'initialize', billing: expect.objectContaining({ identity: '' }),
-    })));
+    expect(screen.getByRole('note')).toHaveTextContent('יש להשלים');
+    expect(screen.getByRole('button', { name: 'התחל תשלום באשראי' })).toBeDisabled();
+    expect(request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(0);
   });
 
   test('cashier can review billing and initiate order payment', async () => {
@@ -57,6 +55,24 @@ describe('admin-assisted Pelecard billing step', () => {
     expect(await screen.findByRole('region', { name: 'פרטי חיוב לפני התשלום' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'התחל תשלום באשראי' }));
     await waitFor(() => expect(request).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'initialize' })));
+  });
+
+  test('missing VAT blocks checkout and directs the cashier to order editing', async () => {
+    role = 'קופאי';
+    request.mockResolvedValue({ ...status, eligibilityIssues: ['vat_required'] });
+    render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
+    expect(await screen.findByText(/יש לקבוע את חבות המע״מ/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /פתחו את פרטי החיוב/ }))
+      .toHaveAttribute('href', `/orders?billingOrderId=${orderId}`);
+    expect(screen.getByRole('button', { name: 'התחל תשלום באשראי' })).toBeDisabled();
+    expect(request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(0);
+  });
+
+  test('historical partial collection explains why original total cannot be charged', async () => {
+    request.mockResolvedValue({ ...status, canInitialize: false, eligibilityIssues: ['digital_partial_unsupported'] });
+    render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
+    expect(await screen.findByText(/גבייה קודמת או יתרה לא ודאית/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'התחל תשלום באשראי' })).toBeNull();
   });
 
   test('shift manager cannot load billing or initiate payment', async () => {

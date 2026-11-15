@@ -15,13 +15,14 @@ function handlerFor(role: string) {
     billing_defaults: { kind: "person", name: "", identity: "", email: "" },
   }));
   const reserve = vi.fn(async () => ({ id: "c0000000-0000-4000-8000-000000000001", created: true }));
+  const eligibility = vi.fn(async (_orderId: string, _actorId: string, billing: {identity:string}) => billing.identity ? [] : ['billing_identity_required']);
   const call = vi.fn(async () => undefined);
   const handler = createCommercialPaymentHandler({
     read: () => "true", allowedOrigins: ["https://example.org"], log: () => {},
     auth: { authenticate: async () => ({ id: actorId, role }) },
-    view, reserve, get: vi.fn(), observe: vi.fn(), finalize: vi.fn(), call,
+    view, eligibility, reserve, get: vi.fn(), observe: vi.fn(), finalize: vi.fn(), call,
   });
-  return { handler, view, reserve, call };
+  return { handler, view, eligibility, reserve, call };
 }
 
 async function status(handler: ReturnType<typeof handlerFor>["handler"], token = "valid") {
@@ -34,7 +35,9 @@ async function status(handler: ReturnType<typeof handlerFor>["handler"], token =
 describe("commercial order payment permissions", () => {
   test.each(["admin", "cashier"])("%s may read their order payment status", async role => {
     const { handler, view } = handlerFor(role);
-    expect((await status(handler)).status).toBe(200);
+    const response = await status(handler);
+    expect(response.status).toBe(200);
+    expect((await response.json()).eligibilityIssues).toContain('billing_identity_required');
     expect(view).toHaveBeenCalledWith(orderId, actorId);
   });
 
@@ -53,15 +56,29 @@ describe("commercial order payment permissions", () => {
     expect(view).not.toHaveBeenCalled();
   });
 
-  test.each(["admin", "cashier"])("%s can reserve with an empty billing identity", async role => {
+  test.each(["admin", "cashier"])("%s cannot initialize without invoice-ready billing", async role => {
     const { handler, reserve, call } = handlerFor(role);
-    await handler(new Request("https://example.org/payment", {
+    const response = await handler(new Request("https://example.org/payment", {
       method: "POST", headers: { Authorization: "Bearer valid", "Content-Type": "application/json" },
       body: JSON.stringify({ action: "initialize", orderId, expectedAmountMinor: 11800,
         previousPaymentId: null, billing: { kind: "person", name: "Test", identity: "", email: "test@example.org" } }),
     }));
-    expect(reserve).toHaveBeenCalledWith(orderId, actorId, 11800, null,
-      { kind: "person", name: "Test", identity: "", email: "test@example.org" });
-    expect(call).toHaveBeenCalledWith("init", "c0000000-0000-4000-8000-000000000001");
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({error:{code:'order_billing_incomplete',issues:['billing_identity_required']}});
+    expect(reserve).not.toHaveBeenCalled();
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  test('direct API call cannot bypass VAT or historical balance checks', async () => {
+    const { handler, eligibility, reserve, call } = handlerFor('cashier');
+    eligibility.mockResolvedValue(['vat_required', 'digital_partial_unsupported']);
+    const response = await handler(new Request('https://example.org/payment', { method: 'POST',
+      headers: { Authorization: 'Bearer valid', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'initialize', orderId, expectedAmountMinor: 11800,
+        previousPaymentId: null, billing: { kind: 'person', name: 'Test', identity: '000000018', email: 'test@example.org' } }),
+    }));
+    expect(response.status).toBe(409);
+    expect(reserve).not.toHaveBeenCalled();
+    expect(call).not.toHaveBeenCalled();
   });
 });

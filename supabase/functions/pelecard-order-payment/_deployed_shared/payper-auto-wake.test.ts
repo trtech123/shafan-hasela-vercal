@@ -19,7 +19,7 @@ function recovery(response: unknown, onPaymentFinalized = vi.fn()) {
   const finalize = vi.fn(async () => ({ status: "succeeded" }));
   const deps = {
     read: () => undefined, auth: { authenticate: async () => null }, allowedOrigins: [], log: () => {},
-    view: vi.fn(), reserve: vi.fn(), get: vi.fn(), observe: vi.fn(async () => {}), finalize,
+    view: vi.fn(), eligibility: vi.fn(), reserve: vi.fn(), get: vi.fn(), observe: vi.fn(async () => {}), finalize,
     call: vi.fn(async (action: string) => action === "lookup" ? response
       : action === "hosted" ? { reachable: true, state: "usable" } : 1),
     onPaymentFinalized,
@@ -34,7 +34,7 @@ describe("verified payment to Payper wake", () => {
     const log = vi.fn(), finalize = vi.fn(), onPaymentFinalized = vi.fn();
     const deps = {
       read: () => undefined, auth: { authenticate: async () => null }, allowedOrigins: [], log,
-      view: vi.fn(), reserve: vi.fn(), get: vi.fn(async () => stored), observe: vi.fn(async () => {}),
+      view: vi.fn(), eligibility: vi.fn(), reserve: vi.fn(), get: vi.fn(async () => stored), observe: vi.fn(async () => {}),
       finalize, onPaymentFinalized,
       call: vi.fn(async (action: string) => action === "lookup"
         ? { StatusCode: "425", ResultData: { ShvaResult: "173" } }

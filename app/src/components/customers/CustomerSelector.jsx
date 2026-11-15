@@ -48,6 +48,6 @@ export default function CustomerSelector({ value, onSelect, onClear = null, init
         <span className="font-medium">{row.display_name}</span><span className="block text-sm text-muted-foreground">{[row.organization_name, row.phone, row.email].filter(Boolean).join(' · ')}</span>
       </button>)}
     </div>}
-    {dialog && <CustomerFormDialog customer={dialog === 'edit' ? selected : null} initialValues={initialValues} onClose={() => setDialog(null)} onSaved={(row) => { setSelected(row); setDialog(null); setRevision((old) => old + 1); if (dialog === 'create') { setEngaged(false); onSelect(row); } }} />}
+    {dialog && <CustomerFormDialog customer={dialog === 'edit' ? selected : null} initialValues={initialValues} onClose={() => setDialog(null)} onSaved={(row) => { setSelected(row); setDialog(null); setRevision((old) => old + 1); setEngaged(false); onSelect(row); }} />}
   </section>;
 }

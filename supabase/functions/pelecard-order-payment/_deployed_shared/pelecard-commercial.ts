@@ -12,6 +12,7 @@ export interface CommercialDependencies {
  now?():number;
  read(name:string):string|undefined;auth:PaymentAuthenticator;allowedOrigins:readonly string[];log(event:Record<string,unknown>):void;
  view(orderId:string,actorId:string):Promise<View|null>;
+ eligibility(orderId:string,actorId:string,billing:Billing):Promise<string[]>;
  reserve(orderId:string,actorId:string,amountMinor:number,previousPaymentId:string|null,billing:Billing):Promise<{id:string;created:boolean}>;
  get(paymentId:string):Promise<Attempt|null>;
  observe(paymentId:string,hostedState:string,apiStatus:string|null,transactionStatus:string|null,correlation:boolean):Promise<unknown>;
@@ -79,7 +80,10 @@ export function createCommercialPaymentHandler(deps:CommercialDependencies){retu
   const keys=body.action==='initialize'?['action','orderId','expectedAmountMinor','previousPaymentId','billing']:body.action==='status'?['action','orderId']:['action','orderId','paymentId'];
   if(Object.keys(body).some(k=>!keys.includes(k))||Object.keys(body).length<keys.length-(body.action==='initialize'?1:0))throw new PaymentHttpError(400,'invalid_input');
   stage='order_status';let row=validate(await deps.view(body.orderId,actor.identity.id),body.orderId);
-  if(body.action==='status')return paymentJson(responseView(row,deps),200,cors);
+  if(body.action==='status'){
+   const issues=await deps.eligibility(row.order_id,actor.identity.id,row.billing_defaults??{kind:'',name:'',identity:'',email:''});
+   return paymentJson({...responseView(row,deps),eligibilityIssues:issues},200,cors);
+  }
   if(body.action==='initialize'){
    if(body.expectedAmountMinor!==minor(row)||body.previousPaymentId!==(row.payment_id??null))throw new PaymentHttpError(409,'stale_order_payment');
    if(row.payment_id&&!row.can_replace||responseView(row,deps).paid)throw new PaymentHttpError(409,'payment_attempt_exists');
@@ -89,6 +93,9 @@ export function createCommercialPaymentHandler(deps:CommercialDependencies){retu
     || Object.keys(supplied).some(k=>!['kind','name','identity','email'].includes(k))
     || Object.values(supplied).some(v=>typeof v!=='string'||v.length>320)))throw new PaymentHttpError(400,'invalid_input');
    const billing=(supplied??{kind:'',name:'',identity:'',email:''}) as Billing;
+   stage='eligibility';
+   const issues=await deps.eligibility(row.order_id,actor.identity.id,billing);
+   if(issues.length)return paymentJson({error:{code:'order_billing_incomplete',issues}},409,cors);
    stage='reservation';const reserved=await deps.reserve(row.order_id,actor.identity.id,minor(row),row.payment_id,billing);
    if(!reserved.created)throw new PaymentHttpError(409,'payment_attempt_exists');
    if(!uuid.test(reserved.id))throw new PaymentHttpError(409,'reservation_invalid');

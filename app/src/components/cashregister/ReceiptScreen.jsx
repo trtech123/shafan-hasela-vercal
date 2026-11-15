@@ -3,6 +3,7 @@ import { CheckCircle, Printer, Mail, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import moment from "moment";
+import { BRAND } from "@/lib/orderDocText";
 
 export default function ReceiptScreen({ receipt, onNewSale }) {
   const receiptRef = useRef(null);
@@ -49,7 +50,7 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
         {/* Receipt */}
         <div ref={receiptRef} className="bg-white text-slate-900 rounded-2xl p-6 space-y-4">
           <div className="text-center border-b border-slate-200 pb-3">
-            <h2 className="font-bold text-lg">אדוונצ׳ר</h2>
+            <h2 className="font-bold text-lg">{BRAND.name}</h2>
             <p className="text-slate-500 text-sm">אישור מכירה פנימי {receipt.receiptNumber}</p>
             <p className="text-slate-500 text-xs">אינו חשבונית מס או קבלה חשבונאית</p>
             <p className="text-slate-400 text-xs">{moment(receipt.timestamp).format("DD/MM/YYYY HH:mm")}</p>
@@ -138,7 +139,7 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
             </div>
           )}
 
-          <p className="text-center text-slate-400 text-xs">{deferred ? 'חיוב מאוחר — טרם שולם' : `אמצעי תשלום: ${receipt.method}`} | אדוונצ׳ר — תודה!</p>
+          <p className="text-center text-slate-400 text-xs">{deferred ? 'חיוב מאוחר — טרם שולם' : `אמצעי תשלום: ${receipt.method}`} | {BRAND.name} — תודה!</p>
         </div>
 
         {/* Actions */}

@@ -7,6 +7,7 @@ import { uuid_ossp } from '@electric-sql/pglite/contrib/uuid_ossp';
 import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 import { buildNoncardPayperRequest, dispatchNoncardPayper } from
   '../../supabase/functions/_shared/payper/noncard.ts';
+import { buildCreatePayperInvoice } from '../../supabase/functions/_shared/payper/provider.ts';
 
 const directory = fileURLToPath(new URL('../../supabase/migrations/', import.meta.url));
 const optional = process.argv.slice(2).filter(arg => arg.endsWith('.sql')).map(arg => resolve(arg));
@@ -69,6 +70,81 @@ try {
   catch (error) { forbidden = /order_collection_forbidden/.test(error.message); }
   assert.equal(forbidden, true, 'instructor must not access POS collection');
   const billing = { kind: 'organization', name: 'Test Group', identity: '123456789', email: 'billing@example.invalid' };
+  current = 'digital order eligibility and immutable invoice source';
+  const digitalOrder = '00000000-0000-4000-8000-000000000010';
+  await db.query('UPDATE public.payper_dispatch_control SET activation_cutoff_utc=statement_timestamp() WHERE singleton');
+  await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
+    activity_id,activity_date,num_participants,price_per_person,payment_status)
+    VALUES($1,'Test Group','0500000000','billing@example.invalid','Test Group',
+      $2,current_date,1,1000,'לא שולם')`, [digitalOrder, activity]);
+  await db.query('SELECT public.link_order_customer($1,$2,0)', [digitalOrder, customer]);
+  const issues = (await db.query('SELECT public.digital_order_payment_issues($1,$2,$3) AS value',
+    [digitalOrder, cashier, JSON.stringify(billing)])).rows[0].value;
+  assert.deepEqual(issues, []);
+  const missing = (await db.query('SELECT public.digital_order_payment_issues($1,$2,$3) AS value',
+    [digitalOrder, cashier, JSON.stringify({ ...billing, identity: '', email: '' })])).rows[0].value;
+  assert.ok(missing.includes('billing_identity_required'));
+  assert.ok(missing.includes('billing_email_required'));
+  let blocked = false;
+  try { await db.query('SELECT public.reserve_pelecard_live_order($1,$2,100000,NULL,$3)',
+    [digitalOrder, cashier, JSON.stringify({ ...billing, identity: '' })]); }
+  catch (error) { blocked = /digital_order_not_eligible/.test(error.message); }
+  assert.equal(blocked, true, 'direct reservation must reject incomplete billing');
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.payment_transactions WHERE order_id=$1',
+    [digitalOrder])).rows[0].n, 0);
+  const digital = (await db.query('SELECT public.reserve_pelecard_live_order($1,$2,100000,NULL,$3) AS value',
+    [digitalOrder, cashier, JSON.stringify(billing)])).rows[0].value;
+  assert.equal(digital.created, true);
+  const frozen = (await db.query(`SELECT p.amount,p.checkout_snapshot,b.billing_name,b.billing_identity,
+    b.billing_email,b.vat_applicable FROM public.payment_transactions p
+    JOIN public.payper_payment_billing_snapshots b ON b.payment_id=p.id WHERE p.id=$1`,
+    [digital.id])).rows[0];
+  assert.equal(Number(frozen.amount), 1000);
+  assert.match(frozen.checkout_snapshot.items[0].name, /Group activity/);
+  assert.equal(frozen.checkout_snapshot.items[0].customPrice, 1000);
+  assert.equal(frozen.billing_name, billing.name);
+  assert.equal(frozen.billing_identity, billing.identity);
+  assert.equal(frozen.billing_email, billing.email);
+  assert.equal(frozen.vat_applicable, true);
+  const hostedId = '00000000-0000-4000-8000-000000000011';
+  const hostedUrl = `https://gateway20.pelecard.biz/PaymentGW?transactionId=${hostedId}`;
+  const claimed = (await db.query('SELECT * FROM public.claim_pelecard_live_init($1)', [digital.id])).rows;
+  assert.equal(claimed.length, 1);
+  assert.equal(claimed[0].amount_minor, 100000);
+  await db.query('SELECT public.persist_pelecard_live_adapter_session($1,$2,$3,$4)',
+    [digital.id, hostedId, 'mock-confirmation', hostedUrl]);
+  await db.query("SELECT public.observe_pelecard_live_attempt($1,'usable','000','000',true)", [digital.id]);
+  await db.query("SELECT public.finalize_pelecard_live($1,$2,'mock-approval','000',1000,'ILS')",
+    [digital.id, hostedId]);
+  const finalized = (await db.query('SELECT status,sale_id FROM public.payment_transactions WHERE id=$1',
+    [digital.id])).rows[0];
+  assert.equal(finalized.status, 'succeeded');
+  assert.ok(finalized.sale_id);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.sales WHERE order_id=$1',
+    [digitalOrder])).rows[0].n, 1);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.payper_document_ledger WHERE payment_id=$1',
+    [digital.id])).rows[0].n, 1);
+  const invoiceFacts = (await db.query('SELECT public.freeze_payper_source($1) AS value',
+    [digital.id])).rows[0].value;
+  assert.equal(invoiceFacts.billing.billing_company_id, billing.identity);
+  assert.equal(invoiceFacts.checkoutSnapshot.items[0].customPrice, 1000);
+  const invoiceRequest = buildCreatePayperInvoice({
+    paymentId: invoiceFacts.paymentId, pelecardTransactionId: invoiceFacts.pelecardTransactionId,
+    amount: Number(invoiceFacts.amount), currency: invoiceFacts.currency,
+    paymentCreatedAt: invoiceFacts.paymentCreatedAt, verifiedAt: invoiceFacts.verifiedAt,
+    activationCutoffUtc: invoiceFacts.activationCutoffUtc,
+    orderId: invoiceFacts.orderId, orderNumber: invoiceFacts.orderNumber,
+    customerKind: invoiceFacts.customerKind, checkoutSnapshot: invoiceFacts.checkoutSnapshot,
+    billing: invoiceFacts.billing,
+  }, '123456', { terminalNumber: 'TEST', user: 'TEST', password: 'TEST' }, { sendByMail: true });
+  assert.equal(invoiceRequest.PayperParameters.typeDocument, 'Invoice-Receipt');
+  assert.equal(invoiceRequest.PayperParameters.DataPayper.invoice_lines[0].price_per_unit, '100000');
+  assert.equal(invoiceRequest.PayperParameters.DataPayper.document_no_vat, 'false');
+  await db.query("SELECT public.finalize_pelecard_live($1,$2,'mock-approval','000',1000,'ILS')",
+    [digital.id, hostedId]);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.sales WHERE order_id=$1',
+    [digitalOrder])).rows[0].n, 1);
+  current = 'cash order collection on full schema';
   const collected = (await db.query(`SELECT public.record_payper_order_collection(
     $1,$2,$3,'cash',100000,NULL,$4,'invoice-receipt',NULL) AS value`,
     [cashier, requestKey, order, JSON.stringify(billing)])).rows[0].value;
@@ -145,6 +221,14 @@ try {
     activity_id,activity_date,num_participants,price_per_person,payment_status)
     VALUES($1,'Legacy Group','0500000000','billing@example.invalid','Test Group',
       $2,current_date,1,1000,'לא שולם')`, [unknownVatOrder, activity]);
+  const vatIssues = (await db.query('SELECT public.digital_order_payment_issues($1,$2,$3) AS value',
+    [unknownVatOrder, cashier, JSON.stringify(billing)])).rows[0].value;
+  assert.ok(vatIssues.includes('vat_required'));
+  let vatReservationBlocked = false;
+  try { await db.query('SELECT public.reserve_pelecard_live_order($1,$2,100000,NULL,$3)',
+    [unknownVatOrder, cashier, JSON.stringify(billing)]); }
+  catch (error) { vatReservationBlocked = /digital_order_not_eligible/.test(error.message); }
+  assert.equal(vatReservationBlocked, true, 'missing VAT must block direct hosted reservation');
   const held = (await db.query(`SELECT public.record_payper_order_collection(
     $1,gen_random_uuid(),$2,'cash',100000,NULL,$3,'invoice-receipt',NULL) AS value`,
     [cashier, unknownVatOrder, JSON.stringify(billing)])).rows[0].value;
@@ -174,6 +258,14 @@ try {
       VALUES($1,$2,$3,gen_random_uuid(),$4,'cash','not_applicable','invoice-receipt',$5,40000)`,
       [priorPayment, priorSale, physicalOrder, cashier, JSON.stringify(billing)]);
     await db.query("UPDATE public.orders SET payment_status='שולם חלקית' WHERE id=$1", [physicalOrder]);
+    const partialIssues = (await db.query('SELECT public.digital_order_payment_issues($1,$2,$3) AS value',
+      [physicalOrder, cashier, JSON.stringify(billing)])).rows[0].value;
+    assert.ok(partialIssues.includes('digital_partial_unsupported'));
+    let fullHostedRejected = false;
+    try { await db.query('SELECT public.reserve_pelecard_live_order($1,$2,100000,NULL,$3)',
+      [physicalOrder, cashier, JSON.stringify(billing)]); }
+    catch (error) { fullHostedRejected = /digital_order_not_eligible/.test(error.message); }
+    assert.equal(fullHostedRejected, true, 'digital checkout cannot charge the original total after a partial payment');
     await db.query("UPDATE public.physical_terminal_devices SET enabled=true,cash_register_code='GENERAL' WHERE register_number='003'");
     let hostedRejected = false;
     try {
@@ -207,6 +299,7 @@ try {
   assert.equal(unvalidated, 0, 'all application constraints must validate');
   console.log(JSON.stringify({ migrations: files.length, optional: optional.length,
     tables: installed, functions, policies, triggers, constraints, unvalidated,
+    digitalOrderMockApproval: 'passed',
     cashOrderCollection: 'passed',
     physicalRemainingBalance: physicalIncluded ? 'passed' : 'not_requested' }));
   if (process.env.AUDIT_CATALOG_NAMES === '1') {

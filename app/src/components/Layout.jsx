@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/AuthContext";
 import SiteOpeningPrompt from "@/components/SiteOpeningPrompt";
 import PayperAdminAlert from "@/components/accounting/PayperAdminAlert";
 import {PelecardPendingAlert} from "@/components/accounting/PelecardPendingReview";
+import { BRAND } from "@/lib/orderDocText";
 
 const allNavItems = [
 { path: "/", label: "דשבורד", icon: LayoutDashboard, roles: ["admin"] },
@@ -103,7 +104,7 @@ export default function Layout() {
             <LogOut className="w-4 h-4" />
             התנתקות
           </button>
-          <p className="text-xs text-sidebar-foreground/40 text-center">© 2026 אדוונצ׳ר</p>
+          <p className="text-xs text-sidebar-foreground/40 text-center">© 2026 {BRAND.name}</p>
         </div>
       </aside>
 
