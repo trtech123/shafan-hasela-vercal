@@ -568,15 +568,7 @@ export default function Schedule() {
                 const siteStyle = SITE_COLORS[order.site];
                 const activityName = getActivityName(order.activity_id);
                 const handleCollect = () => {
-                  const params = new URLSearchParams({
-                    prefill: JSON.stringify({
-                      id: order.id,
-                      name: `${activityName} — ${order.client_name}`,
-                      qty: order.num_participants || 1,
-                      customPrice: order.price_per_person || 0,
-                    })
-                  });
-                  navigate(`/cashregister?${params.toString()}`);
+                  navigate(`/cashregister?orderId=${encodeURIComponent(order.id)}`);
                 };
                 return (
                   <div key={order.id} className={cn("p-4 rounded-xl border space-y-2", siteStyle ? siteStyle.card : "bg-muted/50 border-border")}>
@@ -598,6 +590,7 @@ export default function Schedule() {
                       <span>🏔️ {activityName}</span>
                       {order.start_time && <span>🕐 {order.start_time}{order.end_time ? `–${order.end_time}` : ""}</span>}
                       <span>👥 {order.num_participants} משתתפים</span>
+                      <span>תשלום: {order.payment_status || 'לא שולם'}</span>
                     </div>
                     {order.internal_notes && (
                       <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 text-amber-800">

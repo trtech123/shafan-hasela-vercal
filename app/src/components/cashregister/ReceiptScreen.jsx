@@ -7,6 +7,14 @@ import moment from "moment";
 export default function ReceiptScreen({ receipt, onNewSale }) {
   const receiptRef = useRef(null);
   const deferred = receipt.method === 'חשבונית';
+  const officialUrl = (() => {
+    try {
+      const url = new URL(receipt.accounting?.documentUrl);
+      return url.protocol === 'https:' && ['payper.co.il', 'app.payper.co.il'].includes(url.hostname)
+        && /^\/(?:app\/)?public\/invoice_show\/[0-9]+$/.test(url.pathname)
+        && !url.username && !url.password && !url.port && !url.hash ? url.href : null;
+    } catch { return null; }
+  })();
 
   const handlePrint = () => {
     const content = receiptRef.current.innerHTML;
@@ -136,8 +144,15 @@ export default function ReceiptScreen({ receipt, onNewSale }) {
         {/* Actions */}
         <div className="space-y-3">
           <Button onClick={handlePrint} variant="outline" className="w-full border-slate-600 text-white bg-slate-800 hover:bg-slate-700 gap-2">
-            <Printer className="w-4 h-4" /> הדפס קבלה
+            <Printer className="w-4 h-4" /> הדפס אישור מכירה פנימי
           </Button>
+
+          {receipt.accounting && (receipt.accounting.state === 'succeeded' && officialUrl
+            ? <div role="status" className="rounded border border-emerald-500 p-3 text-sm">
+              מסמך Payper רשמי {receipt.accounting.documentNumber} הופק. שליחה לדוא״ל התבקשה מ־Payper; אישור מסירה אינו זמין.
+              <a className="block underline" href={officialUrl} target="_blank" rel="noopener noreferrer">פתח והדפס מסמך רשמי</a>
+            </div>
+            : <p role="status" className="rounded border border-amber-500 p-3 text-sm">התשלום נשמר. המסמך החשבונאי ממתין להפקה או לבדיקה בבקרת הנהלת חשבונות.</p>)}
 
           {/* Email sending is out of scope for the MVP — disabled with a Hebrew "in progress" tooltip. */}
           <div className="flex gap-2" title="אימייל לא זמין כרגע — בבנייה">
