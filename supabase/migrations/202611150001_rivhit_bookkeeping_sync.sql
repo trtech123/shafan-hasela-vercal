@@ -1,5 +1,8 @@
 -- Local-only draft. Do not apply to Production until migration history is reconciled.
 -- This outbox never reads or releases the legacy accounting_events queue.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '2min';
 CREATE TABLE public.rivhit_bookkeeping_sources (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   account_namespace text NOT NULL CHECK (btrim(account_namespace) <> ''),
@@ -112,6 +115,11 @@ BEGIN
     AND l.mapping_approval_ref = p_approval_ref
     AND l.status = 'ready' AND l.dispatch_started_at IS NULL
     AND l.mapping_approval_ref IS NOT NULL AND l.frozen_request IS NOT NULL
+    AND (s.document_type <> 'invoice_receipt' OR l.leg_kind <> 'receipt' OR
+      EXISTS (SELECT 1 FROM public.rivhit_bookkeeping_legs AS first_leg
+        WHERE first_leg.source_id = l.source_id AND first_leg.leg_kind = 'invoice'
+          AND first_leg.correction_sequence = l.correction_sequence
+          AND first_leg.status = 'succeeded'))
   RETURNING l.id, l.claim_token, l.frozen_request;
 END;
 $$;
@@ -154,3 +162,4 @@ REVOKE ALL ON FUNCTION public.claim_rivhit_bookkeeping_leg(uuid,text,text,text),
 GRANT EXECUTE ON FUNCTION public.claim_rivhit_bookkeeping_leg(uuid,text,text,text),
   public.complete_rivhit_bookkeeping_leg(uuid,uuid,integer,integer,integer),
   public.hold_rivhit_bookkeeping_leg(uuid,uuid,text) TO service_role;
+COMMIT;

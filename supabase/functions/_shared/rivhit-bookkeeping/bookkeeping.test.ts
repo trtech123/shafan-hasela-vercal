@@ -167,6 +167,26 @@ describe("journal worker", () => {
       .toEqual({ status: "reconciliation_required" });
     expect(client.addJournal).toHaveBeenCalledTimes(1);
   });
+
+  test("keeps first invoice leg succeeded when receipt outcome is uncertain", async () => {
+    const states = new Map([["invoice", "ready"], ["receipt", "ready"]]);
+    const repository = {
+      claim: vi.fn(async (id: string) => states.get(id) === "ready"
+        ? { id, token: `claim-${id}`, request: { amount: 4 } } : null),
+      complete: vi.fn(async (id: string) => { states.set(id, "succeeded"); }),
+      fail: vi.fn(async (id: string) => { states.set(id, "reconciliation_required"); }),
+    };
+    const client = { addJournal: vi.fn()
+      .mockResolvedValueOnce({ year: 2026, month: 11, line: 42 })
+      .mockRejectedValueOnce(new JournalOutcomeUnknown()) };
+    expect(await processJournalLeg({ enabled: true, legId: "invoice", repository, client }))
+      .toEqual({ status: "succeeded" });
+    expect(await processJournalLeg({ enabled: true, legId: "receipt", repository, client }))
+      .toEqual({ status: "reconciliation_required" });
+    expect([...states]).toEqual([["invoice", "succeeded"],
+      ["receipt", "reconciliation_required"]]);
+    expect(client.addJournal).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("journal repository", () => {
