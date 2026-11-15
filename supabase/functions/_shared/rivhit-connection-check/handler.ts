@@ -37,6 +37,27 @@ function verifiedGatewayRole(authorization: string | null): string | null {
   } catch { return null; }
 }
 
+async function readBounded(response: Response): Promise<string> {
+  if (!response.body) throw new ProviderReadError('invalid_response');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > 2_000_000) {
+      await reader.cancel();
+      throw new ProviderReadError('response_too_large');
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
+
 export function createConnectionCheckHandler(options: {
   apiToken: string | undefined; fetchImpl?: typeof fetch;
 }) {
@@ -53,8 +74,7 @@ export function createConnectionCheckHandler(options: {
     if (Number(response.headers.get('Content-Length') ?? 0) > 2_000_000)
       throw new ProviderReadError('response_too_large');
     try {
-      const text = await response.text();
-      if (text.length > 2_000_000) throw new ProviderReadError('response_too_large');
+      const text = await readBounded(response);
       const result = record(JSON.parse(text));
       if (!result) throw new ProviderReadError('invalid_response');
       if (result.error_code !== 0) {
@@ -76,10 +96,14 @@ export function createConnectionCheckHandler(options: {
     let input: unknown;
     try { input = await request.json(); } catch { return json(400, { error: 'invalid_request' }); }
     const body = record(input);
-    if (!body || !['identity', 'catalog', 'journal'].includes(String(body.mode))
+    if (!body || !['identity', 'catalog', 'account_cards', 'journal'].includes(String(body.mode))
       || (body.mode === 'identity' && Object.keys(body).length !== 1)
       || (body.mode === 'catalog' &&
         (Object.keys(body).length !== 2 || !Number.isSafeInteger(body.expected_company_id)))
+      || (body.mode === 'account_cards' &&
+        (Object.keys(body).length !== 3 || !Number.isSafeInteger(body.expected_company_id)
+          || !Number.isSafeInteger(body.customer_type)
+          || Number(body.customer_type) < 40 || Number(body.customer_type) > 59))
       || (body.mode === 'journal' &&
         (Object.keys(body).length !== 3 || !Number.isSafeInteger(body.expected_company_id)
           || !validDate(body.date))))
@@ -96,35 +120,32 @@ export function createConnectionCheckHandler(options: {
       if (body.expected_company_id !== company.company_id)
         return json(409, { error: 'company_mismatch' });
 
+      if (body.mode === 'account_cards') {
+        stage = 'account_cards';
+        const customers = record(await call(operations[2], { customer_type: body.customer_type }));
+        if (!customers || !Array.isArray(customers.customer_list))
+          throw new Error('invalid_accounts');
+        return json(200, { company: identity, customer_type: body.customer_type,
+          account_cards_total: customers.customer_list.length,
+          account_cards: customers.customer_list.slice(0, 500).map((item: unknown) => {
+            const row = record(item);
+            return { customer_id: row?.customer_id, customer_type: row?.customer_type,
+              acc_ref: row?.acc_ref };
+          }) });
+      }
+
       if (body.mode === 'catalog') {
         stage = 'sort_codes';
         const sortCodes = await call(operations[1], { documents_only: false });
         if (!Array.isArray(sortCodes)) throw new Error('invalid_sort_codes');
-        stage = 'account_cards';
-        let cards: unknown[] = [];
-        let cardsStatus = 'ok';
-        let cardsCode: string | null = null;
-        try {
-          const customers = record(await call(operations[2]));
-          if (!customers || !Array.isArray(customers.customer_list)) throw new Error('invalid_accounts');
-          cards = customers.customer_list;
-        } catch (error) {
-          cardsStatus = 'unavailable';
-          cardsCode = error instanceof ProviderReadError ? error.safeCode : 'response_shape';
-        }
         return json(200, { company: identity,
           sort_codes: sortCodes.slice(0, 500).map((item: unknown) => {
           const row = record(item);
           return { sort_code: row?.sort_code, description: row?.description };
         }),
           sort_codes_total: sortCodes.length,
-          account_cards: cards.slice(0, 500).map((item: unknown) => {
-          const row = record(item);
-          return { customer_id: row?.customer_id, customer_type: row?.customer_type,
-            acc_ref: row?.acc_ref };
-        }),
-          account_cards_total: cards.length, account_cards_status: cardsStatus,
-          account_cards_error_code: cardsCode });
+          account_cards: [], account_cards_total: 0,
+          account_cards_status: 'not_requested' });
       }
 
       const date = body.date as string;
@@ -133,14 +154,12 @@ export function createConnectionCheckHandler(options: {
         date: `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`,
       }));
       if (!report || !Array.isArray(report.journals_report)) throw new Error('invalid_report');
-      const matches = report.journals_report.filter((item: unknown) => {
+      const referenceMatches = report.journals_report.filter((item: unknown) => {
         const row = record(item);
-        return row && (String(row.reference1 ?? '').includes('200002')
-          || String(row.reference2 ?? '').includes('200002')
-          || String(row.reference1 ?? '').includes(pilotPaymentId)
-          || String(row.reference2 ?? '').includes(pilotPaymentId))
-          && Number(row.total_amount) === 4;
-      }).map((item: unknown) => {
+        return row && [row.reference1, row.reference2, row.details].some(value =>
+          String(value ?? '').includes('200002') || String(value ?? '').includes(pilotPaymentId));
+      });
+      const matches = referenceMatches.slice(0, 20).map((item: unknown) => {
         const row = record(item)!;
         return { journal_year: row.journal_year, journal_month: row.journal_month,
           journal_id: row.journal_id, sort_code: row.sort_code,
@@ -148,7 +167,10 @@ export function createConnectionCheckHandler(options: {
       });
       return json(200, { company: identity,
         document_200002: { searched_date: date, expected_amount: 4,
-          matches, searched_rows: report.journals_report.length } });
+          matches, match_count: referenceMatches.length,
+          amount_4_candidates: report.journals_report.filter((item: unknown) =>
+            Number(record(item)?.total_amount) === 4).length,
+          searched_rows: report.journals_report.length } });
     } catch (error) { return json(502, { error: 'provider_read_failed', stage,
       kind: error instanceof Error && error.message.startsWith('invalid_')
         ? 'response_shape' : 'provider_or_transport',
