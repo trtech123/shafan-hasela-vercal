@@ -15,6 +15,9 @@ let current = 'Supabase bootstrap';
 try {
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
+    CREATE SCHEMA extensions;
+    CREATE FUNCTION extensions.uuid_generate_v4() RETURNS uuid LANGUAGE sql VOLATILE AS
+      'SELECT pg_catalog.gen_random_uuid()';
     CREATE SCHEMA auth;
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
       'SELECT nullif(current_setting(''app.test_uid'',true),'''')::uuid';
@@ -208,7 +211,26 @@ try {
     const names = (await db.query(`SELECT c.relname FROM pg_class c
       JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='public' AND c.relkind='r' ORDER BY c.relname`)).rows.map(row => row.relname);
-    console.log(JSON.stringify({ tableNames: names }));
+    const functionSignatures = (await db.query(`SELECT p.oid::regprocedure::text AS signature
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' ORDER BY signature`)).rows.map(row => row.signature);
+    const criticalFunctionHashes = (await db.query(`SELECT p.oid::regprocedure::text AS signature,
+      md5(p.prosrc) AS hash,
+      md5(regexp_replace(p.prosrc,'[[:space:]]+','','g')) AS compact_hash
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' AND p.proname IN
+      ('payment_checkout_snapshot_is_safe','record_payper_dispatch_outcome_v2',
+       'hold_payper_source','reserve_pelecard_order_payment','finalize_pelecard_payment',
+       'finalize_physical_payment','guard_check_general_register','guard_order_customer_snapshot')
+      ORDER BY signature`)).rows;
+    const policyNames = (await db.query(`SELECT tablename||'.'||policyname AS name
+      FROM pg_policies WHERE schemaname='public' ORDER BY name`)).rows.map(row => row.name);
+    const triggerNames = (await db.query(`SELECT c.relname||'.'||t.tgname AS name
+      FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+      JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND NOT t.tgisinternal ORDER BY name`)).rows.map(row => row.name);
+    console.log(JSON.stringify({ tableNames: names, functionSignatures,
+      criticalFunctionHashes, policyNames, triggerNames }));
   }
 } catch (error) {
   console.error(`Full-schema rehearsal failed at ${current}: ${error.message}`);
