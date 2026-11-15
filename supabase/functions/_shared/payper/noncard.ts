@@ -4,8 +4,8 @@ import { classifyDispatchedPayperOutcome, type PayperDispatchOutcome } from "./o
 export interface NoncardSource {
   amountMinor: number;
   method: "check" | "cash";
-  documentType: "invoice-receipt" | "receipt";
-  referenceDocumentId: string | null;
+  documentType: "invoice-receipt";
+  referenceDocumentId: null;
   receiptNumber: string;
   paidDate: string;
   items: Array<{ name: string; qty: number; customPrice: number }>;
@@ -38,7 +38,8 @@ export function buildNoncardPayperRequest(source: NoncardSource, auth: GatewayCr
   if (!clean(auth.terminalNumber, 50) || !clean(auth.user, 100) || !clean(auth.password, 200))
     throw new Error("payper_credentials_required");
   if (!Number.isSafeInteger(source.amountMinor) || source.amountMinor <= 0 ||
-    !clean(source.receiptNumber, 100) || !["receipt", "invoice-receipt"].includes(source.documentType))
+    !clean(source.receiptNumber, 100) || source.documentType !== "invoice-receipt"
+    || source.referenceDocumentId !== null)
     throw new Error("payper_source_incomplete");
   if (!clean(source.billing.name, 200) || !/^[0-9]{9}$/.test(source.billing.identity)
     || !clean(source.billing.email, 320) || !/^\S+@\S+\.\S+$/.test(source.billing.email))
@@ -72,8 +73,6 @@ export function buildNoncardPayperRequest(source: NoncardSource, auth: GatewayCr
       + `חשבון ${check.account_number}; בעל החשבון ${check.account_holder}; `
       + `התקבלה ${date(check.received_date)}; פירעון ${date(check.due_date)}`;
   } else if (source.method !== "cash" || source.check) throw new Error("payper_payment_method_invalid");
-  if (source.referenceDocumentId !== null && !clean(source.referenceDocumentId, 100))
-    throw new Error("payper_reference_invalid");
   return {
     terminalNumber: auth.terminalNumber, user: auth.user, password: auth.password,
     trxRecordId: "" as const, Uid: "" as const,
@@ -85,7 +84,6 @@ export function buildNoncardPayperRequest(source: NoncardSource, auth: GatewayCr
       receipt_lines: [{ payment_type: source.method === "check" ? "Check" as const : "Cash" as const,
         date: date(paidOn), amount: source.amountMinor }],
       ...(remarks ? { document_remarks: remarks } : {}),
-      ...(source.referenceDocumentId ? { reference_document_id: source.referenceDocumentId } : {}),
     } },
   };
 }

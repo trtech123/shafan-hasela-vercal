@@ -28,8 +28,7 @@ const collect = async body => {
 
 export default function OrderCollection({ orderId }) {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
-  const allowed = isAdmin || user?.role === 'קופאי' || user?.role === 'cashier';
+  const allowed = user?.role === 'admin' || user?.role === 'קופאי' || user?.role === 'cashier';
   const [view, setView] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,8 +38,6 @@ export default function OrderCollection({ orderId }) {
   const [billing, setBilling] = useState({ kind: 'person', name: '', identity: '', email: '' });
   const [check, setCheck] = useState({ check_number: '', bank: '', branch: '', account_number: '',
     account_holder: '', received_date: today(), due_date: today() });
-  const [documentType, setDocumentType] = useState('invoice-receipt');
-  const [referenceDocumentId, setReferenceDocumentId] = useState('');
   const [result, setResult] = useState(null);
   const requestKey = useRef(null);
   const locked = useRef(false);
@@ -52,8 +49,6 @@ export default function OrderCollection({ orderId }) {
       setAmount((latest.balanceMinor / 100).toFixed(2));
       setBilling({ kind: latest.billing?.kind || 'person', name: latest.billing?.name || '', identity: latest.billing?.identity || '',
         email: latest.billing?.email || '' });
-      setDocumentType(latest.paidMinor > 0 || latest.documents?.some(d => d.state === 'succeeded')
-        ? 'receipt' : 'invoice-receipt');
     }
     return latest;
   };
@@ -67,8 +62,6 @@ export default function OrderCollection({ orderId }) {
       setAmount((latest.balanceMinor / 100).toFixed(2));
       setBilling({ kind: latest.billing?.kind || 'person', name: latest.billing?.name || '', identity: latest.billing?.identity || '',
         email: latest.billing?.email || '' });
-      setDocumentType(latest.paidMinor > 0 || latest.documents?.some(d => d.state === 'succeeded')
-        ? 'receipt' : 'invoice-receipt');
     }).catch(() => { if (active) setError('לא ניתן לטעון את יתרת ההזמנה.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -77,7 +70,7 @@ export default function OrderCollection({ orderId }) {
   const amountMinor = Math.round(Number(amount) * 100);
   const validAmount = Number.isSafeInteger(amountMinor) && amountMinor > 0 &&
     Math.abs(Number(amount) * 100 - amountMinor) < 0.00001 &&
-    amountMinor <= view?.balanceMinor && (isAdmin || amountMinor === view?.balanceMinor);
+    amountMinor === view?.balanceMinor;
   const checkReady = method === 'cash' || (/^\d{1,20}$/.test(check.check_number)
     && check.bank.trim() && /^\d{1,8}$/.test(check.branch)
     && /^\d{1,20}$/.test(check.account_number) && check.account_holder.trim()
@@ -90,7 +83,7 @@ export default function OrderCollection({ orderId }) {
     try {
       const saved = await collect({ action: 'collect', orderId, requestKey: requestKey.current,
         method, amountMinor, check: method === 'check' ? { ...check, amount } : null,
-        billing, documentType, referenceDocumentId: referenceDocumentId.trim() || null });
+        billing, documentType: 'invoice-receipt', referenceDocumentId: null });
       setResult(saved);
       publishOrderChange();
       await refresh(true);
@@ -120,6 +113,7 @@ export default function OrderCollection({ orderId }) {
         {view.payments?.length > 0 && <p className="text-sm">היסטוריית גבייה: {view.payments.filter(p => p.status === 'succeeded').length} תשלומים שנרשמו או אומתו</p>}
         {view.payments?.some(p => p.clearanceStatus === 'received_uncleared') && <p className="text-sm text-amber-800">המחאות שהתקבלו טרם נפרעו בבנק.</p>}
         {view.unresolvedPayment && <p role="alert" className="text-amber-800">קיים ניסיון תשלום שתוצאתו אינה ודאית. גבייה נוספת חסומה עד בירור.</p>}
+        {view.accountingReviewRequired && <p role="alert" className="text-amber-800">כבר קיים מסמך או ניסיון הפקה חשבונאי להזמנה. התשלום החדש יישמר, והפקת מסמך נוסף תמתין להתאמה חשבונאית.</p>}
         {view.documents?.map(doc => <p key={doc.paymentId} className="text-sm">
           מסמך עבור תשלום {doc.paymentId}: {doc.state === 'succeeded' ? `הופק ${doc.documentNumber}` : 'ממתין או דורש התאמה'}
           {safeDocumentUrl(doc.documentUrl) && <a className="mr-2 text-primary underline" href={safeDocumentUrl(doc.documentUrl)} target="_blank" rel="noopener noreferrer">פתיחה והדפסה</a>}
@@ -134,12 +128,10 @@ export default function OrderCollection({ orderId }) {
       {view.balanceMinor > 0 && !view.unresolvedPayment && !result && <section className="space-y-3 rounded-xl border bg-white p-5">
         <h2 className="font-bold">רישום תשלום שהתקבל</h2>
         {view.paidMinor === 0 && <Link className="inline-block text-primary underline" to={orderPaymentPath(orderId)}>תשלום דיגיטלי בפלאקארד להזמנה זו</Link>}
-        {view.paidMinor > 0 && <p className="text-sm text-amber-800">תשלום דיגיטלי לחלק מהיתרה דורש התאמה בשרת; גבייה ידנית זמינה כאן.</p>}
+        {view.paidMinor > 0 && <p className="text-sm text-amber-800">הגבייה כאן היא של מלוא היתרה לאחר תשלומים קודמים.</p>}
         <label className="block">אמצעי תשלום<select className="mt-1 w-full rounded border p-2" value={method} onChange={e => setMethod(e.target.value)}><option value="check">המחאה</option><option value="cash">מזומן</option></select></label>
-        <label className="block">סכום לגבייה (₪)<input className="mt-1 w-full rounded border p-2" type="number" min="0.01" max={(view.balanceMinor / 100).toFixed(2)} step="0.01" value={amount} disabled={!isAdmin} onChange={e => setAmount(e.target.value)} /></label>
-        {!isAdmin && <p className="text-xs">גבייה חלקית דורשת מנהל.</p>}
-        <label className="block">סוג מסמך<select className="mt-1 w-full rounded border p-2" value={documentType} onChange={e => setDocumentType(e.target.value)}><option value="invoice-receipt">חשבונית מס/קבלה</option><option value="receipt">קבלה</option></select></label>
-        {documentType === 'receipt' && <label className="block">מזהה חשבונית Payper קיימת, אם קיימת<input className="mt-1 w-full rounded border p-2" value={referenceDocumentId} onChange={e => setReferenceDocumentId(e.target.value)} /></label>}
+        <label className="block">סכום לגבייה (₪)<input className="mt-1 w-full rounded border p-2" type="number" value={amount} readOnly /></label>
+        <p className="text-sm">לאחר קבלת התשלום תתבקש חשבונית מס/קבלה מ־Payper. אם כבר קיים מסמך להזמנה, התשלום יישמר להשלמת התאמה חשבונאית.</p>
         <div className="grid gap-2 sm:grid-cols-3">
           <label>סוג לקוח<select className="w-full rounded border p-2" value={billing.kind} onChange={e => setBilling({ ...billing, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></label>
           <label>שם לחיוב<input className="w-full rounded border p-2" value={billing.name} onChange={e => setBilling({ ...billing, name: e.target.value })} /></label>

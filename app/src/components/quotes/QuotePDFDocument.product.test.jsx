@@ -3,6 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, test, vi } from "vitest";
+vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: vi.fn() } } }));
 import QuotePDFDocument from "./QuotePDFDocument";
 
 afterEach(cleanup);
