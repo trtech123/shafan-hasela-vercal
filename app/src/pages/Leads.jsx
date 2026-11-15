@@ -3,11 +3,11 @@ import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, Wand2, Trash2, Pencil, Check, X, Plus, Copy, FileText, Download } from "lucide-react";
 import QuoteFormDialog from "@/components/quotes/QuoteFormDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { escapeLeadCsvCell } from "@/lib/leadCsv";
 
 const STATUS_STYLES = {
   "פתוח":         "bg-blue-100 text-blue-800 border-blue-200",
@@ -252,11 +252,11 @@ export default function Leads() {
 
   const handleExportCsv = () => {
     if (filtered.length === 0) return;
-    const headers = ["מספר", "שם מלא", "טלפון", "אימייל", "חברה", "סוג לקוח", "אתר", "סטטוס", "תאריך אירוע", "מקור", "הערות"];
-    // Quote every field; double embedded quotes. Handles commas/newlines (e.g. source_text).
-    const esc = (v) => `"${(v == null ? "" : String(v)).replace(/"/g, '""')}"`;
+    const headers = ["מספר", "שם מלא", "טלפון", "אימייל", "חברה", "סוג לקוח", "אתר", "סטטוס", "תאריך אירוע", "מקור", "הערות", "ערוץ", "קמפיין"];
+    // Public form text must not become a spreadsheet formula on export.
+    const esc = escapeLeadCsvCell;
     const rows = filtered.map((l, i) =>
-      [i + 1, l.full_name, l.phone, l.email, l.company, l.customer_type, l.site, l.status, l.event_date, l.source_text, l.notes]
+      [i + 1, l.full_name, l.phone, l.email, l.company, l.customer_type, l.site, l.status, l.event_date, l.source_text, l.notes, l.lead_source, l.lead_attribution?.campaign || l.lead_attribution?.utmCampaign]
         .map(esc).join(",")
     );
     // ﻿ BOM so Excel reads UTF-8 Hebrew correctly. CRLF line endings.
@@ -275,7 +275,8 @@ export default function Leads() {
   const q = searchText.trim().toLowerCase();
   const matchesSearch = (l) => {
     if (!q) return true;
-    return [l.full_name, l.phone, l.email, l.company, l.notes, l.source_text]
+    return [l.full_name, l.phone, l.email, l.company, l.notes, l.source_text,
+      l.lead_source, l.lead_attribution?.campaign, l.lead_attribution?.utmCampaign]
       .some(v => (v || "").toLowerCase().includes(q));
   };
   const matchesCustomerType = (l) =>
@@ -540,6 +541,11 @@ export default function Leads() {
                           {lead.full_name || "—"}
                           {lead.full_name && <button onClick={() => copyToClipboard(lead.full_name)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"><Copy className="w-3 h-3" /></button>}
                         </div>
+                        {lead.lead_source === 'landing_page' && <div className="text-xs font-normal text-muted-foreground mt-1">
+                          <span>דף נחיתה</span>
+                          {(lead.lead_attribution?.campaign || lead.lead_attribution?.utmCampaign) &&
+                            <span className="ms-1">{lead.lead_attribution.campaign || lead.lead_attribution.utmCampaign}</span>}
+                        </div>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         <div className="flex items-center gap-1 group">
@@ -671,7 +677,13 @@ export default function Leads() {
             ) : (
               <>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="font-semibold text-base">{lead.full_name || "—"}</div>
+                  <div><div className="font-semibold text-base">{lead.full_name || "—"}</div>
+                    {lead.lead_source === 'landing_page' && <div className="text-xs text-muted-foreground">
+                      <span>דף נחיתה</span>
+                      {(lead.lead_attribution?.campaign || lead.lead_attribution?.utmCampaign) &&
+                        <span className="ms-1">{lead.lead_attribution.campaign || lead.lead_attribution.utmCampaign}</span>}
+                    </div>}
+                  </div>
                   <div className="flex flex-wrap gap-1 justify-end shrink-0">
                     <span className={cn(
                       "text-xs font-medium rounded-full px-2 py-0.5 border",
