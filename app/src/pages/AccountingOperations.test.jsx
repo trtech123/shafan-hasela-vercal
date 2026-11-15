@@ -37,6 +37,9 @@ vi.mock("@/components/accounting/PelecardPendingReview", () => ({
 vi.mock("@/components/accounting/PayperIssuedDocuments", () => ({
   default: () => null,
 }));
+vi.mock("@/components/accounting/PayperNoncardObligations", () => ({
+  default: () => null,
+}));
 vi.mock("sonner", () => ({
   toast: {
     error: (...args) => toastError(...args),

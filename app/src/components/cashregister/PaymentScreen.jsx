@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowRight, CreditCard, Banknote, Smartphone, Building2, Receipt, FileText, Split, Plus, Trash2, ShieldCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PhysicalTerminalStatus from './PhysicalTerminalStatus.jsx';
+import { billingReviewIssues } from '@/payments/payperBilling';
 
 const PAYMENT_METHODS = [
   { key: "מזומן",       label: "מזומן",         icon: Banknote,     color: "from-emerald-600 to-emerald-700", hint: "קבל מזומן וסמן ידנית" },
@@ -23,6 +24,7 @@ const emptyCheck = {
   account_number: "",
   account_holder: "",
   due_date: "",
+  received_date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()),
   amount: "",
   notes: "",
 };
@@ -68,6 +70,9 @@ export default function PaymentScreen({
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
   const [detailFor, setDetailFor] = useState(null);
   const [check, setCheck] = useState({ ...emptyCheck, amount: String(total) });
+  const [checkBilling, setCheckBilling] = useState({ kind: 'person', name: '', identity: '', email: '' });
+  const [checkDocumentType, setCheckDocumentType] = useState('invoice-receipt');
+  const [checkReferenceId, setCheckReferenceId] = useState('');
   // Split builder: starts with the full total on a single cash line.
   const [lines, setLines] = useState([makeLine("מזומן", total)]);
 
@@ -124,8 +129,11 @@ export default function PaymentScreen({
   };
 
   const submitCheck = () => {
-    // Minimal validation — a check needs at least a number and an amount.
-    if (!check.check_number.trim()) return;
+    if (!/^\d{1,20}$/.test(check.check_number) || !check.bank.trim() ||
+      !/^\d{1,8}$/.test(check.branch) || !/^\d{1,20}$/.test(check.account_number) ||
+      !check.account_holder.trim() || !check.received_date || !check.due_date ||
+      check.due_date < check.received_date || Number(check.amount) !== total ||
+      billingReviewIssues(checkBilling).length > 0) return;
     const details = {
       ...check,
       check_number: check.check_number.trim(),
@@ -134,7 +142,10 @@ export default function PaymentScreen({
       account_number: check.account_number.trim(),
       account_holder: check.account_holder.trim(),
       notes: check.notes.trim(),
-      amount: Number(check.amount) || total,
+      amount: Number(check.amount),
+      billing: checkBilling,
+      document_type: checkDocumentType,
+      reference_document_id: checkReferenceId.trim() || null,
     };
     onConfirm(CHECK_METHOD, details);
   };
@@ -225,7 +236,11 @@ export default function PaymentScreen({
 
   if (detailFor === CHECK_METHOD) {
     const set = (k) => (e) => setCheck((c) => ({ ...c, [k]: e.target.value }));
-    const valid = check.check_number.trim().length > 0;
+    const valid = /^\d{1,20}$/.test(check.check_number) && check.bank.trim() &&
+      /^\d{1,8}$/.test(check.branch) && /^\d{1,20}$/.test(check.account_number) &&
+      check.account_holder.trim() && check.received_date && check.due_date &&
+      check.due_date >= check.received_date && Number(check.amount) === total &&
+      billingReviewIssues(checkBilling).length === 0;
     return (
       <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6" dir="rtl">
         <div className="w-full max-w-lg space-y-6">
@@ -238,6 +253,7 @@ export default function PaymentScreen({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
+            <Field label="סוג לקוח"><select className={inputCls} value={checkBilling.kind} onChange={e => setCheckBilling({ ...checkBilling, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></Field>
             <Field label="מספר צ'ק *">
               <input className={inputCls} value={check.check_number} onChange={set("check_number")} inputMode="numeric" />
             </Field>
@@ -259,12 +275,29 @@ export default function PaymentScreen({
             <Field label="תאריך פירעון">
               <input className={inputCls} type="date" value={check.due_date} onChange={set("due_date")} />
             </Field>
+            <Field label="תאריך קבלת הצ'ק">
+              <input className={inputCls} type="date" value={check.received_date} onChange={set("received_date")} />
+            </Field>
             <div />
             <div className="col-span-2">
               <Field label="הערות">
                 <input className={inputCls} value={check.notes} onChange={set("notes")} />
               </Field>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="מסמך חשבונאי">
+              <select className={inputCls} value={checkDocumentType} onChange={e => setCheckDocumentType(e.target.value)}>
+                <option value="invoice-receipt">חשבונית מס/קבלה</option>
+              </select>
+            </Field>
+            {checkDocumentType === 'receipt' && <Field label="מזהה חשבונית Payper קיימת">
+              <input className={inputCls} value={checkReferenceId} onChange={e => setCheckReferenceId(e.target.value)} />
+            </Field>}
+            <Field label="שם לחיוב"><input className={inputCls} value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
+            <Field label="מספר זהות / חברה"><input className={inputCls} inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
+            <Field label="דוא״ל למסמך"><input className={inputCls} type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
           </div>
 
           <Button
