@@ -107,7 +107,7 @@ describe('Rivhit read-only connection check', () => {
       expect(url).toBe(endpoint + 'Customer.List');
       expect(JSON.parse(String(options.body)).customer_type).toBe(40);
       return ok({ customer_list: [
-        { customer_id: 7, customer_type: 40, acc_ref: '400', first_name: 'Private', email: 'private' },
+        { customer_id: 7, customer_type: 40, acc_ref: '400', first_name: 'הכנסות מקופה', email: 'private' },
       ] });
     });
     const handler = createConnectionCheckHandler({ apiToken: 'private-token',
@@ -115,7 +115,8 @@ describe('Rivhit read-only connection check', () => {
     const response = await handler(makeRequest({ mode: 'account_cards', expected_company_id: 123,
       customer_type: 40 }));
     expect((await response.json()).account_cards).toEqual([
-      { customer_id: 7, customer_type: 40, acc_ref: '400' },
+      { customer_id: 7, customer_type: 40, acc_ref: '400', category: 'revenue_or_register',
+        account_label: 'הכנסות מקופה' },
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect((await handler(makeRequest({ mode: 'account_cards', expected_company_id: 123,
@@ -143,7 +144,7 @@ describe('Rivhit read-only connection check', () => {
       : ok({ journals_report: [
         { reference1: '200002', total_amount: 3.39, journal_id: 10, journal_year: 2026,
           journal_month: 11, details: 'Private customer' },
-        { details: 'Payper 200002', total_amount: 0.61, journal_id: 11, journal_year: 2026,
+        { details: 'RCP-1026', total_amount: 0.61, journal_id: 11, journal_year: 2026,
           journal_month: 11 },
       ] }));
     const handler = createConnectionCheckHandler({ apiToken: 'private-token',
@@ -154,5 +155,31 @@ describe('Rivhit read-only connection check', () => {
     expect(body.document_200002.matches.map((row: { total_amount: number }) => row.total_amount))
       .toEqual([3.39, 0.61]);
     expect(JSON.stringify(body)).not.toContain('Private customer');
+  });
+
+  test('reads a relevant accounting card journal only after company and card checks', async () => {
+    const names: string[] = [];
+    const fetchImpl = vi.fn(async (url: string, options: RequestInit) => {
+      names.push(url.slice(endpoint.length));
+      if (url.endsWith('Company.Details')) return ok({ name: 'Shafan', company_id: 123 });
+      if (url.endsWith('Customer.List')) {
+        expect(JSON.parse(String(options.body)).customer_type).toBe(40);
+        return ok({ customer_list: [{ customer_id: 7, customer_type: 40,
+          first_name: 'הכנסות מקופה' }] });
+      }
+      expect(url).toBe(endpoint + 'Customer.JournalReport');
+      expect(JSON.parse(String(options.body))).toMatchObject({ customer_id: 7, year: 2026 });
+      return ok({ customer_journal: [{ reference1: 'RCP-1026', debit_amount: 4,
+        journal_id: 9, journal_month: 11, journal_year: 2026,
+        details: 'private' }] });
+    });
+    const handler = createConnectionCheckHandler({ apiToken: 'private-token',
+      fetchImpl: fetchImpl as unknown as typeof fetch });
+    const response = await handler(makeRequest({ mode: 'account_journal',
+      expected_company_id: 123, customer_type: 40, customer_id: 7 }));
+    const body = await response.json();
+    expect(body.account_journal.matches).toHaveLength(1);
+    expect(JSON.stringify(body)).not.toContain('private');
+    expect(names).toEqual(['Company.Details', 'Customer.List', 'Customer.JournalReport']);
   });
 });

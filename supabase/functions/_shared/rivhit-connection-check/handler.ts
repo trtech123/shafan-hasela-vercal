@@ -1,7 +1,8 @@
 const baseUrl = 'https://api.rivhit.co.il/online/RivhitOnlineAPI.svc/';
 const operations = ['Company.Details', 'Accounting.SortCodeList',
-  'Customer.List', 'Accounting.JournalsReport'] as const;
+  'Customer.List', 'Accounting.JournalsReport', 'Customer.JournalReport'] as const;
 const pilotPaymentId = 'PRODUCTION_PAYMENT_ID_REDACTED';
+const pilotSaleReference = 'RCP-1026';
 type Operation = typeof operations[number];
 
 class ProviderReadError extends Error {
@@ -22,6 +23,19 @@ function validDate(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function accountLabel(item: unknown): string {
+  const row = record(item);
+  return `${String(row?.first_name ?? '')} ${String(row?.last_name ?? '')}`.trim().slice(0, 100);
+}
+
+function accountingCategory(item: unknown): string | null {
+  const label = accountLabel(item);
+  if (/מע.?מ|מס עסקאות|מס ערך|vat/i.test(label)) return 'vat_output';
+  if (/אשראי|סליקה|כרטיס/i.test(label)) return 'card_clearing';
+  if (/קופה|מכירות|הכנסות|הכנסה/i.test(label)) return 'revenue_or_register';
+  return null;
 }
 
 function verifiedGatewayRole(authorization: string | null): string | null {
@@ -96,7 +110,7 @@ export function createConnectionCheckHandler(options: {
     let input: unknown;
     try { input = await request.json(); } catch { return json(400, { error: 'invalid_request' }); }
     const body = record(input);
-    if (!body || !['identity', 'catalog', 'account_cards', 'journal'].includes(String(body.mode))
+    if (!body || !['identity', 'catalog', 'account_cards', 'account_journal', 'journal'].includes(String(body.mode))
       || (body.mode === 'identity' && Object.keys(body).length !== 1)
       || (body.mode === 'catalog' &&
         (Object.keys(body).length !== 2 || !Number.isSafeInteger(body.expected_company_id)))
@@ -104,6 +118,11 @@ export function createConnectionCheckHandler(options: {
         (Object.keys(body).length !== 3 || !Number.isSafeInteger(body.expected_company_id)
           || !Number.isSafeInteger(body.customer_type)
           || Number(body.customer_type) < 40 || Number(body.customer_type) > 59))
+      || (body.mode === 'account_journal' &&
+        (Object.keys(body).length !== 4 || !Number.isSafeInteger(body.expected_company_id)
+          || !Number.isSafeInteger(body.customer_type)
+          || Number(body.customer_type) < 40 || Number(body.customer_type) > 59
+          || !Number.isSafeInteger(body.customer_id) || Number(body.customer_id) <= 0))
       || (body.mode === 'journal' &&
         (Object.keys(body).length !== 3 || !Number.isSafeInteger(body.expected_company_id)
           || !validDate(body.date))))
@@ -125,13 +144,49 @@ export function createConnectionCheckHandler(options: {
         const customers = record(await call(operations[2], { customer_type: body.customer_type }));
         if (!customers || !Array.isArray(customers.customer_list))
           throw new Error('invalid_accounts');
+        const relevant = customers.customer_list.filter((item: unknown) => accountingCategory(item));
         return json(200, { company: identity, customer_type: body.customer_type,
           account_cards_total: customers.customer_list.length,
-          account_cards: customers.customer_list.slice(0, 500).map((item: unknown) => {
+          relevant_cards_total: relevant.length,
+          account_cards: relevant.slice(0, 100).map((item: unknown) => {
             const row = record(item);
             return { customer_id: row?.customer_id, customer_type: row?.customer_type,
-              acc_ref: row?.acc_ref };
+              acc_ref: row?.acc_ref, category: accountingCategory(item),
+              account_label: accountLabel(item) };
           }) });
+      }
+
+      if (body.mode === 'account_journal') {
+        stage = 'account_cards';
+        const customers = record(await call(operations[2], { customer_type: body.customer_type }));
+        if (!customers || !Array.isArray(customers.customer_list))
+          throw new Error('invalid_accounts');
+        const target = customers.customer_list.find((item: unknown) =>
+          Number(record(item)?.customer_id) === body.customer_id
+          && Number(record(item)?.customer_type) === body.customer_type
+          && accountingCategory(item));
+        if (!target) return json(404, { error: 'account_not_in_relevant_catalog' });
+        stage = 'account_journal';
+        const report = record(await call(operations[4], {
+          customer_id: body.customer_id, year: 2026, only_open: false, all_years: false,
+        }));
+        if (!report || !Array.isArray(report.customer_journal))
+          throw new Error('invalid_report');
+        const matches = report.customer_journal.filter((item: unknown) => {
+          const row = record(item);
+          return row && [row.reference1, row.reference2, row.details].some(value =>
+            String(value ?? '').includes('200002') || String(value ?? '').includes(pilotPaymentId)
+            || String(value ?? '').includes(pilotSaleReference));
+        });
+        return json(200, { company: identity,
+          account_journal: { customer_id: body.customer_id, customer_type: body.customer_type,
+            searched_rows: report.customer_journal.length, match_count: matches.length,
+            matches: matches.slice(0, 20).map((item: unknown) => {
+              const row = record(item);
+              return { journal_year: row?.journal_year, journal_month: row?.journal_month,
+                journal_id: row?.journal_id, sort_code: row?.sort_code,
+                debit_amount: row?.debit_amount, credit_amount: row?.credit_amount };
+            }) } });
       }
 
       if (body.mode === 'catalog') {
@@ -157,7 +212,8 @@ export function createConnectionCheckHandler(options: {
       const referenceMatches = report.journals_report.filter((item: unknown) => {
         const row = record(item);
         return row && [row.reference1, row.reference2, row.details].some(value =>
-          String(value ?? '').includes('200002') || String(value ?? '').includes(pilotPaymentId));
+          String(value ?? '').includes('200002') || String(value ?? '').includes(pilotPaymentId)
+          || String(value ?? '').includes(pilotSaleReference));
       });
       const matches = referenceMatches.slice(0, 20).map((item: unknown) => {
         const row = record(item)!;
