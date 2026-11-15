@@ -13,6 +13,7 @@ const orderId = '33333333-3333-4333-8333-333333333333';
 const view = (paidMinor = 0) => ({ orderId, orderNumber: 'ORD-123', clientName: 'Group A',
   organization: 'Club', activityName: 'Climbing', participants: 10, totalMinor: 10000,
   paidMinor, balanceMinor: 10000 - paidMinor, quoteId: null, unresolvedPayment: false,
+  collectionEnabled: { cash: true, check: true },
   billing: { kind: 'organization', name: 'Group A', identity: '123456789', email: 'group@example.com' },
   payments: paidMinor ? [{ id: 'p1', status: 'succeeded', amountMinor: paidMinor }] : [], documents: [] });
 afterEach(() => { cleanup(); state.invoke.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); });
@@ -42,6 +43,14 @@ test('keeps the physical order link hidden while the browser gate is off', async
   render(<OrderCollection orderId={orderId} />);
   await screen.findByText(/ORD-123/);
   expect(screen.queryByRole('link', { name: /מסופון פיזי/ })).toBeNull();
+});
+
+test('shows the balance but disables cash and check collection while document dispatch is off', async () => {
+  state.invoke.mockResolvedValue({ data: { ...view(), collectionEnabled: { cash: false, check: false } }, error: null });
+  render(<OrderCollection orderId={orderId} />);
+  expect(await screen.findByText(/גבייה במזומן ובהמחאה אינה פעילה/)).toBeInTheDocument();
+  expect(screen.getAllByText('100.00 ₪')).toHaveLength(2);
+  expect(screen.queryByRole('button', { name: /רשום תשלום והפק מסמך/ })).toBeNull();
 });
 
 test('cashier sees the server-computed full balance', async () => {

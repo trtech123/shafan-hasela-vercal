@@ -47,6 +47,8 @@ export default function OrderCollection({ orderId }) {
     setView(latest);
     if (resetAmount) {
       setAmount((latest.balanceMinor / 100).toFixed(2));
+      setMethod(current => latest.collectionEnabled?.[current] ? current
+        : latest.collectionEnabled?.cash ? 'cash' : 'check');
       setBilling({ kind: latest.billing?.kind || 'person', name: latest.billing?.name || '', identity: latest.billing?.identity || '',
         email: latest.billing?.email || '' });
     }
@@ -60,6 +62,7 @@ export default function OrderCollection({ orderId }) {
       if (!active) return;
       setView(latest);
       setAmount((latest.balanceMinor / 100).toFixed(2));
+      setMethod(latest.collectionEnabled?.cash ? 'cash' : 'check');
       setBilling({ kind: latest.billing?.kind || 'person', name: latest.billing?.name || '', identity: latest.billing?.identity || '',
         email: latest.billing?.email || '' });
     }).catch(() => { if (active) setError('לא ניתן לטעון את יתרת ההזמנה.'); })
@@ -130,11 +133,16 @@ export default function OrderCollection({ orderId }) {
           ? <p>מסמך Payper רשמי {result.accounting.documentNumber} · <a className="text-primary underline" href={safeDocumentUrl(result.accounting.documentUrl)} target="_blank" rel="noopener noreferrer">פתיחה והדפסה</a></p>
           : <p>המסמך החשבונאי טרם אושר להפקה. נדרשת בדיקה בבקרת הנהלת חשבונות.</p>}
       </section>}
-      {view.balanceMinor > 0 && !view.unresolvedPayment && !result && <section className="space-y-3 rounded-xl border bg-white p-5">
+      {view.balanceMinor > 0 && !view.unresolvedPayment && !result &&
+        !view.collectionEnabled?.cash && !view.collectionEnabled?.check &&
+        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">גבייה במזומן ובהמחאה אינה פעילה כעת. ניתן לצפות ביתרת ההזמנה ולבדוק תשלום קיים.</p>}
+      {view.balanceMinor > 0 && !view.unresolvedPayment && !result &&
+        (view.collectionEnabled?.cash || view.collectionEnabled?.check) &&
+        <section className="space-y-3 rounded-xl border bg-white p-5">
         <h2 className="font-bold">רישום תשלום שהתקבל</h2>
         {view.paidMinor === 0 && <Link className="inline-block text-primary underline" to={orderPaymentPath(orderId)}>תשלום דיגיטלי בפלאקארד להזמנה זו</Link>}
         {view.paidMinor > 0 && <p className="text-sm text-amber-800">הגבייה כאן היא של מלוא היתרה לאחר תשלומים קודמים.</p>}
-        <label className="block">אמצעי תשלום<select className="mt-1 w-full rounded border p-2" value={method} onChange={e => setMethod(e.target.value)}><option value="check">המחאה</option><option value="cash">מזומן</option></select></label>
+        <label className="block">אמצעי תשלום<select className="mt-1 w-full rounded border p-2" value={method} onChange={e => setMethod(e.target.value)}>{view.collectionEnabled?.check && <option value="check">המחאה</option>}{view.collectionEnabled?.cash && <option value="cash">מזומן</option>}</select></label>
         <label className="block">סכום לגבייה (₪)<input className="mt-1 w-full rounded border p-2" type="number" value={amount} readOnly /></label>
         <p className="text-sm">לאחר קבלת התשלום תתבקש חשבונית מס/קבלה מ־Payper. אם כבר קיים מסמך להזמנה, התשלום יישמר להשלמת התאמה חשבונאית.</p>
         <div className="grid gap-2 sm:grid-cols-3">

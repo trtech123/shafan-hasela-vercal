@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 import { paymentCorsHeaders, paymentJson, PaymentHttpError } from
   "../pelecard-order-payment/_deployed_shared/payment-http.ts";
-import { buildNoncardPayperRequest, dispatchNoncardPayper, type NoncardSource } from
+import { buildNoncardPayperRequest, dispatchNoncardPayper, noncardCollectionEnabled, type NoncardSource } from
   "../_shared/payper/noncard.ts";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -42,12 +42,17 @@ Deno.serve(async request => {
       const view = await rpc("get_payper_order_collection", {
         p_actor_id: actorId, p_order_id: body.orderId,
       });
-      return paymentJson(view, 200, cors);
+      return paymentJson({ ...view, collectionEnabled: {
+        cash: noncardCollectionEnabled("cash", name => Deno.env.get(name)),
+        check: noncardCollectionEnabled("check", name => Deno.env.get(name)),
+      } }, 200, cors);
     }
     if (body.action !== "collect" || typeof body.requestKey !== "string" || !uuid.test(body.requestKey))
       throw new PaymentHttpError(400, "request_invalid");
     if (body.method !== "check" && body.method !== "cash")
       throw new PaymentHttpError(400, "method_invalid");
+    if (!noncardCollectionEnabled(body.method, name => Deno.env.get(name)))
+      throw new PaymentHttpError(503, "collection_disabled");
     let saved: { paymentId: string; saleId: string; receiptNumber: string; created: boolean;
       orderId?: string; balanceMinor?: number };
     if (typeof body.orderId === "string" && uuid.test(body.orderId)) {

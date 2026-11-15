@@ -16,6 +16,11 @@ export interface NoncardSource {
   discount?: unknown;
 }
 
+export function noncardCollectionEnabled(method: "cash" | "check", env: (name: string) => string | undefined) {
+  return env("PAYPER_NONCARD_COLLECTION_ENABLED") === "true" &&
+    env(method === "cash" ? "PAYPER_CASH_DISPATCH_ENABLED" : "PAYPER_CHECK_DISPATCH_ENABLED") === "true";
+}
+
 const clean = (value: unknown, max: number): value is string => typeof value === "string"
   && value.length > 0 && value.length <= max && value.trim() === value
   && !/[\x00-\x1f\x7f]/.test(value);

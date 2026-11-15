@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildNoncardPayperRequest, dispatchNoncardPayper } from "./noncard.ts";
+import { buildNoncardPayperRequest, dispatchNoncardPayper, noncardCollectionEnabled } from "./noncard.ts";
 
 const source = () => ({
   amountMinor: 11800, method: "check" as const, documentType: "invoice-receipt" as const,
@@ -13,6 +13,16 @@ const source = () => ({
 const auth = { terminalNumber: "123", user: "user", password: "secret" };
 
 describe("non-card Payper check documents", () => {
+  it("cannot record a cash or check payment while its document dispatch is off", () => {
+    const flags = new Map([["PAYPER_NONCARD_COLLECTION_ENABLED", "true"],
+      ["PAYPER_CASH_DISPATCH_ENABLED", "true"], ["PAYPER_CHECK_DISPATCH_ENABLED", "false"]]);
+    const env = (name: string) => flags.get(name);
+    expect(noncardCollectionEnabled("cash", env)).toBe(true);
+    expect(noncardCollectionEnabled("check", env)).toBe(false);
+    expect(noncardCollectionEnabled("cash", () => undefined)).toBe(false);
+    flags.delete("PAYPER_NONCARD_COLLECTION_ENABLED");
+    expect(noncardCollectionEnabled("cash", env)).toBe(false);
+  });
   it("uses empty card identifiers, a check receipt line, and preserves postdated details", () => {
     const request = buildNoncardPayperRequest(source(), auth);
     expect(request.trxRecordId).toBe("");
