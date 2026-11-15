@@ -18,4 +18,18 @@ describe('physical POS client', () => {
     await expect(requestPhysicalPayment({ auth }, { action: 'status', requestKey: 'key' }, fetcher))
       .rejects.toThrow('physical_status_unavailable');
   });
+  test('accepts only the documented Pelecard hosted redirect URL', async () => {
+    const auth = { getSession: async () => ({ data: { session: { access_token: 'token' } } }) };
+    const base = { paymentId: '11111111-1111-4111-8111-111111111111',
+      state: 'pending', route: 'hosted', amountMinor: 2400, registerNumber: '004', saleId: null };
+    const good = 'https://gateway21.pelecard.biz/PaymentGW?transactionId=22222222-2222-4222-8222-222222222222';
+    expect((await requestPhysicalPayment({ auth }, { action: 'status' }, async () =>
+      new Response(JSON.stringify({ ...base, redirectUrl: good })))).redirectUrl).toBe(good);
+    const gateway20 = good.replace('gateway21', 'gateway20');
+    expect((await requestPhysicalPayment({ auth }, { action: 'status' }, async () =>
+      new Response(JSON.stringify({ ...base, redirectUrl: gateway20 })))).redirectUrl).toBe(gateway20);
+    await expect(requestPhysicalPayment({ auth }, { action: 'status' }, async () =>
+      new Response(JSON.stringify({ ...base, redirectUrl: 'https://evil.example/PaymentGW' })))).rejects
+      .toThrow('physical_status_unavailable');
+  });
 });

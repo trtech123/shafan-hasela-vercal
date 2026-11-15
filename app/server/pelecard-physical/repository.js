@@ -82,6 +82,42 @@ export function createPhysicalRepository(database) {
         'SELECT public.get_physical_worker_intent($1::uuid) AS result', [intentId]));
       return result;
     },
+    async claimHostedInit(intentId) {
+      if (!uuid.test(intentId)) throw new Error('physical_intent_invalid');
+      return single(await database.query(
+        'SELECT public.claim_physical_hosted_init($1::uuid) AS result', [intentId])) === true;
+    },
+    async hostedSource(intentId) {
+      if (!uuid.test(intentId)) throw new Error('physical_intent_invalid');
+      const source = single(await database.query(
+        'SELECT public.get_physical_hosted_source($1::uuid) AS result', [intentId]));
+      if (!source || source.id !== intentId) throw new Error('physical_hosted_source_unavailable');
+      return source;
+    },
+    async persistHostedSession(intentId, session) {
+      if (!uuid.test(intentId) || !session || typeof session.transactionId !== 'string' ||
+        typeof session.confirmationKey !== 'string' || typeof session.redirectUrl !== 'string')
+        throw new Error('physical_hosted_session_invalid');
+      const saved = single(await database.query(
+        'SELECT public.persist_physical_hosted_session($1::uuid,$2::text,$3::text,$4::text) AS result',
+        [intentId, session.transactionId, session.confirmationKey, session.redirectUrl]));
+      if (saved !== true) throw new Error('physical_hosted_session_unavailable');
+    },
+    async hostedDocumentState(intentId) {
+      if (!uuid.test(intentId)) throw new Error('physical_intent_invalid');
+      const { rows } = await database.query(
+        'SELECT state FROM public.payper_document_ledger WHERE payment_id=$1::uuid', [intentId]);
+      if (rows?.length !== 1) throw new Error('physical_document_hold_unavailable');
+      return rows[0].state;
+    },
+    async recordHostedDocument(intentId, document) {
+      if (!uuid.test(intentId) || document?.state !== 'succeeded')
+        throw new Error('physical_document_invalid');
+      const saved = single(await database.query(
+        'SELECT public.record_physical_hosted_document($1::uuid,$2::text,$3::text,$4::text) AS result',
+        [intentId, document.number, document.url, document.systemId]));
+      if (saved !== true) throw new Error('physical_document_reconciliation_required');
+    },
     async claimDispatch(intentId) {
       return single(await database.query(
         'SELECT public.claim_physical_dispatch($1::uuid) AS result', [intentId])) === true;

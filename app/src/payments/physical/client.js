@@ -1,6 +1,19 @@
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const register = /^(003|004|005|006)$/;
 const states = new Set(['reserved', 'dispatching', 'pending', 'uncertain', 'approved', 'declined', 'canceled', 'succeeded']);
+const hostedId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function validRedirect(value) {
+  if (value == null) return true;
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' &&
+      ['gateway20.pelecard.biz', 'gateway21.pelecard.biz'].includes(url.hostname) &&
+      url.pathname === '/PaymentGW' && !url.port && !url.username && !url.password &&
+      !url.hash && [...url.searchParams.keys()].join(',') === 'transactionId' &&
+      hostedId.test(url.searchParams.get('transactionId') ?? '');
+  } catch { return false; }
+}
 
 export async function requestPhysicalPayment(client, body, fetcher = fetch) {
   const { data: { session } = {} } = await client.auth.getSession();
@@ -18,7 +31,8 @@ export async function requestPhysicalPayment(client, body, fetcher = fetch) {
   }
   if (!uuid.test(result?.paymentId) || !states.has(result.state) ||
     !register.test(result.registerNumber) || !Number.isSafeInteger(result.amountMinor) ||
-    result.amountMinor < 1 || (result.saleId !== null && !uuid.test(result.saleId)))
+    result.amountMinor < 1 || (result.saleId !== null && !uuid.test(result.saleId)) ||
+    !validRedirect(result.redirectUrl))
     throw new Error('physical_status_unavailable');
   return result;
 }

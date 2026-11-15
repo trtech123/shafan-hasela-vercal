@@ -33,7 +33,7 @@ export function createHostedEmvProvider(credentials, fetcher = fetch) {
         throw new Error('physical_hosted_response_invalid');
       let url;
       try { url = new URL(response.URL); } catch { throw new Error('physical_hosted_response_invalid'); }
-      if (url.protocol !== 'https:' || url.hostname !== 'gateway21.pelecard.biz' ||
+      if (url.protocol !== 'https:' || !['gateway20.pelecard.biz', 'gateway21.pelecard.biz'].includes(url.hostname) ||
         url.pathname !== '/PaymentGW' || url.port || url.username || url.password || url.hash ||
         [...url.searchParams.keys()].join(',') !== 'transactionId')
         throw new Error('physical_hosted_url_invalid');
@@ -53,8 +53,23 @@ export function createHostedEmvProvider(credentials, fetcher = fetch) {
       if (input && !Array.isArray(input) && typeof input === 'object')
         for (const key of fields)
           if (typeof input[key] === 'string' || typeof input[key] === 'number') result[key] = input[key];
+      let payper;
+      if (body.PayperData && !Array.isArray(body.PayperData) && typeof body.PayperData === 'object') {
+        const data = body.PayperData;
+        let systemId = null;
+        if (typeof data.RawResponse === 'string' && data.RawResponse.length <= 65_536) {
+          try {
+            const parsed = JSON.parse(data.RawResponse);
+            if (/^[1-9][0-9]{0,29}$/.test(String(parsed?.document_system_id ?? '')))
+              systemId = String(parsed.document_system_id);
+          } catch { /* Do not retain an opaque provider response. */ }
+        }
+        payper = { InvoiceStatus: data.InvoiceStatus,
+          InvoiceNumber: data.InvoiceNumber, InvoiceLink: data.InvoiceLink,
+          InvoiceError: data.InvoiceError ? 'present' : '', document_system_id: systemId };
+      }
       return { StatusCode: typeof body.StatusCode === 'string' ? body.StatusCode : null,
-        ResultData: result };
+        ResultData: result, ...(payper ? { PayperData: payper } : {}) };
     },
   };
 }

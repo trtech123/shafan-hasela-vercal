@@ -1,5 +1,7 @@
 # Pelecard physical EMV and Payper contract handoff — terminal 2
 
+**Superseded implementation status:** The hosted route is now connected to the cashier flow on this branch. See `2026-11-15-cash-physical-activation-handoff.md` for the current migration, configuration, and acceptance procedure. The analysis and provider questions below remain useful, but its earlier “not connected” statement describes commit `673125e` only.
+
 Baseline: `b243aac` on `integration/physical-schedule-collection-20261115` (includes production `4d509b0`). This branch is source-only. No production migration, configuration, charge, document, or deployment was performed.
 
 ## Physical decision and release boundary

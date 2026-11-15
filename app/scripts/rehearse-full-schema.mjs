@@ -1,10 +1,14 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PGlite } from '@electric-sql/pglite';
+const pgliteBase = process.env.PGLITE_MODULE_BASE;
+const { PGlite } = await import(pgliteBase ? new URL('dist/index.js', pgliteBase).href
+  : '@electric-sql/pglite');
 import assert from 'node:assert/strict';
-import { uuid_ossp } from '@electric-sql/pglite/contrib/uuid_ossp';
-import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
+const { uuid_ossp } = await import(pgliteBase ? new URL('dist/contrib/uuid_ossp.js', pgliteBase).href
+  : '@electric-sql/pglite/contrib/uuid_ossp');
+const { pg_trgm } = await import(pgliteBase ? new URL('dist/contrib/pg_trgm.js', pgliteBase).href
+  : '@electric-sql/pglite/contrib/pg_trgm');
 import { buildNoncardPayperRequest, dispatchNoncardPayper } from
   '../../supabase/functions/_shared/payper/noncard.ts';
 
@@ -36,6 +40,8 @@ try {
     .sort((left, right) => basename(left).localeCompare(basename(right), 'en'));
   const physicalIncluded = migrations.some(filename =>
     basename(filename) === '202611150002_physical_order_collection.sql');
+  const hostedIncluded = migrations.some(filename =>
+    basename(filename) === '202611150004_physical_hosted_emv.sql');
   for (const filename of migrations) {
     current = basename(filename);
     await db.exec((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
@@ -81,21 +87,24 @@ try {
   assert.equal(duplicate.paymentId, collected.paymentId);
   current = 'provider-mocked cash Invoice-Receipt';
   const facts = (await db.query(`SELECT n.method,n.document_type,n.reference_document_id,
-    n.check_details,n.billing,n.amount_minor,s.items,s.discount,s.receipt_number,s.sale_date
+    n.check_details,n.billing,n.amount_minor,s.items,s.discount,s.receipt_number,s.sale_date,
+    l.source_facts
     FROM public.payper_noncard_payments n JOIN public.sales s ON s.id=n.sale_id
+    JOIN public.payper_document_ledger l ON l.payment_id=n.payment_id
     WHERE n.payment_id=$1`, [collected.paymentId])).rows[0];
   const cashRequest = buildNoncardPayperRequest({ amountMinor: facts.amount_minor,
     method: facts.method, documentType: facts.document_type,
     referenceDocumentId: facts.reference_document_id,
     receiptNumber: facts.receipt_number, paidDate: facts.sale_date.toISOString().slice(0, 10),
-    items: facts.items, discount: facts.discount, billing: facts.billing, check: facts.check_details },
+    items: facts.items, discount: facts.discount, billing: facts.billing,
+    vatApplicable: facts.source_facts.vatApplicable, check: facts.check_details },
   { terminalNumber: 'TEST', user: 'TEST', password: 'TEST' });
   assert.equal(cashRequest.trxRecordId, '');
   assert.equal(cashRequest.Uid, '');
-  assert.equal(cashRequest.PayperParameters.typeDocument, 'invoice-receipt');
+  assert.equal(cashRequest.PayperParameters.typeDocument, 'Invoice-Receipt');
   assert.deepEqual(cashRequest.PayperParameters.DataPayper.receipt_lines.map(line =>
     ({ payment_type: line.payment_type, amount: line.amount })),
-  [{ payment_type: 'Cash', amount: 100000 }]);
+  [{ payment_type: 'Cash', amount: '100000' }]);
   await db.query('SELECT public.reserve_check_payper_dispatch($1)', [collected.paymentId]);
   let providerPosts = 0;
   const outcome = await dispatchNoncardPayper(cashRequest, async (_url, options) => {
@@ -192,6 +201,40 @@ try {
     const physical = (await db.query(`SELECT public.reserve_physical_order_payment(
       $1,gen_random_uuid(),'GENERAL',$2,60000) AS value`, [cashier, physicalOrder])).rows[0].value;
     assert.equal(physical.amountMinor, 60000);
+    if (hostedIncluded) {
+      current = 'hosted EMV exact payment and document association on combined schema';
+      const hostedOrder = '00000000-0000-4000-8000-000000000010';
+      await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
+        activity_id,activity_date,num_participants,price_per_person,payment_status)
+        VALUES($1,'Synthetic Hosted','0500000000','billing@example.invalid','Test Group',
+          $2,current_date,1,1000,'לא שולם')`, [hostedOrder, activity]);
+      await db.query('SELECT public.link_order_customer($1,$2,0)', [hostedOrder, customer]);
+      await db.query("UPDATE public.physical_terminal_devices SET enabled=false,cash_register_code=NULL WHERE register_number='003'");
+      await db.query("UPDATE public.physical_terminal_devices SET enabled=true,cash_register_code='GENERAL' WHERE register_number='004'");
+      const pending = (await db.query(`SELECT public.reserve_physical_order_payment(
+        $1,gen_random_uuid(),'GENERAL',$2,100000) AS value`, [cashier, hostedOrder])).rows[0].value;
+      assert.equal((await db.query('SELECT public.claim_physical_hosted_init($1) AS value',
+        [pending.paymentId])).rows[0].value, true);
+      const hostedId = '11111111-1111-4111-8111-111111111111';
+      const redirect = `https://gateway21.pelecard.biz/PaymentGW?transactionId=${hostedId}`;
+      await db.query('SELECT public.persist_physical_hosted_session($1,$2,$3,$4)',
+        [pending.paymentId, hostedId, 'synthetic-confirmation', redirect]);
+      await db.query(`SELECT public.observe_physical_result($1,$2::jsonb)`, [pending.paymentId,
+        JSON.stringify({ status: 'approved', intentId: pending.paymentId,
+          merchantTerminal: '2814926015', register: '004', amountMinor: 100000,
+          transactionId: '12345', approvalId: '123456', uid: 'uid123' })]);
+      const completed = (await db.query('SELECT public.finalize_physical_payment($1) AS value',
+        [pending.paymentId])).rows[0].value;
+      assert.equal(completed.state, 'succeeded');
+      const officialUrl = 'https://app.payper.co.il/public/invoice_show/595170';
+      const record = 'SELECT public.record_physical_hosted_document($1,$2,$3,$4) AS value';
+      assert.equal((await db.query(record, [pending.paymentId, '595170', officialUrl, '595170']))
+        .rows[0].value, true);
+      assert.equal((await db.query(record, [pending.paymentId, '595170', officialUrl, '595170']))
+        .rows[0].value, true);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM public.payper_document_ledger WHERE payment_id=$1 AND state=$2',
+        [pending.paymentId, 'succeeded'])).rows[0].n, 1);
+    }
   }
   const installed = (await db.query(`SELECT count(*)::int AS tables FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relkind='r'`)).rows[0].tables;
@@ -208,7 +251,8 @@ try {
   console.log(JSON.stringify({ migrations: files.length, optional: optional.length,
     tables: installed, functions, policies, triggers, constraints, unvalidated,
     cashOrderCollection: 'passed',
-    physicalRemainingBalance: physicalIncluded ? 'passed' : 'not_requested' }));
+    physicalRemainingBalance: physicalIncluded ? 'passed' : 'not_requested',
+    hostedDocumentAssociation: hostedIncluded ? 'passed' : 'not_requested' }));
   if (process.env.AUDIT_CATALOG_NAMES === '1') {
     const names = (await db.query(`SELECT c.relname FROM pg_class c
       JOIN pg_namespace n ON n.oid=c.relnamespace

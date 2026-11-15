@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { PGlite } from '@electric-sql/pglite';
+const { PGlite } = await import(process.env.PGLITE_MODULE_URL || '@electric-sql/pglite');
 import { buildNoncardPayperRequest, dispatchNoncardPayper } from '../../supabase/functions/_shared/payper/noncard.ts';
 
 const root = new URL('../../supabase/migrations/202611150001_payper_check_payments.sql', import.meta.url);
@@ -101,16 +101,20 @@ try {
   await rejects(collect, [admin, id(12), order, 'cash', 100000, null, billing,
     'invoice-receipt', null], 'order_balance_mismatch');
   const source = (await sql(`SELECT n.method,n.document_type,n.reference_document_id,
-    n.check_details,n.billing,n.amount_minor,s.items,s.discount,s.receipt_number,s.sale_date
-    FROM payper_noncard_payments n JOIN sales s ON s.id=n.sale_id WHERE n.payment_id=$1`, [first.paymentId]))[0];
+    n.check_details,n.billing,n.amount_minor,s.items,s.discount,s.receipt_number,s.sale_date,
+    l.source_facts
+    FROM payper_noncard_payments n JOIN sales s ON s.id=n.sale_id
+    JOIN payper_document_ledger l ON l.payment_id=n.payment_id
+    WHERE n.payment_id=$1`, [first.paymentId]))[0];
   const request = buildNoncardPayperRequest({ amountMinor: source.amount_minor,
     method: source.method, documentType: source.document_type,
     referenceDocumentId: source.reference_document_id, receiptNumber: source.receipt_number,
     paidDate: source.sale_date.toISOString().slice(0, 10), items: source.items,
-    discount: source.discount, billing: source.billing, check: source.check_details },
+    discount: source.discount, billing: source.billing,
+    vatApplicable: source.source_facts.vatApplicable, check: source.check_details },
   { terminalNumber: 'test', user: 'test', password: 'test' });
-  assert.equal(request.PayperParameters.typeDocument, 'invoice-receipt');
-  assert.equal(request.PayperParameters.DataPayper.receipt_lines[0].payment_type, 'Check');
+  assert.equal(request.PayperParameters.typeDocument, 'Invoice-Receipt');
+  assert.equal(request.PayperParameters.DataPayper.receipt_lines[0].payment_type, 'Cheque');
   assert.equal(request.trxRecordId, '');
   await sql('SELECT reserve_check_payper_dispatch($1)', [first.paymentId]);
   let calls = 0;

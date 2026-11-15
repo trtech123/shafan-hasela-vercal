@@ -3,6 +3,9 @@
     "api/pelecard-physical.js": {
       "maxDuration": 30
     },
+    "api/pelecard-physical-callback.js": {
+      "maxDuration": 30
+    },
     "api/pelecard-transactions.js": {
       "maxDuration": 30
     },
