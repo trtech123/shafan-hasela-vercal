@@ -15,7 +15,7 @@ const view = (paidMinor = 0) => ({ orderId, orderNumber: 'ORD-123', clientName: 
   paidMinor, balanceMinor: 10000 - paidMinor, quoteId: null, unresolvedPayment: false,
   billing: { kind: 'organization', name: 'Group A', identity: '123456789', email: 'group@example.com' },
   payments: paidMinor ? [{ id: 'p1', status: 'succeeded', amountMinor: paidMinor }] : [], documents: [] });
-afterEach(() => { cleanup(); state.invoke.mockReset(); state.role = 'admin'; });
+afterEach(() => { cleanup(); state.invoke.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); });
 
 test('scheduled order shows saved total and balance without creating a cart', async () => {
   state.invoke.mockResolvedValue({ data: view(2000), error: null });
@@ -26,6 +26,22 @@ test('scheduled order shows saved total and balance without creating a cart', as
   expect(screen.getByText('80.00 ₪')).toBeInTheDocument();
   expect(state.invoke).toHaveBeenCalledWith('payper-noncard-collection',
     { body: { action: 'status', orderId } });
+});
+
+test('offers physical terminal payment for the saved order and keeps its link available for uncertain recovery', async () => {
+  vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
+  state.invoke.mockResolvedValue({ data: { ...view(2000), unresolvedPayment: true }, error: null });
+  render(<OrderCollection orderId={orderId} />);
+  const link = await screen.findByRole('link', { name: /מסופון פיזי/ });
+  expect(link).toHaveAttribute('href', `/payment/physical?orderId=${orderId}`);
+});
+
+test('keeps the physical order link hidden while the browser gate is off', async () => {
+  vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'false');
+  state.invoke.mockResolvedValue({ data: view(), error: null });
+  render(<OrderCollection orderId={orderId} />);
+  await screen.findByText(/ORD-123/);
+  expect(screen.queryByRole('link', { name: /מסופון פיזי/ })).toBeNull();
 });
 
 test('cashier cannot enter a partial payment', async () => {

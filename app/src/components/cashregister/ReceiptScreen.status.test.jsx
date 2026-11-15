@@ -16,6 +16,6 @@ test('deferred invoice-account sale is never displayed as a paid transaction', (
 
 test('the POS printout is identified as an internal record, not a tax document', () => {
   render(<ReceiptScreen receipt={{ ...base, method: 'מזומן' }} onNewSale={() => {}} />);
-  expect(screen.getByText(/אישור מכירה פנימי/)).toBeInTheDocument();
+  expect(screen.getByText(/אישור מכירה פנימי RCP-1000/)).toBeInTheDocument();
   expect(screen.getByText(/אינו חשבונית מס או קבלה חשבונאית/)).toBeInTheDocument();
 });

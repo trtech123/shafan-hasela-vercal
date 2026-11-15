@@ -125,6 +125,11 @@ export default function OrderCollection({ orderId }) {
           {safeDocumentUrl(doc.documentUrl) && <a className="mr-2 text-primary underline" href={safeDocumentUrl(doc.documentUrl)} target="_blank" rel="noopener noreferrer">פתיחה והדפסה</a>}
         </p>)}
       </section>
+      {import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true' && view.balanceMinor > 0 &&
+        <Link className="inline-block rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 font-medium text-indigo-900"
+          to={`/payment/physical?orderId=${encodeURIComponent(orderId)}`}>
+          {view.unresolvedPayment ? 'בדיקת תשלום קיים במסופון פיזי' : 'תשלום במסופון פיזי להזמנה זו'}
+        </Link>}
       {result && <section role="status" className="rounded-xl border bg-white p-4">
         <p>התשלום נרשם במכירה {result.receiptNumber}. זהו אישור פנימי בלבד.</p>
         {result.accounting?.state === 'succeeded' && safeDocumentUrl(result.accounting.documentUrl)
