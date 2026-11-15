@@ -1,10 +1,14 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PGlite } from '@electric-sql/pglite';
+const pgliteBase = process.env.PGLITE_MODULE_BASE;
+const { PGlite } = await import(pgliteBase ? new URL('dist/index.js', pgliteBase).href
+  : '@electric-sql/pglite');
 import assert from 'node:assert/strict';
-import { uuid_ossp } from '@electric-sql/pglite/contrib/uuid_ossp';
-import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
+const { uuid_ossp } = await import(pgliteBase ? new URL('dist/contrib/uuid_ossp.js', pgliteBase).href
+  : '@electric-sql/pglite/contrib/uuid_ossp');
+const { pg_trgm } = await import(pgliteBase ? new URL('dist/contrib/pg_trgm.js', pgliteBase).href
+  : '@electric-sql/pglite/contrib/pg_trgm');
 import { buildNoncardPayperRequest, dispatchNoncardPayper } from
   '../../supabase/functions/_shared/payper/noncard.ts';
 
@@ -81,21 +85,24 @@ try {
   assert.equal(duplicate.paymentId, collected.paymentId);
   current = 'provider-mocked cash Invoice-Receipt';
   const facts = (await db.query(`SELECT n.method,n.document_type,n.reference_document_id,
-    n.check_details,n.billing,n.amount_minor,s.items,s.discount,s.receipt_number,s.sale_date
+    n.check_details,n.billing,n.amount_minor,s.items,s.discount,s.receipt_number,s.sale_date,
+    l.source_facts
     FROM public.payper_noncard_payments n JOIN public.sales s ON s.id=n.sale_id
+    JOIN public.payper_document_ledger l ON l.payment_id=n.payment_id
     WHERE n.payment_id=$1`, [collected.paymentId])).rows[0];
   const cashRequest = buildNoncardPayperRequest({ amountMinor: facts.amount_minor,
     method: facts.method, documentType: facts.document_type,
     referenceDocumentId: facts.reference_document_id,
     receiptNumber: facts.receipt_number, paidDate: facts.sale_date.toISOString().slice(0, 10),
-    items: facts.items, discount: facts.discount, billing: facts.billing, check: facts.check_details },
+    items: facts.items, discount: facts.discount, billing: facts.billing,
+    vatApplicable: facts.source_facts.vatApplicable, check: facts.check_details },
   { terminalNumber: 'TEST', user: 'TEST', password: 'TEST' });
   assert.equal(cashRequest.trxRecordId, '');
   assert.equal(cashRequest.Uid, '');
-  assert.equal(cashRequest.PayperParameters.typeDocument, 'invoice-receipt');
+  assert.equal(cashRequest.PayperParameters.typeDocument, 'Invoice-Receipt');
   assert.deepEqual(cashRequest.PayperParameters.DataPayper.receipt_lines.map(line =>
     ({ payment_type: line.payment_type, amount: line.amount })),
-  [{ payment_type: 'Cash', amount: 100000 }]);
+  [{ payment_type: 'Cash', amount: '100000' }]);
   await db.query('SELECT public.reserve_check_payper_dispatch($1)', [collected.paymentId]);
   let providerPosts = 0;
   const outcome = await dispatchNoncardPayper(cashRequest, async (_url, options) => {

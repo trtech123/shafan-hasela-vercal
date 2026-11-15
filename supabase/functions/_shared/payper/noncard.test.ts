@@ -6,7 +6,8 @@ const source = () => ({
   referenceDocumentId: null, receiptNumber: "RCP-2000",
   paidDate: "2026-11-15",
   items: [{ name: "Group climbing", qty: 1, customPrice: 118 }],
-  billing: { name: "Test Customer", identity: "123456789", email: "test@example.com" },
+  billing: { kind: "person", name: "Test Customer", identity: "123456782", email: "test@example.com" },
+  vatApplicable: true,
   check: { check_number: "0042", bank: "Bank", branch: "012", account_number: "000123",
     account_holder: "Test Customer", amount: "118", received_date: "2026-11-15", due_date: "2026-12-15" },
 });
@@ -19,6 +20,10 @@ describe("non-card Payper check documents", () => {
     const env = (name: string) => flags.get(name);
     expect(noncardCollectionEnabled("cash", env)).toBe(true);
     expect(noncardCollectionEnabled("check", env)).toBe(false);
+    flags.set("PAYPER_CHECK_DISPATCH_ENABLED", "true");
+    expect(noncardCollectionEnabled("check", env)).toBe(false);
+    flags.set("PAYPER_CHECK_DETAILS_CONTRACT_CONFIRMED", "true");
+    expect(noncardCollectionEnabled("check", env)).toBe(true);
     expect(noncardCollectionEnabled("cash", () => undefined)).toBe(false);
     flags.delete("PAYPER_NONCARD_COLLECTION_ENABLED");
     expect(noncardCollectionEnabled("cash", env)).toBe(false);
@@ -28,15 +33,23 @@ describe("non-card Payper check documents", () => {
     expect(request.trxRecordId).toBe("");
     expect(request.Uid).toBe("");
     expect(request.PayperParameters.DataPayper.receipt_lines).toEqual([
-      { payment_type: "Check", date: "15-11-2026", amount: 11800 },
+      { payment_type: "Cheque", date: "15-11-2026", amount: "11800" },
     ]);
     expect(request.PayperParameters.DataPayper.document_remarks).toContain("0042");
     expect(request.PayperParameters.DataPayper.document_remarks).toContain("15-12-2026");
     expect(request.PayperParameters.DataPayper.send_by_mail).toBe("true");
+    expect(request.PayperParameters.DataPayper.document_no_vat).toBe("false");
   });
   it("rejects an amount that differs from the server-frozen item sum", () => {
     expect(() => buildNoncardPayperRequest({ ...source(), amountMinor: 11799 }, auth))
       .toThrow("payper_amount_mismatch");
+  });
+  it("uses actual frozen item names for a discounted gross invoice line", () => {
+    const request = buildNoncardPayperRequest({ ...source(), method: "cash", check: null,
+      amountMinor: 10800, discount: { type: "synthetic" } }, auth);
+    expect(request.PayperParameters.DataPayper.invoice_lines).toEqual([{
+      description: "Group climbing", quantity: "1", price_per_unit: "10800", include_vat: "true",
+    }]);
   });
   it("rejects an unsupported existing-invoice reference", () => {
     expect(() => buildNoncardPayperRequest({ ...source(),
@@ -68,7 +81,39 @@ describe("non-card Payper check documents", () => {
   });
   it("uses the documented cash receipt line for an order balance", () => {
     const request = buildNoncardPayperRequest({ ...source(), method: "cash", check: null }, auth);
+    expect(request).toEqual({
+      terminalNumber: "123", user: "user", password: "secret", trxRecordId: "", Uid: "",
+      PayperParameters: { typeDocument: "Invoice-Receipt", DataPayper: {
+        document_lang: "hb", customer_name: "Test Customer", customer_unique_id: "123456782",
+        customer_mail: "test@example.com", send_by_mail: "true", document_subject: "RCP-2000",
+        document_rounded: "false", document_no_vat: "false",
+        invoice_lines: [{ description: "Group climbing", quantity: "1",
+          price_per_unit: "11800", include_vat: "true" }],
+        receipt_lines: [{ payment_type: "Cash", date: "15-11-2026", amount: "11800" }],
+      } },
+    });
     expect(request.PayperParameters.DataPayper.receipt_lines[0].payment_type).toBe("Cash");
     expect(request.PayperParameters.DataPayper).not.toHaveProperty("document_remarks");
+    expect(request.PayperParameters.DataPayper.receipt_lines[0]).toEqual({
+      payment_type: "Cash", date: "15-11-2026", amount: "11800",
+    });
+  });
+  it("blocks issuance if the frozen VAT fact is absent or not true", () => {
+    expect(() => buildNoncardPayperRequest({ ...source(), vatApplicable: undefined } as never, auth))
+      .toThrow("payper_vat_review_required");
+    expect(() => buildNoncardPayperRequest({ ...source(), vatApplicable: false }, auth))
+      .toThrow("payper_vat_review_required");
+  });
+  it("rejects an invalid frozen person identity", () => {
+    expect(() => buildNoncardPayperRequest({ ...source(), billing: {
+      ...source().billing, identity: "123456789",
+    } }, auth)).toThrow("payper_billing_incomplete");
+  });
+  it("rejects impossible cash and check calendar dates", () => {
+    expect(() => buildNoncardPayperRequest({ ...source(), method: "cash", check: null,
+      paidDate: "2026-02-30" }, auth)).toThrow("payper_check_date_invalid");
+    expect(() => buildNoncardPayperRequest({ ...source(), check: {
+      ...source().check, due_date: "2026-02-30",
+    } }, auth)).toThrow("payper_check_date_invalid");
   });
 });
