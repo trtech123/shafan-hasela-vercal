@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
@@ -21,7 +21,31 @@ const base = { mode: 'live', orderId, paid: false, canInitialize: true, amountMi
   billingDefaults: defaults, eligibilityIssues: [], payment: null };
 beforeEach(() => { state.request.mockReset(); state.redirect.mockReset(); state.order.mockReset()
   .mockResolvedValue({ data: { id: orderId, payment_status: 'לא שולם' }, error: null }); });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+test('a stalled status request ends with clear Hebrew guidance and never initializes', async () => {
+  vi.useFakeTimers();
+  state.request.mockImplementation(() => new Promise(() => {}));
+  render(<OrderDigitalCheckout orderId={orderId} balanceMinor={1500} />);
+  fireEvent.click(screen.getByRole('button', { name: 'שלם באשראי דיגיטלי' }));
+  expect(screen.getByRole('button', { name: 'בודק וממשיך לתשלום…' })).toBeDisabled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(20001); });
+  expect(screen.getByRole('alert')).toHaveTextContent('בדיקת התשלום מתעכבת');
+  expect(state.request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(0);
+});
+
+test('a stalled initialization requires review and cannot launch a second attempt', async () => {
+  vi.useFakeTimers();
+  state.request.mockImplementation((_client, body) => body.action === 'status'
+    ? Promise.resolve(base) : new Promise(() => {}));
+  render(<OrderDigitalCheckout orderId={orderId} balanceMinor={1500} />);
+  fireEvent.click(screen.getByRole('button', { name: 'שלם באשראי דיגיטלי' }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(30001); });
+  expect(screen.getByRole('alert')).toHaveTextContent('ניסיון התשלום עשוי להיות פעיל');
+  expect(screen.getByRole('button', { name: 'שלם באשראי דיגיטלי' })).toBeDisabled();
+  expect(screen.getByRole('link', { name: 'בדיקת ניסיון התשלום הקיים' })).toBeInTheDocument();
+  expect(state.request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(1);
+});
 
 test('eligible scheduled order initializes once for the server balance and redirects', async () => {
   state.request.mockImplementation(async (_client, body) => body.action === 'status' ? base : {
