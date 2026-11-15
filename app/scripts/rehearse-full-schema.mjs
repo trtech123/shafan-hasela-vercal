@@ -149,6 +149,14 @@ try {
   assert.equal((await db.query('SELECT count(*)::int AS n FROM public.sales WHERE order_id=$1',
     [digitalOrder])).rows[0].n, 1);
   current = 'cash order collection on full schema';
+  let mismatchedBillingBlocked = false;
+  try { await db.query(`SELECT public.record_payper_order_collection(
+    $1,gen_random_uuid(),$2,'cash',100000,NULL,$3,'invoice-receipt',NULL)`,
+    [cashier, order, JSON.stringify({ ...billing, name: 'Wrong Customer' })]); }
+  catch (error) { mismatchedBillingBlocked = /order_billing_review_required/.test(error.message); }
+  assert.equal(mismatchedBillingBlocked, true, 'cash direct API must use the frozen customer billing');
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.sales WHERE order_id=$1',
+    [order])).rows[0].n, 0);
   const collected = (await db.query(`SELECT public.record_payper_order_collection(
     $1,$2,$3,'cash',100000,NULL,$4,'invoice-receipt',NULL) AS value`,
     [cashier, requestKey, order, JSON.stringify(billing)])).rows[0].value;
@@ -221,7 +229,7 @@ try {
     await db.query(`SELECT public.record_payper_order_collection(
       $1,gen_random_uuid(),$2,'cash',100000,NULL,$3,'invoice-receipt',NULL)`,
       [cashier, order, JSON.stringify(billing)]);
-  } catch (error) { rejected = /order_balance_mismatch/.test(error.message); }
+  } catch (error) { rejected = /order_balance_mismatch|order_accounting_review_required/.test(error.message); }
   assert.equal(rejected, true, 'second full-balance collection must fail');
   const unknownVatOrder = '00000000-0000-4000-8000-000000000009';
   await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
@@ -236,13 +244,14 @@ try {
     [unknownVatOrder, cashier, JSON.stringify(billing)]); }
   catch (error) { vatReservationBlocked = /digital_order_not_eligible/.test(error.message); }
   assert.equal(vatReservationBlocked, true, 'missing VAT must block direct hosted reservation');
-  const held = (await db.query(`SELECT public.record_payper_order_collection(
-    $1,gen_random_uuid(),$2,'cash',100000,NULL,$3,'invoice-receipt',NULL) AS value`,
-    [cashier, unknownVatOrder, JSON.stringify(billing)])).rows[0].value;
-  assert.equal(held.created, true, 'real payment remains recorded');
-  const heldLedger = (await db.query(`SELECT state,reconciliation_code FROM public.payper_document_ledger
-    WHERE payment_id=$1`, [held.paymentId])).rows[0];
-  assert.deepEqual(heldLedger, { state: 'source_blocked', reconciliation_code: 'vat_review_required' });
+  let cashVatBlocked = false;
+  try { await db.query(`SELECT public.record_payper_order_collection(
+    $1,gen_random_uuid(),$2,'cash',100000,NULL,$3,'invoice-receipt',NULL)`,
+    [cashier, unknownVatOrder, JSON.stringify(billing)]); }
+  catch (error) { cashVatBlocked = /order_billing_or_vat_review_required/.test(error.message); }
+  assert.equal(cashVatBlocked, true, 'missing VAT must block payment and sale');
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.sales WHERE order_id=$1',
+    [unknownVatOrder])).rows[0].n, 0);
   if (physicalIncluded) {
     current = 'physical balance reservation on combined schema';
     const physicalOrder = '00000000-0000-4000-8000-000000000005';
