@@ -21,6 +21,65 @@ CREATE TABLE public.rivhit_bookkeeping_sources (
   UNIQUE (account_namespace, source_system, source_document_id)
 );
 
+-- A successful Payper document can be observed before its issued PDF, VAT and
+-- accounting mapping have been independently verified. This intake has no
+-- dispatch route and is never scanned by the journal worker.
+CREATE TABLE public.rivhit_bookkeeping_intake_control (
+  singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+  enabled boolean NOT NULL DEFAULT false
+);
+INSERT INTO public.rivhit_bookkeeping_intake_control (singleton, enabled) VALUES (true, false);
+
+CREATE TABLE public.rivhit_bookkeeping_intake (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  payper_ledger_id uuid NOT NULL UNIQUE,
+  payment_id uuid NOT NULL UNIQUE,
+  sale_id uuid,
+  document_number text NOT NULL UNIQUE CHECK (document_number ~ '^[0-9]+$'),
+  gross_minor bigint NOT NULL CHECK (gross_minor > 0),
+  currency text NOT NULL CHECK (currency = 'ILS'),
+  status text NOT NULL DEFAULT 'held_evidence' CHECK (status = 'held_evidence'),
+  captured_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.rivhit_bookkeeping_intake_control ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rivhit_bookkeeping_intake ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.rivhit_bookkeeping_intake_control,
+  public.rivhit_bookkeeping_intake FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.rivhit_bookkeeping_intake_control,
+  public.rivhit_bookkeeping_intake TO service_role;
+
+CREATE FUNCTION public.capture_succeeded_payper_bookkeeping_intake(p_payment_id uuid)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_id uuid;
+BEGIN
+  IF auth.role() <> 'service_role' THEN RAISE EXCEPTION 'service_role_required'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.rivhit_bookkeeping_intake_control
+                 WHERE singleton AND enabled) THEN RETURN NULL; END IF;
+  INSERT INTO public.rivhit_bookkeeping_intake
+    (payper_ledger_id, payment_id, sale_id, document_number, gross_minor, currency)
+  SELECT l.id, l.payment_id, l.sale_id, l.document_number,
+    (p.amount * 100)::bigint, p.currency
+  FROM public.payper_document_ledger AS l
+  JOIN public.payment_transactions AS p ON p.id = l.payment_id
+  WHERE l.payment_id = p_payment_id AND l.state = 'succeeded'
+    AND l.document_number ~ '^[0-9]+$' AND l.document_url IS NOT NULL
+    AND p.status = 'succeeded' AND p.amount > 0 AND p.amount * 100 = trunc(p.amount * 100)
+    AND p.currency = 'ILS'
+  ON CONFLICT (payper_ledger_id) DO NOTHING
+  RETURNING id INTO v_id;
+  IF v_id IS NULL THEN
+    SELECT id INTO v_id FROM public.rivhit_bookkeeping_intake
+    WHERE payment_id = p_payment_id;
+  END IF;
+  RETURN v_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.capture_succeeded_payper_bookkeeping_intake(uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.capture_succeeded_payper_bookkeeping_intake(uuid)
+  TO service_role;
+
 CREATE TABLE public.rivhit_bookkeeping_legs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   source_id uuid NOT NULL REFERENCES public.rivhit_bookkeeping_sources(id),

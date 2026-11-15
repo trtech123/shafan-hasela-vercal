@@ -36,7 +36,7 @@ try {
   await client.query(harness.replace('CREATE SCHEMA IF NOT EXISTS extensions;', ''));
   const sql = await readFile(new URL('../../supabase/tests/rivhit_bookkeeping_sync.sql', import.meta.url), 'utf8');
   await client.query(sql.replace('CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;', ''));
-  console.log('PASS migration and 9 SQL assertions on native PostgreSQL');
+  console.log('PASS migration and 14 SQL assertions on native PostgreSQL');
 
   stage = 'parallel claim';
   await client.query(`
