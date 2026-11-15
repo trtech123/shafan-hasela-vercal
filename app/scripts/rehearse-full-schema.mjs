@@ -29,6 +29,8 @@ try {
   const files = (await readdir(directory)).filter(name => name.endsWith('.sql'));
   const migrations = [...files.map(name => resolve(directory, name)), ...optional]
     .sort((left, right) => basename(left).localeCompare(basename(right), 'en'));
+  const physicalIncluded = migrations.some(filename =>
+    basename(filename) === '202611150002_physical_order_collection.sql');
   for (const filename of migrations) {
     current = basename(filename);
     await db.exec((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
@@ -97,7 +99,7 @@ try {
   const heldLedger = (await db.query(`SELECT state,reconciliation_code FROM public.payper_document_ledger
     WHERE payment_id=$1`, [held.paymentId])).rows[0];
   assert.deepEqual(heldLedger, { state: 'source_blocked', reconciliation_code: 'vat_review_required' });
-  if (optional.length) {
+  if (physicalIncluded) {
     current = 'physical balance reservation on combined schema';
     const physicalOrder = '00000000-0000-4000-8000-000000000005';
     const priorPayment = '00000000-0000-4000-8000-000000000007';
@@ -153,7 +155,7 @@ try {
   console.log(JSON.stringify({ migrations: files.length, optional: optional.length,
     tables: installed, functions, policies, triggers, constraints, unvalidated,
     cashOrderCollection: 'passed',
-    physicalRemainingBalance: optional.length ? 'passed' : 'not_requested' }));
+    physicalRemainingBalance: physicalIncluded ? 'passed' : 'not_requested' }));
 } catch (error) {
   console.error(`Full-schema rehearsal failed at ${current}: ${error.message}`);
   process.exitCode = 1;

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 
 const migration = readFileSync(new URL('../../../../supabase/migrations/202611150002_physical_order_collection.sql', import.meta.url), 'utf8');
+const compatibility = readFileSync(new URL('../../../../supabase/migrations/202611150003_physical_order_collection_compat.sql', import.meta.url), 'utf8');
 
 describe('physical order collection migration contract', () => {
   test('locks the saved order and checks its ledger balance before J4 reservation', () => {
@@ -26,11 +27,21 @@ describe('physical order collection migration contract', () => {
     expect(migration).toMatch(/t\.checkout_snapshot->'linked_order_info'->>'order_number'=o\.order_number/);
     expect(migration).toMatch(/o\.payment_status NOT IN \('לא שולם','שולם חלקית'\)/);
   });
+  test('blocks a terminal request when an order has an existing accounting document', () => {
+    expect(migration).toMatch(/physical_order_document_review_required/);
+    expect(migration).toMatch(/FROM public\.accounting_documents doc/);
+    expect(migration).toMatch(/l\.state IN \('dispatch_reserved','reconciliation_required'\)/);
+  });
   test('matches an already issued physical document after verified approval', () => {
     expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.record_physical_payper_manual_document/);
     expect(migration).toMatch(/p_issued_at < p\.created_at/);
     expect(migration).toMatch(/i\.provider_transaction_id IS DISTINCT FROM p\.provider_transaction_id/);
     expect(migration).toMatch(/'providerIssuedAutomatically',true/);
     expect(migration).not.toMatch(/p_issued_at < p\.verified_at/);
+  });
+  test('compatibility migration retains the exact physical reservation guard', () => {
+    expect(compatibility).toMatch(/NEW\.idempotency_key='physical-'\|\|NEW\.id::text/);
+    expect(compatibility).toMatch(/NEW\.checkout_snapshot->'source_order'->>'orderId'=NEW\.order_id::text/);
+    expect(compatibility).toMatch(/\) IS NOT TRUE/);
   });
 });

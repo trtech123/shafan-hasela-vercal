@@ -41,6 +41,7 @@ try {
       source_customer_snapshot_id uuid,customer_kind text,billing_name text,
       billing_identity text,billing_email text,vat_applicable boolean);
     CREATE TABLE payper_noncard_payments(payment_id uuid PRIMARY KEY,order_id uuid);
+    CREATE TABLE accounting_documents(source_type text,source_id text,status text);
     CREATE TABLE payper_document_ledger(payment_id uuid PRIMARY KEY,order_id uuid,
       sale_id uuid,state text,reconciliation_code text);
     CREATE FUNCTION finalize_pelecard_payment(uuid,text,text,text,numeric,text) RETURNS jsonb
@@ -79,7 +80,14 @@ try {
     amount,status) VALUES($1,'pelecard','payment',$2,600,'initiated')`,[id(6),order]),
     error => error.message.includes('hosted_partial_balance_unsupported'));
   assert.equal((await query('SELECT count(*)::int AS n FROM payment_transactions WHERE order_id=$1',[order]))[0].n,2);
-  console.log('Isolated physical migration rehearsal passed: post-check balance, correlated reservation, retry idempotency, hosted guard, overpayment fence.');
+  const documented=id(8);
+  await query(`INSERT INTO orders(id,order_number,client_name,client_email,organization,status,
+    total_price,vat_applicable,payment_status,billing_company_id)
+    VALUES($1,'ORD-8','Other Group','group@example.com','Club','מאושר',1000,true,'לא שולם','123456789')`,[documented]);
+  await query("INSERT INTO accounting_documents VALUES('order',$1,'succeeded')",[documented]);
+  await assert.rejects(() => query(reserve,[actor,id(9),'004',documented,100000]),
+    error => error.message.includes('physical_order_document_review_required'));
+  console.log('Isolated physical migration rehearsal passed: post-check balance, correlated reservation, retry idempotency, hosted guard, overpayment fence, existing-document hold.');
 } catch (error) {
   console.error('Isolated physical migration rehearsal failed:',error.message);
   process.exitCode=1;

@@ -54,8 +54,24 @@ BEGIN
   SELECT * INTO o FROM public.orders WHERE id=p_order_id FOR UPDATE;
   IF NOT FOUND OR o.archived_at IS NOT NULL OR o.status='בוטל' OR
     o.total_price IS NULL OR o.total_price<=0 OR
-    o.total_price*100<>trunc(o.total_price*100) OR o.vat_applicable IS NULL
+    o.total_price*100<>trunc(o.total_price*100) OR o.vat_applicable IS DISTINCT FROM true
   THEN RAISE EXCEPTION 'physical_order_not_payable' USING ERRCODE='23514'; END IF;
+  -- J4 automatically issues an Invoice-Receipt. An order-level tax document or
+  -- an uncertain prior payment document must be reviewed before another charge.
+  -- A settled document for a distinct earlier partial payment is permitted.
+  IF EXISTS(SELECT 1 FROM public.accounting_documents doc
+      WHERE ((doc.source_type='order' AND doc.source_id=o.id::text AND
+             doc.status<>'permanent_error') OR
+         (doc.source_type='sale' AND EXISTS(SELECT 1 FROM public.sales s
+           WHERE s.order_id=o.id AND s.id::text=doc.source_id) AND
+           doc.status IN ('processing','reconciliation_required')) OR
+         (doc.source_type='payment_transaction' AND EXISTS
+           (SELECT 1 FROM public.payment_transactions t
+             WHERE t.order_id=o.id AND t.id::text=doc.source_id) AND
+           doc.status IN ('processing','reconciliation_required'))))
+    OR EXISTS(SELECT 1 FROM public.payper_document_ledger l WHERE l.order_id=o.id
+      AND l.state IN ('dispatch_reserved','reconciliation_required'))
+  THEN RAISE EXCEPTION 'physical_order_document_review_required' USING ERRCODE='23514'; END IF;
   IF EXISTS(SELECT 1 FROM public.sales s WHERE s.order_id IS NULL AND
     s.linked_order_info->>'order_number'=o.order_number)
     OR EXISTS(SELECT 1 FROM public.payment_transactions t WHERE t.order_id IS NULL AND

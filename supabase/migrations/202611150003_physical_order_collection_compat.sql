@@ -55,8 +55,9 @@ LANGUAGE plpgsql SET search_path='' AS $$
 BEGIN
   IF NEW.provider='pelecard' AND NEW.operation='payment' AND NEW.order_id IS NOT NULL
     AND EXISTS(SELECT 1 FROM public.payper_noncard_payments n WHERE n.order_id=NEW.order_id)
-    AND NOT (NEW.idempotency_key LIKE 'physical-%' AND
-      NEW.checkout_snapshot ? 'source_order')
+    AND (NEW.idempotency_key='physical-'||NEW.id::text AND
+      NEW.checkout_snapshot->'source_order'->>'orderId'=NEW.order_id::text AND
+      (NEW.checkout_snapshot->'source_order'->>'collected')::numeric=NEW.amount) IS NOT TRUE
   THEN RAISE EXCEPTION 'hosted_partial_balance_unsupported' USING ERRCODE='23514'; END IF;
   RETURN NEW;
 END $$;
