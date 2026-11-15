@@ -53,6 +53,21 @@ test('shows the balance but disables cash and check collection while document di
   expect(screen.queryByRole('button', { name: /רשום תשלום והפק מסמך/ })).toBeNull();
 });
 
+test('keeps existing digital order checkout available when non-card gates are off', async () => {
+  state.invoke.mockResolvedValue({ data: { ...view(), collectionEnabled: { cash: false, check: false } }, error: null });
+  render(<OrderCollection orderId={orderId} />);
+  const link = await screen.findByRole('link', { name: /תשלום דיגיטלי בפלאקארד/ });
+  expect(link).toHaveAttribute('href', `/payment/order?orderId=${orderId}`);
+  expect(screen.queryByRole('button', { name: /רשום תשלום והפק מסמך/ })).toBeNull();
+});
+
+test('does not offer full-total digital checkout after an order has a partial payment', async () => {
+  state.invoke.mockResolvedValue({ data: { ...view(2000), collectionEnabled: { cash: false, check: false } }, error: null });
+  render(<OrderCollection orderId={orderId} />);
+  await screen.findByText(/ORD-123/);
+  expect(screen.queryByRole('link', { name: /תשלום דיגיטלי בפלאקארד/ })).toBeNull();
+});
+
 test('cashier sees the server-computed full balance', async () => {
   state.role = 'קופאי';
   state.invoke.mockResolvedValue({ data: view(), error: null });

@@ -127,6 +127,11 @@ export default function OrderCollection({ orderId }) {
           to={`/payment/physical?orderId=${encodeURIComponent(orderId)}`}>
           {view.unresolvedPayment ? 'בדיקת תשלום קיים במסופון פיזי' : 'תשלום במסופון פיזי להזמנה זו'}
         </Link>}
+      {view.balanceMinor > 0 && view.paidMinor === 0 &&
+        <Link className="inline-block rounded-lg border border-primary/30 bg-white px-4 py-2 font-medium text-primary"
+          to={orderPaymentPath(orderId)}>
+          {view.unresolvedPayment ? 'בדיקת תשלום דיגיטלי קיים' : 'תשלום דיגיטלי בפלאקארד להזמנה זו'}
+        </Link>}
       {result && <section role="status" className="rounded-xl border bg-white p-4">
         <p>התשלום נרשם במכירה {result.receiptNumber}. זהו אישור פנימי בלבד.</p>
         {result.accounting?.state === 'succeeded' && safeDocumentUrl(result.accounting.documentUrl)
@@ -135,12 +140,11 @@ export default function OrderCollection({ orderId }) {
       </section>}
       {view.balanceMinor > 0 && !view.unresolvedPayment && !result &&
         !view.collectionEnabled?.cash && !view.collectionEnabled?.check &&
-        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">גבייה במזומן ובהמחאה אינה פעילה כעת. ניתן לצפות ביתרת ההזמנה ולבדוק תשלום קיים.</p>}
+        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">גבייה במזומן ובהמחאה אינה פעילה כעת.</p>}
       {view.balanceMinor > 0 && !view.unresolvedPayment && !result &&
         (view.collectionEnabled?.cash || view.collectionEnabled?.check) &&
         <section className="space-y-3 rounded-xl border bg-white p-5">
         <h2 className="font-bold">רישום תשלום שהתקבל</h2>
-        {view.paidMinor === 0 && <Link className="inline-block text-primary underline" to={orderPaymentPath(orderId)}>תשלום דיגיטלי בפלאקארד להזמנה זו</Link>}
         {view.paidMinor > 0 && <p className="text-sm text-amber-800">הגבייה כאן היא של מלוא היתרה לאחר תשלומים קודמים.</p>}
         <label className="block">אמצעי תשלום<select className="mt-1 w-full rounded border p-2" value={method} onChange={e => setMethod(e.target.value)}>{view.collectionEnabled?.check && <option value="check">המחאה</option>}{view.collectionEnabled?.cash && <option value="cash">מזומן</option>}</select></label>
         <label className="block">סכום לגבייה (₪)<input className="mt-1 w-full rounded border p-2" type="number" value={amount} readOnly /></label>
