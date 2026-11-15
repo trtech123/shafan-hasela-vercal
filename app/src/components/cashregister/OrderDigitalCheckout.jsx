@@ -90,7 +90,7 @@ export default function OrderDigitalCheckout({ orderId, balanceMinor, onStatus }
     </Button>
     {message && <p role="alert" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">{message}</p>}
     {payment?.payment && !payment.paid && <a className="text-sm text-primary underline"
-      href={`/payment/order?orderId=${encodeURIComponent(orderId)}`}>
+      href={`/payment/order?orderId=${encodeURIComponent(orderId)}&review=1`}>
       בדיקת ניסיון התשלום הקיים
     </a>}
     <Dialog open={billingOpen} onOpenChange={setBillingOpen}>

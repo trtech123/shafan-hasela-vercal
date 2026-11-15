@@ -32,6 +32,17 @@ test('legacy order preparation URL returns cashier to the existing order without
   expect(request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(0);
 });
 
+test('legacy URL with missing VAT also returns to cashier rather than showing an autofilled identity', async () => {
+  request.mockResolvedValue({ ...status, canInitialize: false, billingDefaults: null,
+    eligibilityIssues: ['vat_required'] });
+  render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}>
+    <Routes><Route path="/payment/order" element={<OrderPayment />} />
+      <Route path="/cashregister" element={<p>cashier collection</p>} /></Routes>
+  </MemoryRouter>);
+  expect(await screen.findByText('cashier collection')).toBeInTheDocument();
+  expect(screen.queryByLabelText('שם מלא')).toBeNull();
+});
+
 test('shift manager cannot load billing or initiate payment on the legacy URL', () => {
   role = 'אחמ"ש';
   render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
