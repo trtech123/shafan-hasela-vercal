@@ -8,6 +8,20 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Hosted checkout still charges an original order total. Physical reservations
+-- use the locked, server-computed balance and carry a correlated source order.
+CREATE OR REPLACE FUNCTION public.guard_hosted_after_noncard_partial() RETURNS trigger
+LANGUAGE plpgsql SET search_path='' AS $$
+BEGIN
+  IF NEW.provider='pelecard' AND NEW.operation='payment' AND NEW.order_id IS NOT NULL
+    AND EXISTS(SELECT 1 FROM public.payper_noncard_payments n WHERE n.order_id=NEW.order_id)
+    AND (NEW.idempotency_key='physical-'||NEW.id::text
+      AND NEW.checkout_snapshot->'source_order'->>'orderId'=NEW.order_id::text
+      AND (NEW.checkout_snapshot->'source_order'->>'collected')::numeric=NEW.amount) IS NOT TRUE
+  THEN RAISE EXCEPTION 'hosted_partial_balance_unsupported' USING ERRCODE='23514'; END IF;
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION public.reserve_physical_order_payment(
   p_actor_id uuid,p_request_key uuid,p_workstation_code text,p_order_id uuid,
   p_amount_minor integer
@@ -42,6 +56,11 @@ BEGIN
     o.total_price IS NULL OR o.total_price<=0 OR
     o.total_price*100<>trunc(o.total_price*100) OR o.vat_applicable IS NULL
   THEN RAISE EXCEPTION 'physical_order_not_payable' USING ERRCODE='23514'; END IF;
+  IF EXISTS(SELECT 1 FROM public.sales s WHERE s.order_id IS NULL AND
+    s.linked_order_info->>'order_number'=o.order_number)
+    OR EXISTS(SELECT 1 FROM public.payment_transactions t WHERE t.order_id IS NULL AND
+      t.checkout_snapshot->'linked_order_info'->>'order_number'=o.order_number)
+  THEN RAISE EXCEPTION 'physical_order_legacy_link_unresolved' USING ERRCODE='23514'; END IF;
   IF EXISTS(SELECT 1 FROM public.payment_transactions t WHERE t.order_id=o.id
     AND t.operation='payment' AND t.status IN ('initiated','pending_provider','timed_out'))
   THEN RAISE EXCEPTION 'order_payment_unresolved' USING ERRCODE='23514'; END IF;
@@ -52,6 +71,8 @@ BEGIN
     WHERE s.order_id=o.id AND s.payment_transaction_id IS NULL AND
       s.method IN ('צ''ק','מזומן');
   paid:=paid+legacy_paid; balance:=o.total_price-paid;
+  IF o.payment_status NOT IN ('לא שולם','שולם חלקית') AND balance>0
+  THEN RAISE EXCEPTION 'physical_order_status_unresolved' USING ERRCODE='23514'; END IF;
   amount:=p_amount_minor::numeric/100;
   IF balance<=0 OR p_amount_minor::numeric/100>balance OR
     (EXISTS(SELECT 1 FROM public.profiles WHERE id=p_actor_id AND role::text='cashier')
@@ -196,6 +217,75 @@ BEGIN
   RETURN jsonb_build_object('paymentId',i.payment_id,'orderId',order_id,
     'state',i.state,'registerNumber',i.register_number,'amountMinor',i.amount_minor,
     'saleId',i.sale_id,'createdAt',i.created_at);
+END $$;
+
+-- Pelecard can issue the automatic Invoice-Receipt at approval, before our
+-- subsequent verified_at timestamp. Reconcile the already-issued document
+-- against the reservation time, verified payment, sale, amount, and evidence.
+-- This RPC only records an existing document; it never calls Payper issuance.
+CREATE OR REPLACE FUNCTION public.record_physical_payper_manual_document(
+  p_payment_id uuid, p_document_number text, p_document_url text,
+  p_issued_at timestamptz, p_amount numeric,
+  p_provider_confirmation_ref text, p_accountant_approval_ref text
+) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE
+  l public.payper_document_ledger%ROWTYPE;
+  p public.payment_transactions%ROWTYPE;
+  s public.sales%ROWTYPE;
+  i public.physical_payment_intents%ROWTYPE;
+  actor uuid := auth.uid();
+BEGIN
+  IF actor IS NULL OR NOT EXISTS (
+    SELECT 1 FROM public.profiles WHERE id=actor AND role::text='admin'
+  ) THEN RAISE EXCEPTION 'administrator_required' USING ERRCODE='42501'; END IF;
+  IF p_document_number IS NULL OR p_document_number !~ '^[1-9][0-9]{0,29}$'
+    OR p_document_url IS NULL OR
+      p_document_url !~ '^https://app\.payper\.co\.il/public/invoice_show/[1-9][0-9]*(\?ak=[A-Za-z0-9_-]{16,128})?$'
+    OR p_provider_confirmation_ref IS NULL OR
+      p_provider_confirmation_ref !~ '^[A-Za-z0-9:/._-]{8,120}$'
+    OR p_accountant_approval_ref IS NULL OR
+      p_accountant_approval_ref !~ '^[A-Za-z0-9:/._-]{8,120}$'
+  THEN RAISE EXCEPTION 'manual_document_evidence_invalid' USING ERRCODE='23514'; END IF;
+
+  SELECT * INTO l FROM public.payper_document_ledger WHERE payment_id=p_payment_id FOR UPDATE;
+  SELECT * INTO p FROM public.payment_transactions WHERE id=p_payment_id;
+  SELECT * INTO i FROM public.physical_payment_intents WHERE payment_id=p_payment_id;
+  SELECT * INTO s FROM public.sales WHERE id=l.sale_id;
+  IF l.payment_id IS NULL OR p.id IS NULL OR i.payment_id IS NULL OR s.id IS NULL
+    OR l.state <> 'source_blocked'
+    OR l.reconciliation_code <> 'physical_provider_confirmation_required'
+    OR l.document_number IS NOT NULL OR l.document_url IS NOT NULL
+    OR i.state <> 'succeeded' OR i.sale_id IS DISTINCT FROM s.id
+    OR i.provider_transaction_id IS NULL OR i.provider_uid IS NULL
+    OR i.provider_transaction_id IS DISTINCT FROM p.provider_transaction_id
+    OR p.status <> 'succeeded' OR p.provider <> 'pelecard'
+    OR p.operation <> 'payment' OR p.currency <> 'ILS'
+    OR p.sale_id IS DISTINCT FROM s.id
+    OR p_amount IS NULL OR p.amount IS DISTINCT FROM p_amount
+    OR s.total IS DISTINCT FROM p_amount
+    OR p_issued_at IS NULL OR p.created_at IS NULL OR p.verified_at IS NULL
+    OR p_issued_at < p.created_at OR p_issued_at > clock_timestamp() + interval '5 minutes'
+    OR EXISTS (SELECT 1 FROM public.accounting_documents d
+      WHERE d.status='succeeded' AND d.source_id IN (p_payment_id::text, s.id::text))
+  THEN RAISE EXCEPTION 'physical_manual_document_reconciliation_blocked' USING ERRCODE='23514'; END IF;
+
+  INSERT INTO public.payper_manual_document_audit(
+    payment_id, document_number, document_url, issued_at, gross_amount,
+    provider_confirmation_ref, accountant_approval_ref, actor_id, previous_reconciliation_code
+  ) VALUES (
+    p_payment_id, p_document_number, p_document_url, p_issued_at, p_amount,
+    p_provider_confirmation_ref, p_accountant_approval_ref, actor, l.reconciliation_code
+  );
+  UPDATE public.payper_document_ledger
+    SET state='succeeded', document_origin='manual',
+      source_facts=jsonb_build_object('physicalPaymentId',p_payment_id,
+        'providerTransactionId',i.provider_transaction_id,'providerUid',i.provider_uid,
+        'providerIssuedAutomatically',true,'reconciledManually',true),
+      source_frozen_at=p_issued_at, dispatch_reserved_at=p_issued_at,
+      document_number=p_document_number, document_url=p_document_url,
+      updated_at=clock_timestamp()
+    WHERE payment_id=p_payment_id;
+  RETURN true;
 END $$;
 
 COMMIT;

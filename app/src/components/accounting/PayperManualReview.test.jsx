@@ -66,7 +66,7 @@ test('offers a dedicated manual reconciliation action only for a physical provid
   }) }) }) }) });
   render(<PayperManualReview />);
   expect(await screen.findByText(/physical-payment/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /רישום מסמך ידני מאומת/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /התאמת מסמך Payper קיים/ })).toBeInTheDocument();
 });
 
 test('warns the administrator that a provider timeout cannot be retried automatically', async () => {

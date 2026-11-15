@@ -28,11 +28,10 @@ describe("non-card Payper check documents", () => {
     expect(() => buildNoncardPayperRequest({ ...source(), amountMinor: 11799 }, auth))
       .toThrow("payper_amount_mismatch");
   });
-  it("builds a receipt referencing an existing Payper invoice", () => {
-    const request = buildNoncardPayperRequest({ ...source(), documentType: "receipt",
-      referenceDocumentId: "provider-document-42" }, auth);
-    expect(request.PayperParameters).toMatchObject({ typeDocument: "receipt",
-      DataPayper: { reference_document_id: "provider-document-42" } });
+  it("rejects an unsupported existing-invoice reference", () => {
+    expect(() => buildNoncardPayperRequest({ ...source(),
+      referenceDocumentId: "undocumented-provider-id" } as never, auth))
+      .toThrow("payper_source_incomplete");
   });
   it("never retries an uncertain creation response", async () => {
     const fetcher = vi.fn().mockRejectedValue(new Error("network timeout"));

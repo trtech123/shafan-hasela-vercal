@@ -119,21 +119,22 @@ export default function CashRegister() {
       navigate(`/cashregister?orderId=${encodeURIComponent(linkedOrder.id)}`);
       return;
     }
-    if (method === "צ'ק") {
+    if (method === "צ'ק" || method === "מזומן") {
       checkRequestKey.current ||= crypto.randomUUID();
       const { billing, document_type: documentType, reference_document_id: referenceDocumentId,
         ...check } = paymentDetails || {};
+      const isCheck = method === "צ'ק";
       try {
         const { data, error } = await supabase.functions.invoke('payper-noncard-collection', { body: {
-          action: 'collect', requestKey: checkRequestKey.current, method: 'check',
-          amountMinor: Math.round(total * 100), check, billing, documentType,
+          action: 'collect', requestKey: checkRequestKey.current, method: isCheck ? 'check' : 'cash',
+          amountMinor: Math.round(total * 100), check: isCheck ? check : null, billing, documentType,
           referenceDocumentId, lines: cartItems.map(item => ({ kind: item.kind,
             id: item.id, qty: item.qty })),
           discount: discount ? { type: discount.type, mode: discount.mode,
             value: Number(discount.value) } : null,
         } });
         if (error || data?.error || !data?.receiptNumber) throw new Error('check_collection_unresolved');
-        setReceiptData({ items: cartItems, total, method, paymentDetails: check,
+        setReceiptData({ items: cartItems, total, method, paymentDetails: isCheck ? check : null,
           discount: discount ? { type: discount.type, amount: discountAmount,
             original_total: subtotal } : null,
           linkedOrder: null, timestamp: new Date(), receiptNumber: data.receiptNumber,
@@ -141,7 +142,7 @@ export default function CashRegister() {
         setPaymentMethod(method);
         setScreen('receipt');
       } catch {
-        toast.error('תוצאת שמירת הצ׳ק אינה ודאית. יש לבדוק את דוח המכירות והנהלת החשבונות לפני ניסיון נוסף.');
+        toast.error('תוצאת שמירת התשלום אינה ודאית. יש לבדוק את דוח המכירות והנהלת החשבונות לפני ניסיון נוסף.');
         manualSaleSubmitted.current = false;
       } finally { setManualSaleSaving(false); }
       return;

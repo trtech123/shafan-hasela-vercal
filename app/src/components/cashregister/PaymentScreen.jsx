@@ -14,6 +14,7 @@ const PAYMENT_METHODS = [
 ];
 
 const CHECK_METHOD = "צ'ק";
+const CASH_METHOD = "מזומן";
 const SPLIT_METHOD = "מפוצל"; // sale.method marker for split payments
 const SPLIT_LINE_METHODS = ["מזומן", "אשראי", "צ'ק"];
 
@@ -71,12 +72,14 @@ export default function PaymentScreen({
   const [detailFor, setDetailFor] = useState(null);
   const [check, setCheck] = useState({ ...emptyCheck, amount: String(total) });
   const [checkBilling, setCheckBilling] = useState({ kind: 'person', name: '', identity: '', email: '' });
-  const [checkDocumentType, setCheckDocumentType] = useState('invoice-receipt');
-  const [checkReferenceId, setCheckReferenceId] = useState('');
   // Split builder: starts with the full total on a single cash line.
   const [lines, setLines] = useState([makeLine("מזומן", total)]);
 
   const handleMethodClick = (key) => {
+    if (key === CASH_METHOD) {
+      setDetailFor(CASH_METHOD);
+      return;
+    }
     if (key === CHECK_METHOD) {
       setCheck({ ...emptyCheck, amount: String(total) });
       setDetailFor(CHECK_METHOD);
@@ -144,10 +147,15 @@ export default function PaymentScreen({
       notes: check.notes.trim(),
       amount: Number(check.amount),
       billing: checkBilling,
-      document_type: checkDocumentType,
-      reference_document_id: checkReferenceId.trim() || null,
+      document_type: 'invoice-receipt',
+      reference_document_id: null,
     };
     onConfirm(CHECK_METHOD, details);
+  };
+
+  const submitCash = () => {
+    if (billingReviewIssues(checkBilling).length > 0) return;
+    onConfirm(CASH_METHOD, { billing: checkBilling, document_type: 'invoice-receipt', reference_document_id: null });
   };
 
   if (physicalTerminalState) {
@@ -234,6 +242,21 @@ export default function PaymentScreen({
     );
   }
 
+  if (detailFor === CASH_METHOD) {
+    return <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6" dir="rtl">
+      <div className="w-full max-w-lg space-y-5">
+        <button onClick={() => setDetailFor(null)} className="text-slate-300">חזרה לאמצעי תשלום</button>
+        <h2 className="text-2xl font-bold">רישום מזומן שהתקבל</h2>
+        <p>סכום: {total.toFixed(2)} ₪ · לאחר הקבלה תתבקש חשבונית מס/קבלה מ־Payper.</p>
+        <Field label="סוג לקוח"><select className={inputCls} value={checkBilling.kind} onChange={e => setCheckBilling({ ...checkBilling, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></Field>
+        <Field label="שם לחיוב"><input className={inputCls} value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
+        <Field label="מספר זהות / חברה"><input className={inputCls} inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
+        <Field label="דוא״ל למסמך"><input className={inputCls} type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
+        <Button onClick={submitCash} disabled={manualSaleSaving || billingReviewIssues(checkBilling).length > 0}>אשר קבלת מזומן</Button>
+      </div>
+    </div>;
+  }
+
   if (detailFor === CHECK_METHOD) {
     const set = (k) => (e) => setCheck((c) => ({ ...c, [k]: e.target.value }));
     const valid = /^\d{1,20}$/.test(check.check_number) && check.bank.trim() &&
@@ -287,14 +310,7 @@ export default function PaymentScreen({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="מסמך חשבונאי">
-              <select className={inputCls} value={checkDocumentType} onChange={e => setCheckDocumentType(e.target.value)}>
-                <option value="invoice-receipt">חשבונית מס/קבלה</option>
-              </select>
-            </Field>
-            {checkDocumentType === 'receipt' && <Field label="מזהה חשבונית Payper קיימת">
-              <input className={inputCls} value={checkReferenceId} onChange={e => setCheckReferenceId(e.target.value)} />
-            </Field>}
+            <p className="col-span-2 text-sm">לאחר קבלת ההמחאה תתבקש חשבונית מס/קבלה מ־Payper.</p>
             <Field label="שם לחיוב"><input className={inputCls} value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
             <Field label="מספר זהות / חברה"><input className={inputCls} inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
             <Field label="דוא״ל למסמך"><input className={inputCls} type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>

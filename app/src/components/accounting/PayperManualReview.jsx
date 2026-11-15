@@ -3,7 +3,7 @@ import { supabase } from '@/api/supabaseClient';
 import RecordManualPayperDocument from './RecordManualPayperDocument';
 
 const reasons = {
-  physical_provider_confirmation_required: 'תשלום במסופון פיזי אומת; נדרש מסמך Payper ידני באישור רואה חשבון והתאמתו לתשלום.',
+  physical_provider_confirmation_required: 'תשלום במסופון פיזי אומת; יש לאתר ולאמת את חשבונית המס/קבלה ש־Pelecard הפיקה אוטומטית ולהתאימה לתשלום. אין להפיק מסמך נוסף.',
   eligible: 'ממתין לעיבוד אוטומטי של Payper',
   source_frozen: 'ממתין לעיבוד אוטומטי של Payper',
   dispatch_reserved: 'בקשת הפקה נשלחה; יש לבדוק את מצבה אם היא מתעכבת',

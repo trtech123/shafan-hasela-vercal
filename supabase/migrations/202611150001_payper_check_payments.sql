@@ -59,8 +59,8 @@ GRANT SELECT ON public.payper_noncard_payments TO service_role;
 
 -- The sale, non-card payment, durable Payper obligation and accounting event
 -- commit together. Reusing a request key only returns the original sale.
-CREATE FUNCTION public.record_payper_check_sale(
-  p_actor_id uuid, p_request_key uuid, p_lines jsonb, p_discount jsonb,
+CREATE FUNCTION public.record_payper_noncard_sale(
+  p_actor_id uuid, p_request_key uuid, p_method text, p_lines jsonb, p_discount jsonb,
   p_check jsonb, p_billing jsonb, p_document_type text,
   p_reference_document_id text, p_expected_minor integer
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
@@ -77,11 +77,14 @@ BEGIN
     RAISE EXCEPTION 'check_sale_forbidden' USING ERRCODE='42501'; END IF;
   SELECT * INTO existing FROM public.payper_noncard_payments WHERE request_key=p_request_key;
   IF FOUND THEN
-    IF existing.actor_id IS DISTINCT FROM p_actor_id THEN RAISE EXCEPTION 'request_key_conflict'; END IF;
+    IF existing.actor_id IS DISTINCT FROM p_actor_id OR existing.method IS DISTINCT FROM p_method
+      OR existing.amount_minor IS DISTINCT FROM p_expected_minor
+    THEN RAISE EXCEPTION 'request_key_conflict'; END IF;
     RETURN pg_catalog.jsonb_build_object('paymentId',existing.payment_id,'saleId',existing.sale_id,
       'receiptNumber',(SELECT s.receipt_number FROM public.sales s WHERE s.id=existing.sale_id),'created',false);
   END IF;
-  IF p_document_type IS DISTINCT FROM 'invoice-receipt' OR p_reference_document_id IS NOT NULL THEN
+  IF p_method NOT IN ('check','cash') OR p_document_type IS DISTINCT FROM 'invoice-receipt'
+    OR p_reference_document_id IS NOT NULL THEN
     RAISE EXCEPTION 'check_document_type_invalid'; END IF;
   IF pg_catalog.jsonb_typeof(p_billing)<>'object' OR
     coalesce(p_billing->>'kind','') NOT IN ('person','organization') OR
@@ -91,7 +94,8 @@ BEGIN
     coalesce(p_billing->>'identity','') !~ '^[0-9]{9}$' OR
     (p_billing->>'kind'='person' AND NOT public.payper_valid_person_identity(p_billing->>'identity')) THEN
     RAISE EXCEPTION 'check_billing_invalid'; END IF;
-  IF pg_catalog.jsonb_typeof(p_check)<>'object' OR
+  IF p_method='check' THEN
+    IF pg_catalog.jsonb_typeof(p_check)<>'object' OR
     coalesce(p_check->>'check_number','') !~ '^[0-9]{1,20}$' OR
     pg_catalog.length(pg_catalog.btrim(coalesce(p_check->>'bank',''))) NOT BETWEEN 1 AND 100 OR
     coalesce(p_check->>'branch','') !~ '^[0-9]{1,8}$' OR
@@ -101,10 +105,14 @@ BEGIN
     coalesce(p_check->>'due_date','') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR
     coalesce(p_check->>'amount','') !~ '^[0-9]{1,8}(\.[0-9]{1,2})?$' THEN
     RAISE EXCEPTION 'check_details_invalid'; END IF;
-  received_date:=(p_check->>'received_date')::date;
-  due_date:=(p_check->>'due_date')::date;
-  IF received_date>(pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date OR
-    due_date<received_date THEN RAISE EXCEPTION 'check_dates_invalid'; END IF;
+    received_date:=(p_check->>'received_date')::date;
+    due_date:=(p_check->>'due_date')::date;
+    IF received_date>(pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date OR
+      due_date<received_date THEN RAISE EXCEPTION 'check_dates_invalid'; END IF;
+  ELSE
+    IF p_check IS NOT NULL AND p_check<>'null'::jsonb THEN RAISE EXCEPTION 'cash_check_details_forbidden'; END IF;
+    received_date:=(pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date;
+  END IF;
   IF pg_catalog.jsonb_typeof(p_lines)<>'array' OR
     pg_catalog.jsonb_array_length(p_lines) NOT BETWEEN 1 AND 100 THEN
     RAISE EXCEPTION 'cart_invalid'; END IF;
@@ -146,36 +154,41 @@ BEGIN
     discount_snapshot:=p_discount||pg_catalog.jsonb_build_object('original_total',subtotal,'final_total',subtotal-deduction);
   END IF;
   total:=subtotal-deduction;
-  IF total<=0 OR total*100>2147483647 OR (total*100)::integer IS DISTINCT FROM p_expected_minor OR
-    (total*100)::integer IS DISTINCT FROM ((p_check->>'amount')::numeric*100)::integer OR
-    (p_check->>'amount')::numeric<>total THEN RAISE EXCEPTION 'check_amount_mismatch'; END IF;
+  IF total<=0 OR total*100>2147483647 OR (total*100)::integer IS DISTINCT FROM p_expected_minor
+    THEN RAISE EXCEPTION 'sale_amount_mismatch'; END IF;
+  IF p_method='check' AND (p_check->>'amount')::numeric<>total
+    THEN RAISE EXCEPTION 'check_amount_mismatch'; END IF;
   INSERT INTO public.sales(items,total,method,payment_details,discount,sale_date,created_by)
-    VALUES(frozen,total,'צ''ק',p_check,discount_snapshot,received_date,p_actor_id)
+    VALUES(frozen,total,CASE WHEN p_method='check' THEN 'צ''ק' ELSE 'מזומן' END,
+      p_check,discount_snapshot,received_date,p_actor_id)
     RETURNING id,sales.receipt_number INTO sale_id,receipt_number;
   payment_id:=pg_catalog.gen_random_uuid();
   INSERT INTO public.payment_transactions(id,provider,operation,sale_id,amount,currency,status,
     idempotency_key,checkout_snapshot,created_by)
-    VALUES(payment_id,'manual_check','payment',sale_id,total,'ILS','succeeded',
-      'check-'||p_request_key::text,pg_catalog.jsonb_build_object('schema_version',1,'items',frozen,
+    VALUES(payment_id,CASE WHEN p_method='check' THEN 'manual_check' ELSE 'manual_cash' END,
+      'payment',sale_id,total,'ILS','succeeded',
+      'noncard-'||p_request_key::text,pg_catalog.jsonb_build_object('schema_version',1,'items',frozen,
       'discount',discount_snapshot,'sale_date',received_date::text),p_actor_id);
   UPDATE public.sales SET payment_transaction_id=payment_id WHERE id=sale_id;
   INSERT INTO public.payper_noncard_payments(payment_id,sale_id,request_key,actor_id,method,clearance_status,document_type,
     reference_document_id,check_details,billing,amount_minor)
-    VALUES(payment_id,sale_id,p_request_key,p_actor_id,'check','received_uncleared',p_document_type,p_reference_document_id,
+    VALUES(payment_id,sale_id,p_request_key,p_actor_id,p_method,
+      CASE WHEN p_method='check' THEN 'received_uncleared' ELSE 'not_applicable' END,p_document_type,p_reference_document_id,
       p_check,p_billing,(total*100)::integer);
   INSERT INTO public.payper_document_ledger(payment_id,order_id,sale_id,state,source_facts,source_frozen_at)
     VALUES(payment_id,NULL,sale_id,'source_frozen',pg_catalog.jsonb_build_object(
-      'sourceType','manual_check','saleId',sale_id,'paymentId',payment_id,'amountMinor',(total*100)::integer,
+      'sourceType',CASE WHEN p_method='check' THEN 'manual_check' ELSE 'manual_cash' END,
+      'saleId',sale_id,'paymentId',payment_id,'amountMinor',(total*100)::integer,
       'items',frozen,'discount',discount_snapshot,'vatApplicable',true,
       'documentType',p_document_type,'referenceDocumentId',p_reference_document_id),pg_catalog.clock_timestamp());
   INSERT INTO public.accounting_events(source_type,source_id,purpose,accounting_provider,status)
-    VALUES('payment_transaction',payment_id::text,'check_payment','payper','pending');
+    VALUES('payment_transaction',payment_id::text,'noncard_payment','payper','pending');
   RETURN pg_catalog.jsonb_build_object('paymentId',payment_id,'saleId',sale_id,
     'receiptNumber',receipt_number,'created',true);
 END $$;
-REVOKE ALL ON FUNCTION public.record_payper_check_sale(uuid,uuid,jsonb,jsonb,jsonb,jsonb,text,text,integer)
+REVOKE ALL ON FUNCTION public.record_payper_noncard_sale(uuid,uuid,text,jsonb,jsonb,jsonb,jsonb,text,text,integer)
   FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION public.record_payper_check_sale(uuid,uuid,jsonb,jsonb,jsonb,jsonb,text,text,integer)
+GRANT EXECUTE ON FUNCTION public.record_payper_noncard_sale(uuid,uuid,text,jsonb,jsonb,jsonb,jsonb,text,text,integer)
   TO service_role;
 
 -- Schedule collection uses the saved order total and already recorded money.
@@ -188,7 +201,7 @@ DECLARE
   role_name text; o public.orders%ROWTYPE; existing public.payper_noncard_payments%ROWTYPE;
   paid numeric:=0; legacy_paid numeric:=0; balance numeric; amount numeric;
   activity_name text; sale_id uuid; payment_id uuid; receipt_number text;
-  frozen jsonb; received_date date; due_date date;
+  frozen jsonb; received_date date; due_date date; document_review boolean:=false;
 BEGIN
   IF coalesce(auth.role(),'')<>'service_role' THEN RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
   SELECT role::text INTO role_name FROM public.profiles WHERE id=p_actor_id;
@@ -197,6 +210,7 @@ BEGIN
   SELECT * INTO existing FROM public.payper_noncard_payments WHERE request_key=p_request_key;
   IF FOUND THEN
     IF existing.actor_id IS DISTINCT FROM p_actor_id OR existing.order_id IS DISTINCT FROM p_order_id
+      OR existing.method IS DISTINCT FROM p_method OR existing.amount_minor IS DISTINCT FROM p_amount_minor
     THEN RAISE EXCEPTION 'request_key_conflict'; END IF;
     RETURN pg_catalog.jsonb_build_object('paymentId',existing.payment_id,'saleId',existing.sale_id,
       'receiptNumber',(SELECT s.receipt_number FROM public.sales s WHERE s.id=existing.sale_id),'created',false);
@@ -224,28 +238,23 @@ BEGIN
   paid:=paid+legacy_paid;
   balance:=o.total_price-paid; amount:=p_amount_minor::numeric/100;
   IF o.payment_status IS NULL OR o.payment_status NOT IN ('לא שולם','שולם חלקית') OR
-    balance<=0 OR amount>balance OR amount*100<>p_amount_minor OR
-    (role_name='cashier' AND amount<>balance)
+    (o.payment_status='לא שולם' AND paid>0) OR
+    (o.payment_status='שולם חלקית' AND paid<=0) OR
+    balance<=0 OR amount<>balance OR amount*100<>p_amount_minor
   THEN RAISE EXCEPTION 'order_balance_mismatch'; END IF;
-  IF p_document_type NOT IN ('invoice-receipt','receipt') THEN
+  IF p_document_type IS DISTINCT FROM 'invoice-receipt' OR p_reference_document_id IS NOT NULL THEN
     RAISE EXCEPTION 'check_document_type_invalid'; END IF;
-  IF p_document_type='invoice-receipt' AND
-    (paid>0 OR amount<>o.total_price OR
-      EXISTS(SELECT 1 FROM public.accounting_documents d
-        WHERE d.status='succeeded' AND d.document_type_key IN ('invoice','invoice-receipt','immediate_sale')
-          AND ((d.source_type='order' AND d.source_id=o.id::text) OR
-            (d.source_type='sale' AND EXISTS(SELECT 1 FROM public.sales s
-              WHERE s.order_id=o.id AND s.id::text=d.source_id)) OR
-            (d.source_type='payment_transaction' AND EXISTS
-              (SELECT 1 FROM public.payment_transactions p
-                WHERE p.order_id=o.id AND p.id::text=d.source_id)))) OR
-      EXISTS(SELECT 1 FROM public.payper_document_ledger l WHERE l.order_id=o.id AND l.state='succeeded'))
-  THEN RAISE EXCEPTION 'existing_invoice_or_partial_payment'; END IF;
-  IF p_document_type='receipt' AND p_reference_document_id IS NOT NULL AND NOT EXISTS
-    (SELECT 1 FROM public.accounting_documents d WHERE d.provider='payper'
-      AND d.external_document_id=p_reference_document_id AND d.status='succeeded'
-      AND d.document_type_key='invoice' AND d.source_id=o.id::text)
-  THEN RAISE EXCEPTION 'prior_payper_invoice_required'; END IF;
+  SELECT EXISTS(SELECT 1 FROM public.accounting_documents d
+      WHERE d.status<>'permanent_error' AND
+        ((d.source_type='order' AND d.source_id=o.id::text) OR
+         (d.source_type='sale' AND EXISTS(SELECT 1 FROM public.sales s
+           WHERE s.order_id=o.id AND s.id::text=d.source_id)) OR
+         (d.source_type='payment_transaction' AND EXISTS
+           (SELECT 1 FROM public.payment_transactions p
+             WHERE p.order_id=o.id AND p.id::text=d.source_id))))
+    OR EXISTS(SELECT 1 FROM public.payper_document_ledger l WHERE l.order_id=o.id
+      AND l.state IN ('dispatch_reserved','reconciliation_required','succeeded'))
+    INTO document_review;
   IF pg_catalog.jsonb_typeof(p_billing)<>'object' OR
     coalesce(p_billing->>'kind','') NOT IN ('person','organization') OR
     pg_catalog.length(pg_catalog.btrim(coalesce(p_billing->>'name',''))) NOT BETWEEN 1 AND 200 OR
@@ -296,16 +305,17 @@ BEGIN
     VALUES(payment_id,sale_id,o.id,p_request_key,p_actor_id,p_method,
       CASE WHEN p_method='check' THEN 'received_uncleared' ELSE 'not_applicable' END,p_document_type,
       p_reference_document_id,p_check,p_billing,p_amount_minor);
-  INSERT INTO public.payper_document_ledger(payment_id,order_id,sale_id,state,source_facts,source_frozen_at)
-    VALUES(payment_id,o.id,sale_id,'source_frozen',pg_catalog.jsonb_build_object(
+  INSERT INTO public.payper_document_ledger(payment_id,order_id,sale_id,state,reconciliation_code,source_facts,source_frozen_at)
+    VALUES(payment_id,o.id,sale_id,CASE WHEN document_review THEN 'source_blocked' ELSE 'source_frozen' END,
+      CASE WHEN document_review THEN 'existing_document_review_required' ELSE NULL END,pg_catalog.jsonb_build_object(
       'sourceType',CASE WHEN p_method='check' THEN 'manual_check' ELSE 'manual_cash' END,
       'saleId',sale_id,'orderId',o.id,'paymentId',payment_id,'amountMinor',p_amount_minor,
       'items',frozen,'vatApplicable',true,'documentType',p_document_type,
       'referenceDocumentId',p_reference_document_id),pg_catalog.clock_timestamp());
   INSERT INTO public.accounting_events(source_type,source_id,purpose,accounting_provider,status)
-    VALUES('payment_transaction',payment_id::text,'noncard_payment','payper','pending');
-  UPDATE public.orders SET payment_status=CASE WHEN amount=balance
-    THEN CASE WHEN p_method='check' THEN 'צ''ק' ELSE 'מזומן' END ELSE 'שולם חלקית' END
+    VALUES('payment_transaction',payment_id::text,'noncard_payment','payper',
+      CASE WHEN document_review THEN 'configuration_required' ELSE 'pending' END);
+  UPDATE public.orders SET payment_status=CASE WHEN p_method='check' THEN 'צ''ק' ELSE 'מזומן' END
     WHERE id=o.id;
   RETURN pg_catalog.jsonb_build_object('paymentId',payment_id,'saleId',sale_id,
     'receiptNumber',receipt_number,'created',true,'orderId',o.id,
@@ -320,6 +330,7 @@ CREATE FUNCTION public.get_payper_order_collection(p_actor_id uuid,p_order_id uu
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
 DECLARE o public.orders%ROWTYPE; paid numeric:=0; legacy_paid numeric:=0;
   activity_name text; documents jsonb; payments jsonb; unresolved boolean;
+  document_review boolean;
 BEGIN
   IF coalesce(auth.role(),'')<>'service_role' OR NOT EXISTS
     (SELECT 1 FROM public.profiles WHERE id=p_actor_id AND role::text IN ('admin','cashier'))
@@ -344,6 +355,19 @@ BEGIN
   THEN unresolved:=true; END IF;
   IF (o.payment_status IS NULL OR o.payment_status NOT IN ('לא שולם','שולם חלקית')) AND paid<o.total_price THEN
     unresolved:=true; END IF;
+  IF (o.payment_status='לא שולם' AND paid>0) OR
+    (o.payment_status='שולם חלקית' AND paid<=0) THEN unresolved:=true; END IF;
+  SELECT EXISTS(SELECT 1 FROM public.accounting_documents d
+      WHERE d.status<>'permanent_error' AND
+        ((d.source_type='order' AND d.source_id=o.id::text) OR
+         (d.source_type='sale' AND EXISTS(SELECT 1 FROM public.sales s
+           WHERE s.order_id=o.id AND s.id::text=d.source_id)) OR
+         (d.source_type='payment_transaction' AND EXISTS
+           (SELECT 1 FROM public.payment_transactions p
+             WHERE p.order_id=o.id AND p.id::text=d.source_id))))
+    OR EXISTS(SELECT 1 FROM public.payper_document_ledger l WHERE l.order_id=o.id
+      AND l.state IN ('dispatch_reserved','reconciliation_required','succeeded'))
+    INTO document_review;
   SELECT coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
     'id',p.id,'amountMinor',(p.amount*100)::integer,'provider',p.provider,
     'status',p.status,'clearanceStatus',n.clearance_status,'createdAt',p.created_at)
@@ -361,6 +385,7 @@ BEGIN
     'pricePerPerson',o.price_per_person,'quoteId',o.quote_id,
     'totalMinor',(o.total_price*100)::integer,'paidMinor',(paid*100)::integer,
     'balanceMinor',((o.total_price-paid)*100)::integer,'unresolvedPayment',unresolved,
+    'accountingReviewRequired',document_review,
     'billing',pg_catalog.jsonb_build_object('kind',CASE WHEN nullif(o.organization,'') IS NULL THEN 'person' ELSE 'organization' END,
       'name',coalesce(o.billing_institution_name,o.organization,o.client_name),
       'identity',o.billing_company_id,'email',coalesce(o.billing_accounting_email,o.client_email)),

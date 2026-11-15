@@ -44,26 +44,27 @@ test('keeps the physical order link hidden while the browser gate is off', async
   expect(screen.queryByRole('link', { name: /מסופון פיזי/ })).toBeNull();
 });
 
-test('cashier cannot enter a partial payment', async () => {
+test('cashier sees the server-computed full balance', async () => {
   state.role = 'קופאי';
   state.invoke.mockResolvedValue({ data: view(), error: null });
   render(<OrderCollection orderId={orderId} />);
   const amount = await screen.findByLabelText('סכום לגבייה (₪)');
-  expect(amount).toBeDisabled();
+  expect(amount).toHaveAttribute('readonly');
   expect(amount).toHaveValue(100);
 });
 
-test('admin cash collection uses the order ID and requested partial amount exactly once', async () => {
+test('admin cash collection uses the order ID and full balance exactly once', async () => {
   state.invoke.mockImplementation((_name, { body }) => Promise.resolve({
     data: body.action === 'status' ? view() : { saleId: 'sale-1', paymentId: 'payment-1',
       receiptNumber: 'RCP-2000', accounting: { state: 'source_frozen' } }, error: null,
   }));
   render(<OrderCollection orderId={orderId} />);
-  fireEvent.change(await screen.findByLabelText('סכום לגבייה (₪)'), { target: { value: '25.00' } });
+  await screen.findByLabelText('סכום לגבייה (₪)');
   fireEvent.change(screen.getByLabelText('אמצעי תשלום'), { target: { value: 'cash' } });
   fireEvent.click(screen.getByText('רשום תשלום והפק מסמך'));
   await waitFor(() => expect(state.invoke).toHaveBeenCalledWith('payper-noncard-collection',
-    { body: expect.objectContaining({ action: 'collect', orderId, method: 'cash', amountMinor: 2500,
+    { body: expect.objectContaining({ action: 'collect', orderId, method: 'cash', amountMinor: 10000,
+      documentType: 'invoice-receipt',
       requestKey: expect.any(String) }) }));
   expect(state.invoke.mock.calls.filter(([, arg]) => arg.body.action === 'collect')).toHaveLength(1);
 });

@@ -22,6 +22,19 @@ function renderPayment(overrides = {}) {
 }
 
 describe("PaymentScreen payment-method separation", () => {
+  test("records received cash with billing for the required Invoice-Receipt", () => {
+    const props = renderPayment();
+    fireEvent.click(screen.getByRole("button", { name: /מזומן/ }));
+    expect(props.onConfirm).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('סוג לקוח'), { target: { value: 'organization' } });
+    fireEvent.change(screen.getByLabelText('שם לחיוב'), { target: { value: 'Club' } });
+    fireEvent.change(screen.getByLabelText('מספר זהות / חברה'), { target: { value: '123456789' } });
+    fireEvent.change(screen.getByLabelText('דוא״ל למסמך'), { target: { value: 'club@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'אשר קבלת מזומן' }));
+    expect(props.onConfirm).toHaveBeenCalledWith('מזומן', expect.objectContaining({
+      document_type: 'invoice-receipt', billing: expect.objectContaining({ email: 'club@example.com' }),
+    }));
+  });
   test("keeps אשראי as an explicitly external/manual payment", () => {
     const props = renderPayment();
     fireEvent.click(screen.getByRole("button", { name: /אשראי.*חיצוני/s }));

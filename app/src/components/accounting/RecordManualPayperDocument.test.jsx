@@ -28,7 +28,7 @@ test('routes a physical source hold to its dedicated reconciliation RPC', async 
   rpc.mockResolvedValue({ data: true, error: null });
   render(<RecordManualPayperDocument paymentId="4a108cd6-d769-4d07-a193-0013b21a50ed" amount={4}
     reconciliationRpc="record_physical_payper_manual_document" />);
-  fireEvent.click(screen.getByRole('button', { name: /רישום מסמך ידני/ }));
+  fireEvent.click(screen.getByRole('button', { name: /התאמת מסמך Payper קיים/ }));
   fireEvent.change(screen.getByLabelText(/מספר מסמך Payper/), { target: { value: '595171' } });
   fireEvent.change(screen.getByLabelText(/קישור למסמך Payper/), { target: { value: 'https://app.payper.co.il/public/invoice_show/595171' } });
   fireEvent.change(screen.getByLabelText(/מועד הפקה/), { target: { value: '2026-11-12T12:00' } });

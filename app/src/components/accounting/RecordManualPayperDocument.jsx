@@ -7,6 +7,7 @@ const payperUrl = (value) => /^https:\/\/app\.payper\.co\.il\/public\/invoice_sh
 /** Records an already-issued portal document. This component never calls an issuance endpoint. */
 export default function RecordManualPayperDocument({ paymentId, amount, onRecorded,
   reconciliationRpc = 'record_payper_manual_document' }) {
+  const physicalExisting = reconciliationRpc === 'record_physical_payper_manual_document';
   const [open, setOpen] = useState(false);
   const [number, setNumber] = useState('');
   const [url, setUrl] = useState('');
@@ -38,10 +39,12 @@ export default function RecordManualPayperDocument({ paymentId, amount, onRecord
   }
 
   if (!open) return <button type="button" onClick={() => setOpen(true)} className="text-xs underline">
-    רישום מסמך ידני מאומת
+    {physicalExisting ? 'התאמת מסמך Payper קיים' : 'רישום מסמך ידני מאומת'}
   </button>;
   return <form onSubmit={record} className="mt-3 space-y-2 rounded-lg border border-slate-300 bg-white p-3">
-    <p className="text-xs">רישום מסמך שכבר הופק ב־Payper. הפעולה אינה מפיקה או שולחת מסמך.</p>
+    <p className="text-xs">{physicalExisting
+      ? 'יש לאמת בפועל את חשבונית המס/קבלה שהופקה אוטומטית לעסקת המסופון, את הסכום, הנמען והקישור. הפעולה אינה מפיקה או שולחת מסמך.'
+      : 'רישום מסמך שכבר הופק ב־Payper. הפעולה אינה מפיקה או שולחת מסמך.'}</p>
     <label className="block text-xs">מספר מסמך Payper<input className="block w-full border" value={number} onChange={e => setNumber(e.target.value)} /></label>
     <label className="block text-xs">קישור למסמך Payper<input className="block w-full border" value={url} onChange={e => setUrl(e.target.value)} /></label>
     <label className="block text-xs">מועד הפקה<input className="block w-full border" type="datetime-local" value={issuedAt} onChange={e => setIssuedAt(e.target.value)} /></label>

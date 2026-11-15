@@ -58,9 +58,10 @@ Deno.serve(async request => {
         p_billing: body.billing, p_document_type: body.documentType,
         p_reference_document_id: body.referenceDocumentId ?? null,
       }) as typeof saved;
-    } else if (body.orderId == null && body.method === "check") {
-      saved = await rpc("record_payper_check_sale", {
-        p_actor_id: actorId, p_request_key: body.requestKey, p_lines: body.lines,
+    } else if (body.orderId == null) {
+      saved = await rpc("record_payper_noncard_sale", {
+        p_actor_id: actorId, p_request_key: body.requestKey, p_method: body.method,
+        p_lines: body.lines,
         p_discount: body.discount ?? null, p_check: body.check, p_billing: body.billing,
         p_document_type: body.documentType, p_reference_document_id: body.referenceDocumentId ?? null,
         p_expected_minor: body.amountMinor,
