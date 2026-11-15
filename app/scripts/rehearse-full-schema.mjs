@@ -5,6 +5,8 @@ import { PGlite } from '@electric-sql/pglite';
 import assert from 'node:assert/strict';
 import { uuid_ossp } from '@electric-sql/pglite/contrib/uuid_ossp';
 import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
+import { buildNoncardPayperRequest, dispatchNoncardPayper } from
+  '../../supabase/functions/_shared/payper/noncard.ts';
 
 const directory = fileURLToPath(new URL('../../supabase/migrations/', import.meta.url));
 const optional = process.argv.slice(2).filter(arg => arg.endsWith('.sql')).map(arg => resolve(arg));
@@ -13,6 +15,9 @@ let current = 'Supabase bootstrap';
 try {
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
+    CREATE SCHEMA extensions;
+    CREATE FUNCTION extensions.uuid_generate_v4() RETURNS uuid LANGUAGE sql VOLATILE AS
+      'SELECT pg_catalog.gen_random_uuid()';
     CREATE SCHEMA auth;
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
       'SELECT nullif(current_setting(''app.test_uid'',true),'''')::uuid';
@@ -29,8 +34,6 @@ try {
   const files = (await readdir(directory)).filter(name => name.endsWith('.sql'));
   const migrations = [...files.map(name => resolve(directory, name)), ...optional]
     .sort((left, right) => basename(left).localeCompare(basename(right), 'en'));
-  const physicalIncluded = migrations.some(filename =>
-    basename(filename) === '202611150002_physical_order_collection.sql');
   for (const filename of migrations) {
     current = basename(filename);
     await db.exec((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
@@ -74,12 +77,60 @@ try {
     [cashier, requestKey, order, JSON.stringify(billing)])).rows[0].value;
   assert.equal(duplicate.created, false);
   assert.equal(duplicate.paymentId, collected.paymentId);
+  current = 'provider-mocked cash Invoice-Receipt';
+  const facts = (await db.query(`SELECT n.method,n.document_type,n.reference_document_id,
+    n.check_details,n.billing,n.amount_minor,s.items,s.discount,s.receipt_number,s.sale_date
+    FROM public.payper_noncard_payments n JOIN public.sales s ON s.id=n.sale_id
+    WHERE n.payment_id=$1`, [collected.paymentId])).rows[0];
+  const cashRequest = buildNoncardPayperRequest({ amountMinor: facts.amount_minor,
+    method: facts.method, documentType: facts.document_type,
+    referenceDocumentId: facts.reference_document_id,
+    receiptNumber: facts.receipt_number, paidDate: facts.sale_date.toISOString().slice(0, 10),
+    items: facts.items, discount: facts.discount, billing: facts.billing, check: facts.check_details },
+  { terminalNumber: 'TEST', user: 'TEST', password: 'TEST' });
+  assert.equal(cashRequest.trxRecordId, '');
+  assert.equal(cashRequest.Uid, '');
+  assert.equal(cashRequest.PayperParameters.typeDocument, 'invoice-receipt');
+  assert.deepEqual(cashRequest.PayperParameters.DataPayper.receipt_lines.map(line =>
+    ({ payment_type: line.payment_type, amount: line.amount })),
+  [{ payment_type: 'Cash', amount: 100000 }]);
+  await db.query('SELECT public.reserve_check_payper_dispatch($1)', [collected.paymentId]);
+  let providerPosts = 0;
+  const outcome = await dispatchNoncardPayper(cashRequest, async (_url, options) => {
+    providerPosts += 1;
+    assert.equal(JSON.parse(options.body).PayperParameters.DataPayper.send_by_mail, 'true');
+    return new Response(JSON.stringify({ StatusCode: '000', PayperData: {
+      InvoiceStatus: 'Success', InvoiceNumber: '2001',
+      InvoiceLink: 'https://app.payper.co.il/public/invoice_show/2001',
+    } }), { status: 200 });
+  });
+  assert.equal(outcome.state, 'succeeded');
+  await db.query(`SELECT public.record_check_payper_outcome(
+    $1,'succeeded',$2,$3,NULL,true,'000','Success',NULL)`,
+  [collected.paymentId, outcome.documentNumber, outcome.documentUrl]);
+  assert.equal(providerPosts, 1);
+  const issued = (await db.query(`SELECT state,document_number,document_url
+    FROM public.payper_document_ledger WHERE payment_id=$1`, [collected.paymentId])).rows[0];
+  assert.deepEqual(issued, { state: 'succeeded', document_number: '2001',
+    document_url: 'https://app.payper.co.il/public/invoice_show/2001' });
+  let redispatchRejected = false;
+  try { await db.query('SELECT public.reserve_check_payper_dispatch($1)', [collected.paymentId]); }
+  catch (error) { redispatchRejected = /check_payper_dispatch_fence/.test(error.message); }
+  assert.equal(redispatchRejected, true);
+  const afterIssuance = (await db.query(`SELECT public.record_payper_order_collection(
+    $1,$2,$3,'cash',100000,NULL,$4,'invoice-receipt',NULL) AS value`,
+    [cashier, requestKey, order, JSON.stringify(billing)])).rows[0].value;
+  assert.equal(afterIssuance.created, false);
+  assert.equal(afterIssuance.paymentId, collected.paymentId);
   const settled = (await db.query('SELECT public.get_payper_order_collection($1,$2) AS value',
     [cashier, order])).rows[0].value;
   assert.equal(settled.balanceMinor, 0);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM public.sales WHERE order_id=$1', [order])).rows[0].n, 1);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.payment_transactions WHERE order_id=$1', [order])).rows[0].n, 1);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM public.payper_document_ledger WHERE order_id=$1', [order])).rows[0].n, 1);
-  assert.equal((await db.query('SELECT state FROM public.payper_document_ledger WHERE order_id=$1', [order])).rows[0].state, 'source_frozen');
+  assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.accounting_events
+    WHERE source_type='payment_transaction' AND source_id=$1`, [collected.paymentId])).rows[0].n, 1);
+  assert.equal((await db.query('SELECT state FROM public.payper_document_ledger WHERE order_id=$1', [order])).rows[0].state, 'succeeded');
   let rejected = false;
   try {
     await db.query(`SELECT public.record_payper_order_collection(
@@ -99,7 +150,7 @@ try {
   const heldLedger = (await db.query(`SELECT state,reconciliation_code FROM public.payper_document_ledger
     WHERE payment_id=$1`, [held.paymentId])).rows[0];
   assert.deepEqual(heldLedger, { state: 'source_blocked', reconciliation_code: 'vat_review_required' });
-  if (physicalIncluded) {
+  if (optional.length) {
     current = 'physical balance reservation on combined schema';
     const physicalOrder = '00000000-0000-4000-8000-000000000005';
     const priorPayment = '00000000-0000-4000-8000-000000000007';
@@ -155,7 +206,32 @@ try {
   console.log(JSON.stringify({ migrations: files.length, optional: optional.length,
     tables: installed, functions, policies, triggers, constraints, unvalidated,
     cashOrderCollection: 'passed',
-    physicalRemainingBalance: physicalIncluded ? 'passed' : 'not_requested' }));
+    physicalRemainingBalance: optional.length ? 'passed' : 'not_requested' }));
+  if (process.env.AUDIT_CATALOG_NAMES === '1') {
+    const names = (await db.query(`SELECT c.relname FROM pg_class c
+      JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relkind='r' ORDER BY c.relname`)).rows.map(row => row.relname);
+    const functionSignatures = (await db.query(`SELECT p.oid::regprocedure::text AS signature
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' ORDER BY signature`)).rows.map(row => row.signature);
+    const criticalFunctionHashes = (await db.query(`SELECT p.oid::regprocedure::text AS signature,
+      md5(p.prosrc) AS hash,
+      md5(regexp_replace(p.prosrc,'[[:space:]]+','','g')) AS compact_hash
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' AND p.proname IN
+      ('payment_checkout_snapshot_is_safe','record_payper_dispatch_outcome_v2',
+       'hold_payper_source','reserve_pelecard_order_payment','finalize_pelecard_payment',
+       'finalize_physical_payment','guard_check_general_register','guard_order_customer_snapshot')
+      ORDER BY signature`)).rows;
+    const policyNames = (await db.query(`SELECT tablename||'.'||policyname AS name
+      FROM pg_policies WHERE schemaname='public' ORDER BY name`)).rows.map(row => row.name);
+    const triggerNames = (await db.query(`SELECT c.relname||'.'||t.tgname AS name
+      FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+      JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND NOT t.tgisinternal ORDER BY name`)).rows.map(row => row.name);
+    console.log(JSON.stringify({ tableNames: names, functionSignatures,
+      criticalFunctionHashes, policyNames, triggerNames }));
+  }
 } catch (error) {
   console.error(`Full-schema rehearsal failed at ${current}: ${error.message}`);
   process.exitCode = 1;
