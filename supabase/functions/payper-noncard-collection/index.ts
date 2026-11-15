@@ -75,7 +75,7 @@ Deno.serve(async request => {
     if (!uuid.test(saved.paymentId) || !uuid.test(saved.saleId))
       throw new PaymentHttpError(502, "saved_payment_unavailable");
     const { data: ledger, error: ledgerError } = await client.from("payper_document_ledger")
-      .select("state,document_number,document_url,reconciliation_code")
+      .select("state,document_number,document_url,reconciliation_code,source_facts")
       .eq("payment_id", saved.paymentId).single();
     if (ledgerError || !ledger) throw new PaymentHttpError(502, "accounting_state_unavailable");
     const view = () => ({ saleId: saved.saleId, paymentId: saved.paymentId,
@@ -104,6 +104,7 @@ Deno.serve(async request => {
         amountMinor: source.amount_minor, method: source.method,
         documentType: source.document_type, referenceDocumentId: source.reference_document_id,
         receiptNumber: sale.receipt_number, paidDate: sale.sale_date,
+        vatApplicable: ledger.source_facts?.vatApplicable,
         items: sale.items, discount: sale.discount,
         billing: source.billing, check: source.check_details,
       } as NoncardSource, { terminalNumber: required("PELECARD_TERMINAL"),
