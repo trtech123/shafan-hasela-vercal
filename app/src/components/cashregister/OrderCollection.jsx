@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/api/supabaseClient';
-import { orderPaymentPath } from '@/payments/orderPayments';
+import OrderDigitalCheckout from './OrderDigitalCheckout';
 import { billingReviewIssues } from '@/payments/payperBilling';
 import { publishOrderChange } from '@/lib/orderEvents';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import OrderCustomerLink from '@/components/customers/OrderCustomerLink';
 
 const validId = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
 const shekels = minor => `${(Number(minor) / 100).toFixed(2)} ₪`;
@@ -39,6 +41,8 @@ export default function OrderCollection({ orderId }) {
   const [check, setCheck] = useState({ check_number: '', bank: '', branch: '', account_number: '',
     account_holder: '', received_date: today(), due_date: today() });
   const [result, setResult] = useState(null);
+  const [billingOrder, setBillingOrder] = useState(null);
+  const [billingOpen, setBillingOpen] = useState(false);
   const requestKey = useRef(null);
   const locked = useRef(false);
 
@@ -79,8 +83,14 @@ export default function OrderCollection({ orderId }) {
     && /^\d{1,20}$/.test(check.account_number) && check.account_holder.trim()
     && check.received_date && check.due_date && check.due_date >= check.received_date);
   const billingReady = billingReviewIssues(billing).length === 0;
+  const accountingReady = !view?.billingIssues?.length && !view?.accountingReviewRequired;
+  const openBilling = async () => {
+    const { data, error: failure } = await supabase.from('orders').select('*').eq('id', orderId).single();
+    if (failure || !data) { setError('לא ניתן לפתוח את פרטי החיוב של ההזמנה.'); return; }
+    setBillingOrder(data); setBillingOpen(true);
+  };
   const submit = async () => {
-    if (locked.current || !validAmount || !checkReady || !billingReady || !view || view.unresolvedPayment) return;
+    if (locked.current || !validAmount || !checkReady || !billingReady || !accountingReady || !view || view.unresolvedPayment) return;
     locked.current = true; setBusy(true); setError('');
     requestKey.current ||= crypto.randomUUID();
     try {
@@ -116,7 +126,10 @@ export default function OrderCollection({ orderId }) {
         {view.payments?.length > 0 && <p className="text-sm">היסטוריית גבייה: {view.payments.filter(p => p.status === 'succeeded').length} תשלומים שנרשמו או אומתו</p>}
         {view.payments?.some(p => p.clearanceStatus === 'received_uncleared') && <p className="text-sm text-amber-800">המחאות שהתקבלו טרם נפרעו בבנק.</p>}
         {view.unresolvedPayment && <p role="alert" className="text-amber-800">קיים ניסיון תשלום שתוצאתו אינה ודאית. גבייה נוספת חסומה עד בירור.</p>}
-        {view.accountingReviewRequired && <p role="alert" className="text-amber-800">כבר קיים מסמך או ניסיון הפקה חשבונאי להזמנה. התשלום החדש יישמר, והפקת מסמך נוסף תמתין להתאמה חשבונאית.</p>}
+        {view.accountingReviewRequired && <p role="alert" className="text-amber-800">כבר קיים מסמך או ניסיון הפקה חשבונאי להזמנה. גבייה נוספת חסומה עד להתאמה חשבונאית.</p>}
+      {view.billingIssues?.length > 0 && <p role="alert" className="text-amber-800">לפני גבייה במזומן או בהמחאה יש להשלים פרטי חיוב ומדיניות מע״מ מאומתים בכרטיס הלקוח. לא יירשם תשלום עד להשלמה.</p>}
+      {view.billingIssues?.some(issue => ['vat_required', 'billing_identity_required', 'billing_email_required', 'cash_vat_unsupported'].includes(issue)) &&
+        <Button type="button" variant="outline" onClick={openBilling}>השלמת פרטי חיוב להזמנה זו</Button>}
         {view.documents?.map(doc => <p key={doc.paymentId} className="text-sm">
           מסמך עבור תשלום {doc.paymentId}: {doc.state === 'succeeded' ? `הופק ${doc.documentNumber}` : 'ממתין או דורש התאמה'}
           {safeDocumentUrl(doc.documentUrl) && <a className="mr-2 text-primary underline" href={safeDocumentUrl(doc.documentUrl)} target="_blank" rel="noopener noreferrer">פתיחה והדפסה</a>}
@@ -128,10 +141,8 @@ export default function OrderCollection({ orderId }) {
           {view.unresolvedPayment ? 'בדיקת תשלום קיים במסופון פיזי' : 'תשלום במסופון פיזי להזמנה זו'}
         </Link>}
       {view.balanceMinor > 0 && view.paidMinor === 0 &&
-        <Link className="inline-block rounded-lg border border-primary/30 bg-white px-4 py-2 font-medium text-primary"
-          to={orderPaymentPath(orderId)}>
-          {view.unresolvedPayment ? 'בדיקת תשלום דיגיטלי קיים' : 'תשלום דיגיטלי בפלאקארד להזמנה זו'}
-        </Link>}
+        <OrderDigitalCheckout orderId={orderId} balanceMinor={view.balanceMinor}
+          onStatus={() => refresh(false).catch(() => setError('לא ניתן לרענן את יתרת ההזמנה.'))} />}
       {result && <section role="status" className="rounded-xl border bg-white p-4">
         <p>התשלום נרשם במכירה {result.receiptNumber}. זהו אישור פנימי בלבד.</p>
         {result.accounting?.state === 'succeeded' && safeDocumentUrl(result.accounting.documentUrl)
@@ -148,7 +159,7 @@ export default function OrderCollection({ orderId }) {
         {view.paidMinor > 0 && <p className="text-sm text-amber-800">הגבייה כאן היא של מלוא היתרה לאחר תשלומים קודמים.</p>}
         <label className="block">אמצעי תשלום<select className="mt-1 w-full rounded border p-2" value={method} onChange={e => setMethod(e.target.value)}>{view.collectionEnabled?.check && <option value="check">המחאה</option>}{view.collectionEnabled?.cash && <option value="cash">מזומן</option>}</select></label>
         <label className="block">סכום לגבייה (₪)<input className="mt-1 w-full rounded border p-2" type="number" value={amount} readOnly /></label>
-        <p className="text-sm">לאחר קבלת התשלום תתבקש חשבונית מס/קבלה מ־Payper. אם כבר קיים מסמך להזמנה, התשלום יישמר להשלמת התאמה חשבונאית.</p>
+        <p className="text-sm">לאחר קבלת התשלום תתבקש חשבונית מס/קבלה מ־Payper. הזמנה עם מסמך קיים מחייבת התאמה לפני גבייה נוספת.</p>
         <div className="grid gap-2 sm:grid-cols-3">
           <label>סוג לקוח<select className="w-full rounded border p-2" value={billing.kind} onChange={e => setBilling({ ...billing, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></label>
           <label>שם לחיוב<input className="w-full rounded border p-2" value={billing.name} onChange={e => setBilling({ ...billing, name: e.target.value })} /></label>
@@ -160,8 +171,18 @@ export default function OrderCollection({ orderId }) {
             ["account_number", "מספר חשבון"], ["account_holder", "בעל החשבון"],
             ["received_date", "תאריך קבלה"], ["due_date", "תאריך פירעון"]].map(([key, label]) =>
             <label key={key}>{label}<input className="w-full rounded border p-2" type={key.endsWith('date') ? 'date' : 'text'} value={check[key]} onChange={e => setCheck({ ...check, [key]: e.target.value })} /></label>)}</div>}
-        <Button disabled={busy || !validAmount || !checkReady || !billingReady} onClick={submit}>{busy ? 'שומר ובודק מסמך…' : 'רשום תשלום והפק מסמך'}</Button>
+        <Button disabled={busy || !validAmount || !checkReady || !billingReady || !accountingReady} onClick={submit}>{busy ? 'שומר ובודק מסמך…' : 'רשום תשלום והפק מסמך'}</Button>
       </section>}
+      <Dialog open={billingOpen} onOpenChange={setBillingOpen}>
+        <DialogContent dir="rtl" aria-describedby="noncard-billing-help" className="max-h-[90vh] overflow-y-auto">
+          <DialogTitle>השלמת פרטי חיוב להזמנה</DialogTitle>
+          <p id="noncard-billing-help" className="text-sm">יש לבחור כרטיס לקוח מאומת, להשלים את הפרטים החסרים ולקבוע מדיניות מע״מ. לאחר השמירה חזרו לאישור התשלום.</p>
+          {billingOrder && <OrderCustomerLink order={billingOrder} requirePaymentReady onLinked={saved => {
+            setBillingOrder(saved); setBillingOpen(false);
+            refresh(true).catch(() => setError('לא ניתן לרענן את פרטי החיוב.'));
+          }} />}
+        </DialogContent>
+      </Dialog>
       <Button variant="outline" disabled={busy} onClick={() => refresh(false).catch(() => setError('לא ניתן לרענן את היתרה.'))}>רענן יתרה ומסמכים</Button>
     </>}
   </main>;

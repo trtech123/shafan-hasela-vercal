@@ -9,7 +9,7 @@ import PaymentScreen from "@/components/cashregister/PaymentScreen";
 import ReceiptScreen from "@/components/cashregister/ReceiptScreen";
 import OrderCollection from "@/components/cashregister/OrderCollection";
 import { calculateCheckoutTotals } from "@/payments/pelecardPayments";
-import { orderPaymentPath } from "@/payments/orderPayments";
+import { posCheckoutRequestKey, posPendingKey, startPosCheckout, posPaymentErrorMessage } from '@/payments/posPayments';
 import { buildStandaloneCheckout } from "@/payments/standaloneCart";
 import { useAuth } from "@/lib/AuthContext";
 import { BRAND } from "@/lib/orderDocText";
@@ -34,6 +34,8 @@ export default function CashRegister() {
   // null = standalone sale; else { id, order_number, client_name, client_phone, organization }
   const [linkedOrder, setLinkedOrder] = useState(null);
   const posCheckoutId = useRef(null);
+  const digitalInFlight = useRef(false);
+  const [digitalBusy, setDigitalBusy] = useState(false);
   const physicalCheckoutId = useRef(null);
   const manualSaleSubmitted = useRef(false);
   const checkRequestKey = useRef(null);
@@ -197,15 +199,34 @@ export default function CashRegister() {
     setScreen("receipt");
   };
 
-  const handlePelecardStart = () => {
-    if(!canPayOrder)return;
-    if(linkedOrder?.id){navigate(orderPaymentPath(linkedOrder.id));return;}
-    if(canHostedCart){
-      posCheckoutId.current ||= crypto.randomUUID();
-      navigate('/payment/pos',{state:{checkoutId:posCheckoutId.current,cart:{
-      lines:cartItems.map(item=>({kind:item.kind,id:item.id,qty:item.qty})),
-      discount:discount?{type:discount.type,mode:discount.mode,value:Number(discount.value)}:null,
-      }}});
+  const handlePelecardStart = async () => {
+    if (!canPayOrder || digitalInFlight.current) return;
+    if (linkedOrder?.id) { navigate(`/cashregister?orderId=${encodeURIComponent(linkedOrder.id)}`); return; }
+    if (!canHostedCart) return;
+    digitalInFlight.current = true; setDigitalBusy(true);
+    const cart = {
+      lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
+      discount: discount ? { type: discount.type, mode: discount.mode, value: Number(discount.value) } : null,
+    };
+    posCheckoutId.current ||= posCheckoutRequestKey(null, cart, sessionStorage.getItem(posPendingKey));
+    const requestKey = posCheckoutId.current;
+    sessionStorage.setItem(posPendingKey, JSON.stringify({ requestKey, cart: JSON.stringify(cart) }));
+    try {
+      const result = await startPosCheckout(supabase, { requestKey, cart,
+        billing: { kind: 'person', name: '', identity: '', email: '' } });
+      // A usable hosted URL redirects inside startPosCheckout. Otherwise the
+      // existing route is only a read-only result or recovery screen.
+      if (!result.canResume || !result.redirectUrl) navigate('/payment/pos', { state: { checkoutId: requestKey, cart } });
+    } catch (reason) {
+      const safe = ['capability_disabled', 'catalog_item_unavailable', 'cart_invalid',
+        'cart_line_invalid', 'cart_amount_invalid', 'discount_invalid', 'pos_payment_forbidden'].includes(reason?.code);
+      if (safe) {
+        toast.error(posPaymentErrorMessage(reason.code));
+        digitalInFlight.current = false; setDigitalBusy(false);
+      } else {
+        toast.error('מצב התשלום אינו ודאי. בדקו את הניסיון הקיים לפני פעולה נוספת.');
+        navigate('/payment/pos', { state: { checkoutId: requestKey, cart } });
+      }
     }
   };
 
@@ -222,6 +243,8 @@ export default function CashRegister() {
     manualSaleSubmitted.current = false;
     checkRequestKey.current = null;
     posCheckoutId.current = null;
+    digitalInFlight.current = false;
+    setDigitalBusy(false);
     physicalCheckoutId.current = null;
     setCartItems([]);
     setScreen("menu");
@@ -253,6 +276,7 @@ export default function CashRegister() {
         onConfirm={handlePaymentConfirm}
         manualSaleSaving={manualSaleSaving}
         onPelecard={handlePelecardStart}
+        pelecardBusy={digitalBusy}
         onPhysicalTerminal={handlePhysicalStart}
         physicalTerminalVisible={import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true'}
         physicalTerminalEnabled={Boolean(canPayOrder && canHostedCart && !linkedOrder?.id)}
@@ -293,7 +317,9 @@ export default function CashRegister() {
           discountValid={discountValid}
           total={total}
           linkedOrder={linkedOrder}
-          onLinkOrder={setLinkedOrder}
+          onLinkOrder={order => order?.id
+            ? navigate(`/cashregister?orderId=${encodeURIComponent(order.id)}`)
+            : setLinkedOrder(null)}
           onSetDiscount={setDiscount}
           onUpdateQty={updateQty}
           onUpdatePrice={updatePrice}

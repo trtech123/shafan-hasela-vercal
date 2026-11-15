@@ -73,8 +73,8 @@ test('billing deep link opens the existing order and returns to eligibility afte
   window.history.replaceState(null, '', `/orders?billingOrderId=${id}`);
   render(<Orders />);
   fireEvent.click(await screen.findByRole('button', { name: 'link billing for payment' }, { timeout: 10000 }));
-  expect(await screen.findByRole('link', { name: 'חזרה לבדיקת זכאות ולתשלום הדיגיטלי' }, { timeout: 10000 }))
-    .toHaveAttribute('href', `/payment/order?orderId=${id}`);
+  expect(await screen.findByRole('link', { name: /חזרה לגבייה בקופה/ }, { timeout: 10000 }))
+    .toHaveAttribute('href', `/cashregister?orderId=${id}`);
 }, 15000);
 
 const confirmArchive = (dialog) => {

@@ -18,7 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/AuthContext";
-import { orderPaymentPath, validOrderId } from "@/payments/orderPayments";
+import { validOrderId } from "@/payments/orderPayments";
 import { toast } from "sonner";
 import { orderArchiveError } from "@/components/orders/orderArchiveError";
 import { deleteOrder, orderDeleteError } from "@/lib/deleteOrder";
@@ -400,7 +400,7 @@ export default function Orders() {
                 <PaymentBadge status={order.payment_status} />
                 <div className="flex gap-0.5">
                   {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
-                  {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
+                  {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <a href={`/cashregister?orderId=${encodeURIComponent(order.id)}`} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">גבייה בקופה</a>}
                   {!archiveView && <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     <Pencil className="w-4 h-4 text-muted-foreground" />
                   </button>}
@@ -490,7 +490,7 @@ export default function Orders() {
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
                         {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
-                        {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <a href={orderPaymentPath(order.id)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">תשלום באשראי</a>}
+                        {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <a href={`/cashregister?orderId=${encodeURIComponent(order.id)}`} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">גבייה בקופה</a>}
                         {!archiveView && <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                           <Pencil className="w-4 h-4 text-muted-foreground" />
                         </button>}
@@ -532,7 +532,7 @@ export default function Orders() {
         <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto">
           <DialogTitle>פרטי חיוב להזמנה</DialogTitle>
           {billingOrder && <OrderCustomerLink order={billingOrder} requirePaymentReady={returnPaymentOrderId === billingOrder.id} onLinked={(saved) => { setBillingOrder(returnPaymentOrderId ? saved : null); loadData(); }} />}
-          {billingOrder && returnPaymentOrderId === billingOrder.id && billingOrder.customer_snapshot_id && <a className="text-primary underline" href={orderPaymentPath(billingOrder.id)}>חזרה לבדיקת זכאות ולתשלום הדיגיטלי</a>}
+          {billingOrder && returnPaymentOrderId === billingOrder.id && billingOrder.customer_snapshot_id && <a className="text-primary underline" href={`/cashregister?orderId=${encodeURIComponent(billingOrder.id)}`}>חזרה לגבייה בקופה</a>}
         </DialogContent>
       </Dialog>
 

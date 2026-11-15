@@ -42,7 +42,20 @@ Deno.serve(async request => {
       const view = await rpc("get_payper_order_collection", {
         p_actor_id: actorId, p_order_id: body.orderId,
       });
-      return paymentJson({ ...view, collectionEnabled: {
+      const billingDefaults = await rpc("get_payper_billing_defaults", {
+        p_order_id: body.orderId, p_actor_id: actorId,
+      });
+      const issues = await rpc("digital_order_payment_issues", {
+        p_order_id: body.orderId, p_actor_id: actorId, p_billing: billingDefaults,
+      }) as string[];
+      const { data: order, error: orderError } = await client.from("orders")
+        .select("vat_applicable,customer_snapshot_id").eq("id", body.orderId).single();
+      if (orderError || !order) throw new PaymentHttpError(409, "order_collection_review_required");
+      return paymentJson({ ...view, billing: billingDefaults,
+        billingIssues: [...issues.filter(issue => issue !== "digital_partial_unsupported"),
+          ...(order.vat_applicable === false ? ["cash_vat_unsupported"] : [])],
+        customerSnapshotId: order.customer_snapshot_id,
+        collectionEnabled: {
         cash: noncardCollectionEnabled("cash", name => Deno.env.get(name)),
         check: noncardCollectionEnabled("check", name => Deno.env.get(name)),
       } }, 200, cors);

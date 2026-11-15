@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/api/supabaseClient';
 import { Button } from '@/components/ui/button';
@@ -111,6 +111,10 @@ export default function OrderPayment() {
 
   if (!canPayOrder) return <p dir="rtl" className="p-8">התשלום זמין למנהל ולקופאי בלבד</p>;
   if (!validOrderId(orderId)) return <p dir="rtl" className="p-8">לא נבחרה הזמנה תקינה</p>;
+  // Provider returns and uncertain attempts stay here for verification.
+  // A new or safely replaceable payment starts from the cashier screen.
+  if (view?.canInitialize && !returnPaymentId) return <Navigate
+    to={`/cashregister?orderId=${encodeURIComponent(orderId)}`} replace />;
   return <main dir="rtl" className="max-w-xl mx-auto p-6 space-y-6 text-slate-900">
     <Link to="/orders" className="text-sm text-primary">חזרה להזמנות</Link>
     <h1 className="text-2xl font-bold">פלאקארד — תשלום באשראי</h1>
@@ -134,14 +138,14 @@ export default function OrderPayment() {
           </select>
         </label>
         <label className="block text-sm">{billing.kind === 'organization' ? 'שם החברה הרשום' : 'שם מלא'}
-          <input className="mt-1 w-full rounded-md border bg-white p-2" maxLength={200} autoComplete="name" value={billing.name} onChange={event => setBilling({ ...billing, name: event.target.value })} />
+          <input className="mt-1 w-full rounded-md border bg-white p-2" maxLength={200} autoComplete="off" value={billing.name} onChange={event => setBilling({ ...billing, name: event.target.value })} />
         </label>
         <label className="block text-sm">{billing.kind === 'organization' ? 'מספר חברה' : 'מספר תעודת זהות'}
           <span className="mt-1 flex gap-2"><input dir="ltr" className="min-w-0 flex-1 rounded-md border bg-white p-2" type={showIdentity ? 'text' : 'password'} inputMode="numeric" autoComplete="off" maxLength={9} value={billing.identity} onChange={event => setBilling({ ...billing, identity: event.target.value })} />
           <button type="button" className="rounded-md border px-3 text-sm" onClick={() => setShowIdentity(!showIdentity)}>{showIdentity ? 'הסתר' : 'הצג'}</button></span>
         </label>
         <label className="block text-sm">כתובת דוא״ל למסמך
-          <input dir="ltr" className="mt-1 w-full rounded-md border bg-white p-2" type="email" maxLength={320} autoComplete="email" value={billing.email} onChange={event => setBilling({ ...billing, email: event.target.value })} />
+          <input dir="ltr" className="mt-1 w-full rounded-md border bg-white p-2" type="email" maxLength={320} autoComplete="off" value={billing.email} onChange={event => setBilling({ ...billing, email: event.target.value })} />
         </label>
         {billingIssues.length>0 && <p role="note" className="text-sm text-amber-900">יש להשלים שם לחיוב, מספר זיהוי ודוא״ל תקינים לפני תשלום.</p>}
       </section>}

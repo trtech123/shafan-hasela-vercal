@@ -30,4 +30,5 @@ test('a saved pending provider session cannot be reopened from the POS screen',a
   expect(await screen.findByText('ממתין לתוצאת פלאקארד')).toBeInTheDocument();
   expect(screen.queryByRole('button',{name:'המשך לניסיון התשלום הקיים'})).not.toBeInTheDocument();
   expect(screen.getByRole('button',{name:'בדוק תוצאת תשלום'})).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'שמור סל ובדוק את הסכום בשרת'})).toBeNull();
 });

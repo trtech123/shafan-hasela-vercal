@@ -1,5 +1,5 @@
 import {describe,expect,test,vi} from 'vitest';
-import {requestPosPayment,redirectPosPayment,posPaymentErrorMessage,posCheckoutRequestKey} from './posPayments';
+import {requestPosPayment,redirectPosPayment,posPaymentErrorMessage,posCheckoutRequestKey,startPosCheckout} from './posPayments';
 const id='11111111-1111-4111-8111-111111111111';
 const view={mode:'pos',paymentId:id,amountMinor:100,currency:'ILS',status:'initiated',paid:false,serverTime:new Date().toISOString()};
 describe('POS browser boundary',()=>{
@@ -31,5 +31,20 @@ describe('POS browser boundary',()=>{
     const saved=JSON.stringify({requestKey:oldKey,cart:JSON.stringify(cart)});
     expect(posCheckoutRequestKey(nextKey,cart,saved)).toBe(nextKey);
     expect(posCheckoutRequestKey(null,cart,saved)).toBe(oldKey);
+  });
+  test('one Pay action prepares, initializes and redirects with server amount',async()=>{
+    const hosted={...view,status:'hosted',canResume:true,redirectUrl:`https://gateway20.pelecard.biz/PaymentGW?transactionId=${id}`,
+      hostedExpiresAt:new Date(Date.now()+60000).toISOString()};
+    const invoke=vi.fn(async(_route,{body})=>({data:body.action==='prepare'?view:hosted,error:null}));
+    const redirect=vi.fn();
+    await startPosCheckout({functions:{invoke}},{requestKey:id,cart:{lines:[{kind:'product',id,qty:1}],discount:null},billing:{},redirect});
+    expect(invoke.mock.calls.map(([,args])=>args.body.action)).toEqual(['prepare','initialize']);
+    expect(invoke.mock.calls[1][1].body).toEqual({action:'initialize',requestKey:id});
+    expect(redirect).toHaveBeenCalledWith(hosted.redirectUrl);
+  });
+  test('does not initialize an already dispatched or uncertain attempt',async()=>{
+    const invoke=vi.fn(async()=>({data:{...view,dispatchStarted:true},error:null}));
+    await startPosCheckout({functions:{invoke}},{requestKey:id,cart:{lines:[],discount:null},billing:{},redirect:vi.fn()});
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 });

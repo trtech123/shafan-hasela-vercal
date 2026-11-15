@@ -1,95 +1,39 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { MemoryRouter, useNavigate } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import OrderPayment from './OrderPayment';
 
 const request = vi.fn();
-const redirect = vi.fn();
 let role = 'admin';
 vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role } }) }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: {} }));
 vi.mock('@/payments/orderPayments', () => ({
   validOrderId: () => true,
   requestOrderPayment: (...args) => request(...args),
-  redirectOrderPayment: (...args) => redirect(...args),
+  redirectOrderPayment: vi.fn(),
 }));
 
 const orderId = 'a0000000-0000-4000-8000-000000000001';
 const status = { orderId, orderNumber: 'NEW-1', amountMinor: 11800, currency: 'ILS',
   paid: false, canInitialize: true, payment: null,
   billingDefaults: { kind: 'person', name: 'Test Customer', identity: '000000018', email: 'test@example.org' } };
-function NextOrder() {
-  const navigate = useNavigate();
-  return <button onClick={() => navigate('/payment/order?orderId=b0000000-0000-4000-8000-000000000002')}>next order</button>;
-}
 
-beforeEach(() => { role = 'admin'; request.mockReset().mockResolvedValue(status); redirect.mockReset(); });
+beforeEach(() => { role = 'admin'; request.mockReset().mockResolvedValue(status); });
 afterEach(cleanup);
 
-describe('admin-assisted Pelecard billing step', () => {
-  test('reviews existing identity before initializing without putting it in the URL', async () => {
-    render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
-    expect(await screen.findByRole('region', { name: 'פרטי חיוב לפני התשלום' })).toBeInTheDocument();
-    expect(screen.getByLabelText('מספר תעודת זהות')).toHaveValue('000000018');
-    fireEvent.click(screen.getByRole('button', { name: 'התחל תשלום באשראי' }));
-    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      action: 'initialize', orderId, billing: status.billingDefaults,
-    })));
-    expect(window.location.search).not.toContain('000000018');
-  });
+test('legacy order preparation URL returns cashier to the existing order without initializing', async () => {
+  render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}>
+    <Routes><Route path="/payment/order" element={<OrderPayment />} />
+      <Route path="/cashregister" element={<p>cashier collection</p>} /></Routes>
+  </MemoryRouter>);
+  expect(await screen.findByText('cashier collection')).toBeInTheDocument();
+  expect(request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(0);
+});
 
-  test('blocks an empty identity before opening checkout', async () => {
-    render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
-    const identity = await screen.findByLabelText('מספר תעודת זהות');
-    fireEvent.change(identity, { target: { value: '' } });
-    expect(screen.getByRole('note')).toHaveTextContent('יש להשלים');
-    expect(screen.getByRole('button', { name: 'התחל תשלום באשראי' })).toBeDisabled();
-    expect(request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(0);
-  });
-
-  test('cashier can review billing and initiate order payment', async () => {
-    role = 'קופאי';
-    render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
-    expect(await screen.findByRole('region', { name: 'פרטי חיוב לפני התשלום' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'התחל תשלום באשראי' }));
-    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'initialize' })));
-  });
-
-  test('missing VAT blocks checkout and directs the cashier to order editing', async () => {
-    role = 'קופאי';
-    request.mockResolvedValue({ ...status, eligibilityIssues: ['vat_required'] });
-    render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
-    expect(await screen.findByText(/יש לקבוע את חבות המע״מ/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /פתחו את פרטי החיוב/ }))
-      .toHaveAttribute('href', `/orders?billingOrderId=${orderId}`);
-    expect(screen.getByRole('button', { name: 'התחל תשלום באשראי' })).toBeDisabled();
-    expect(request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(0);
-  });
-
-  test('historical partial collection explains why original total cannot be charged', async () => {
-    request.mockResolvedValue({ ...status, canInitialize: false, eligibilityIssues: ['digital_partial_unsupported'] });
-    render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
-    expect(await screen.findByText(/גבייה קודמת או יתרה לא ודאית/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'התחל תשלום באשראי' })).toBeNull();
-  });
-
-  test('shift manager cannot load billing or initiate payment', async () => {
-    role = 'אחמ"ש';
-    render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
-    expect(screen.queryByRole('region', { name: 'פרטי חיוב לפני התשלום' })).not.toBeInTheDocument();
-    expect(request).not.toHaveBeenCalled();
-  });
-
-  test('does not reuse a previous order identity when a new order has no defaults', async () => {
-    request.mockImplementation(async (_client, body) => body.orderId === orderId
-      ? status : { ...status, orderId: body.orderId, billingDefaults: null });
-    render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><NextOrder /><OrderPayment /></MemoryRouter>);
-    expect(await screen.findByLabelText('מספר תעודת זהות')).toHaveValue('000000018');
-    fireEvent.click(screen.getByRole('button', { name: 'next order' }));
-    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.anything(),
-      expect.objectContaining({ action: 'status', orderId: 'b0000000-0000-4000-8000-000000000002' })));
-    expect(await screen.findByLabelText('מספר תעודת זהות')).toHaveValue('');
-  });
+test('shift manager cannot load billing or initiate payment on the legacy URL', () => {
+  role = 'אחמ"ש';
+  render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}`]}><OrderPayment /></MemoryRouter>);
+  expect(request).not.toHaveBeenCalled();
 });

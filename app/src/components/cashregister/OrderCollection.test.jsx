@@ -3,10 +3,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, test, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({ role: 'admin', invoke: vi.fn() }));
+const state = vi.hoisted(() => ({ role: 'admin', invoke: vi.fn(), order: vi.fn() }));
 vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: state.role } }) }));
 vi.mock('react-router-dom', () => ({ Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a> }));
-vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: state.invoke } } }));
+vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: state.invoke },
+  from: () => ({ select: () => ({ eq: () => ({ single: () => state.order() }) }) }) } }));
+vi.mock('@/components/customers/OrderCustomerLink', () => ({ default: () => <p>customer link control</p> }));
 import OrderCollection from './OrderCollection';
 
 const orderId = '33333333-3333-4333-8333-333333333333';
@@ -16,7 +18,7 @@ const view = (paidMinor = 0) => ({ orderId, orderNumber: 'ORD-123', clientName: 
   collectionEnabled: { cash: true, check: true },
   billing: { kind: 'organization', name: 'Group A', identity: '123456789', email: 'group@example.com' },
   payments: paidMinor ? [{ id: 'p1', status: 'succeeded', amountMinor: paidMinor }] : [], documents: [] });
-afterEach(() => { cleanup(); state.invoke.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); });
+afterEach(() => { cleanup(); state.invoke.mockReset(); state.order.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); });
 
 test('scheduled order shows saved total and balance without creating a cart', async () => {
   state.invoke.mockResolvedValue({ data: view(2000), error: null });
@@ -56,8 +58,7 @@ test('shows the balance but disables cash and check collection while document di
 test('keeps existing digital order checkout available when non-card gates are off', async () => {
   state.invoke.mockResolvedValue({ data: { ...view(), collectionEnabled: { cash: false, check: false } }, error: null });
   render(<OrderCollection orderId={orderId} />);
-  const link = await screen.findByRole('link', { name: /תשלום דיגיטלי בפלאקארד/ });
-  expect(link).toHaveAttribute('href', `/payment/order?orderId=${orderId}`);
+  expect(await screen.findByRole('button', { name: /שלם באשראי דיגיטלי/ })).toBeEnabled();
   expect(screen.queryByRole('button', { name: /רשום תשלום והפק מסמך/ })).toBeNull();
 });
 
@@ -65,7 +66,7 @@ test('does not offer full-total digital checkout after an order has a partial pa
   state.invoke.mockResolvedValue({ data: { ...view(2000), collectionEnabled: { cash: false, check: false } }, error: null });
   render(<OrderCollection orderId={orderId} />);
   await screen.findByText(/ORD-123/);
-  expect(screen.queryByRole('link', { name: /תשלום דיגיטלי בפלאקארד/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /שלם באשראי דיגיטלי/ })).toBeNull();
 });
 
 test('cashier sees the server-computed full balance', async () => {
@@ -91,4 +92,14 @@ test('admin cash collection uses the order ID and full balance exactly once', as
       documentType: 'invoice-receipt',
       requestKey: expect.any(String) }) }));
   expect(state.invoke.mock.calls.filter(([, arg]) => arg.body.action === 'collect')).toHaveLength(1);
+});
+
+test('missing VAT blocks cash collection and offers same-order customer linking', async () => {
+  state.invoke.mockResolvedValue({ data: { ...view(), billingIssues: ['vat_required'] }, error: null });
+  state.order.mockResolvedValue({ data: { id: orderId }, error: null });
+  render(<OrderCollection orderId={orderId} />);
+  expect(await screen.findByRole('button', { name: 'רשום תשלום והפק מסמך' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'השלמת פרטי חיוב להזמנה זו' }));
+  expect(await screen.findByText('customer link control')).toBeInTheDocument();
+  expect(state.invoke.mock.calls.filter(([, arg]) => arg.body.action === 'collect')).toHaveLength(0);
 });

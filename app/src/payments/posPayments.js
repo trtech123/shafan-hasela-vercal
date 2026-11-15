@@ -1,5 +1,7 @@
 import {validOrderId} from './orderPayments';
 
+export const posPendingKey = 'pelecard.posPending.v1';
+
 const safeCodes=new Set(['capability_disabled','pos_payment_in_progress','catalog_item_unavailable',
   'cart_invalid','cart_line_invalid','cart_amount_invalid','discount_invalid','request_key_conflict',
   'pos_payment_forbidden','invalid_input','payment_database_unavailable']);
@@ -43,4 +45,18 @@ export async function requestPosPayment(client,body){
 export function redirectPosPayment(url,location=window.location){
   if(typeof url!=='string'||!/^https:\/\/gateway20\.pelecard\.biz\/PaymentGW\?transactionId=[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(url))throw Error('invalid_redirect');
   location.assign(url);
+}
+
+// The cashier's single Pay action performs both existing server steps. A
+// prepared or uncertain attempt is never initialized a second time.
+export async function startPosCheckout(client,{requestKey,cart,billing,redirect=redirectPosPayment}){
+  const prepared=await requestPosPayment(client,{action:'prepare',requestKey,
+    lines:cart.lines,discount:cart.discount??null,billing});
+  const current=prepared.status==='initiated'&&!prepared.dispatchStarted
+    ?await requestPosPayment(client,{action:'initialize',requestKey}):prepared;
+  if(!current.paid&&current.canResume&&current.redirectUrl&&
+    Number.isFinite(current.hostedDeadlineMs)&&current.hostedDeadlineMs>performance.now()){
+    redirect(current.redirectUrl);
+  }
+  return current;
 }

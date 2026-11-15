@@ -43,6 +43,8 @@ test('physical action stays separate from hosted checkout when explicitly enable
   render(<PaymentScreen total={24} cartItems={[{ id: 'p1' }]} onConfirm={vi.fn()} onBack={vi.fn()}
     onPelecard={onDigital} onPhysicalTerminal={onPhysical} physicalTerminalVisible physicalTerminalEnabled />);
   fireEvent.click(screen.getByRole('button', { name: /תשלום במסופון פיזי/ }));
+  expect(onPhysical).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByTestId('cashier-pay'));
   expect(onPhysical).toHaveBeenCalledTimes(1);
   expect(onDigital).not.toHaveBeenCalled();
   expect(screen.getByText('הסכום נשלח אוטומטית למסופון המשויך לקופה')).toBeInTheDocument();

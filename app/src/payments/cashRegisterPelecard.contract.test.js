@@ -8,11 +8,11 @@ const cashRegister = readFileSync(
 const app = readFileSync(new URL("../App.jsx", import.meta.url), "utf8");
 
 describe("CashRegister hosted Pelecard wiring", () => {
-  test("routes linked orders to their order flow and standalone carts to POS review", () => {
+  test("routes linked orders to cashier collection and standalone carts directly to hosted checkout", () => {
     expect(cashRegister).toContain("user?.role === 'admin' || user?.role === 'קופאי'");
-    expect(cashRegister).toContain('navigate(orderPaymentPath(linkedOrder.id))');
+    expect(cashRegister).toContain('navigate(`/cashregister?orderId=${encodeURIComponent(linkedOrder.id)}`)');
     expect(cashRegister).toContain("onPelecard={handlePelecardStart}");
-    expect(cashRegister).toContain("navigate('/payment/pos'");
+    expect(cashRegister).toContain('startPosCheckout(supabase');
     expect(cashRegister).toContain("pelecardEnabled={canPayOrder && (Boolean(linkedOrder?.id)||canHostedCart)}");
     expect(app).toContain('<Route path="/payment/pos" element={<PosPayment />} />');
     expect(cashRegister).not.toContain("beginHostedPelecardPayment");

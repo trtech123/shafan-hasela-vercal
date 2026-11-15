@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowRight, CreditCard, Banknote, Smartphone, Building2, Receipt, FileText, Split, Plus, Trash2, ShieldCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import PhysicalTerminalStatus from './PhysicalTerminalStatus.jsx';
 import { billingReviewIssues } from '@/payments/payperBilling';
 
@@ -70,13 +71,16 @@ export default function PaymentScreen({
 }) {
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
   const [detailFor, setDetailFor] = useState(null);
+  const [selectedMethod, setSelectedMethod] = useState(null);
   const [check, setCheck] = useState({ ...emptyCheck, amount: String(total) });
   const [checkBilling, setCheckBilling] = useState({ kind: 'person', name: '', identity: '', email: '' });
+  const [cashReceived, setCashReceived] = useState(String(total));
   // Split builder: starts with the full total on a single cash line.
   const [lines, setLines] = useState([makeLine("מזומן", total)]);
 
   const handleMethodClick = (key) => {
     if (key === CASH_METHOD) {
+      setCashReceived(String(total));
       setDetailFor(CASH_METHOD);
       return;
     }
@@ -86,6 +90,13 @@ export default function PaymentScreen({
       return;
     }
     onConfirm(key);
+  };
+
+  const paySelected = () => {
+    if (selectedMethod === 'digital') return onPelecard();
+    if (selectedMethod === 'physical') return onPhysicalTerminal();
+    if (selectedMethod === SPLIT_METHOD) return enterSplit();
+    if (selectedMethod) return handleMethodClick(selectedMethod);
   };
 
   const enterSplit = () => {
@@ -154,7 +165,8 @@ export default function PaymentScreen({
   };
 
   const submitCash = () => {
-    if (billingReviewIssues(checkBilling).length > 0) return;
+    if (billingReviewIssues(checkBilling).length > 0 ||
+      !Number.isFinite(Number(cashReceived)) || Math.round(Number(cashReceived) * 100) < Math.round(total * 100)) return;
     onConfirm(CASH_METHOD, { billing: checkBilling, document_type: 'invoice-receipt', reference_document_id: null });
   };
 
@@ -242,20 +254,20 @@ export default function PaymentScreen({
     );
   }
 
-  if (detailFor === CASH_METHOD) {
-    return <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6" dir="rtl">
-      <div className="w-full max-w-lg space-y-5">
-        <button onClick={() => setDetailFor(null)} className="text-slate-300">חזרה לאמצעי תשלום</button>
-        <h2 className="text-2xl font-bold">רישום מזומן שהתקבל</h2>
-        <p>סכום: {total.toFixed(2)} ₪ · לאחר הקבלה תתבקש חשבונית מס/קבלה מ־Payper.</p>
+  const cashDialog = <Dialog open={detailFor === CASH_METHOD} onOpenChange={open => { if (!open) setDetailFor(null); }}>
+    <DialogContent dir="rtl" aria-describedby="cash-receipt-help" className="max-h-[90vh] overflow-y-auto bg-slate-900 text-white">
+        <DialogTitle>אישור קבלת מזומן</DialogTitle>
+        <p id="cash-receipt-help">סכום: {total.toFixed(2)} ₪ · לאחר הקבלה תתבקש חשבונית מס/קבלה מ־Payper.</p>
+        <Field label="מזומן שהתקבל (₪)"><input className={inputCls} type="number" min={total} step="0.01" value={cashReceived} onChange={e => setCashReceived(e.target.value)} /></Field>
+        {Number(cashReceived) >= total && <p>עודף: {((Math.round(Number(cashReceived) * 100) - Math.round(total * 100)) / 100).toFixed(2)} ₪</p>}
         <Field label="סוג לקוח"><select className={inputCls} value={checkBilling.kind} onChange={e => setCheckBilling({ ...checkBilling, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></Field>
-        <Field label="שם לחיוב"><input className={inputCls} value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
-        <Field label="מספר זהות / חברה"><input className={inputCls} inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
-        <Field label="דוא״ל למסמך"><input className={inputCls} type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
-        <Button onClick={submitCash} disabled={manualSaleSaving || billingReviewIssues(checkBilling).length > 0}>אשר קבלת מזומן</Button>
-      </div>
-    </div>;
-  }
+        <Field label="שם לחיוב"><input className={inputCls} autoComplete="off" value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
+        <Field label="מספר זהות / חברה"><input className={inputCls} autoComplete="off" inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
+        <Field label="דוא״ל למסמך"><input className={inputCls} autoComplete="off" type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
+        <Button onClick={submitCash} disabled={manualSaleSaving || billingReviewIssues(checkBilling).length > 0 ||
+          !Number.isFinite(Number(cashReceived)) || Math.round(Number(cashReceived) * 100) < Math.round(total * 100)}>אשר קבלת מזומן</Button>
+    </DialogContent>
+  </Dialog>;
 
   if (detailFor === CHECK_METHOD) {
     const set = (k) => (e) => setCheck((c) => ({ ...c, [k]: e.target.value }));
@@ -330,6 +342,7 @@ export default function PaymentScreen({
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6" dir="rtl">
+      {cashDialog}
       <div className="w-full max-w-lg space-y-8">
 
         <div className="text-center">
@@ -338,15 +351,18 @@ export default function PaymentScreen({
           </button>
           <p className="text-slate-400 text-sm mb-1">סכום לתשלום</p>
           <p className="text-6xl font-bold text-emerald-300">{total.toLocaleString()}₪</p>
-          <p className="text-slate-500 text-sm mt-2">{cartItems.length} פריטים</p>
+          <ul className="mt-3 text-sm text-slate-300 text-right" aria-label="פריטים לתשלום">
+            {cartItems.map((item, index) => <li key={`${item.id}-${index}`}>{item.name} × {item.qty}</li>)}
+          </ul>
         </div>
 
         <div className="space-y-2">
           <p className="text-slate-400 text-sm font-medium text-center mb-4">בחר אמצעי תשלום</p>
           <button
-            onClick={onPelecard}
+            onClick={() => setSelectedMethod('digital')}
+            aria-pressed={selectedMethod === 'digital'}
             disabled={pelecardBusy || !pelecardEnabled}
-            className="w-full bg-gradient-to-l from-cyan-600 to-sky-700 rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right disabled:opacity-60 disabled:cursor-wait"
+            className={`w-full bg-gradient-to-l from-cyan-600 to-sky-700 rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right disabled:opacity-60 disabled:cursor-wait ${selectedMethod === 'digital' ? 'ring-4 ring-white' : ''}`}
           >
             <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
               {pelecardBusy
@@ -360,9 +376,10 @@ export default function PaymentScreen({
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>
           {physicalTerminalVisible && (
-            <button type="button" onClick={onPhysicalTerminal}
+            <button type="button" onClick={() => setSelectedMethod('physical')}
+              aria-pressed={selectedMethod === 'physical'}
               disabled={!physicalTerminalEnabled || pelecardBusy || manualSaleSaving}
-              className="w-full bg-gradient-to-l from-indigo-600 to-indigo-700 rounded-2xl p-5 flex items-center gap-4 text-right disabled:opacity-60 disabled:cursor-not-allowed">
+              className={`w-full bg-gradient-to-l from-indigo-600 to-indigo-700 rounded-2xl p-5 flex items-center gap-4 text-right disabled:opacity-60 disabled:cursor-not-allowed ${selectedMethod === 'physical' ? 'ring-4 ring-white' : ''}`}>
               <CreditCard className="w-8 h-8 text-white" />
               <span><strong className="block text-lg">תשלום במסופון פיזי</strong>
                 <small className="text-white/70">{physicalTerminalEnabled ? 'הסכום נשלח אוטומטית למסופון המשויך לקופה' : 'ממתין להפעלת ממשק המסופונים על ידי פלאקארד'}</small></span>
@@ -373,9 +390,10 @@ export default function PaymentScreen({
             return (
               <button
                 key={method.key}
-                onClick={() => handleMethodClick(method.key)}
+                onClick={() => setSelectedMethod(method.key)}
+                aria-pressed={selectedMethod === method.key}
                 disabled={manualSaleSaving}
-                className={`w-full bg-gradient-to-l ${method.color} rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right`}
+                className={`w-full bg-gradient-to-l ${method.color} rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right ${selectedMethod === method.key ? 'ring-4 ring-white' : ''}`}
               >
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                   <Icon className="w-6 h-6 text-white" />
@@ -391,9 +409,10 @@ export default function PaymentScreen({
 
           {/* Split payment entry */}
           <button
-            onClick={enterSplit}
+            onClick={() => setSelectedMethod(SPLIT_METHOD)}
+            aria-pressed={selectedMethod === SPLIT_METHOD}
             disabled={manualSaleSaving}
-            className="w-full mt-2 border border-dashed border-slate-600 rounded-2xl p-4 flex items-center gap-4 hover:bg-slate-800 active:scale-[0.98] transition-all text-right"
+            className={`w-full mt-2 border border-dashed border-slate-600 rounded-2xl p-4 flex items-center gap-4 hover:bg-slate-800 active:scale-[0.98] transition-all text-right ${selectedMethod === SPLIT_METHOD ? 'ring-4 ring-white' : ''}`}
           >
             <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
               <Split className="w-6 h-6 text-white" />
@@ -404,6 +423,10 @@ export default function PaymentScreen({
             </div>
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>
+          <Button onClick={paySelected} disabled={!selectedMethod || pelecardBusy || manualSaleSaving}
+            className="w-full h-14 text-lg font-bold" data-testid="cashier-pay">
+            {pelecardBusy || manualSaleSaving ? 'מעבד תשלום…' : 'שלם'}
+          </Button>
         </div>
       </div>
     </div>

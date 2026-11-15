@@ -3,7 +3,7 @@ import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import {afterEach,describe,expect,test,vi} from 'vitest';
 
-const state=vi.hoisted(()=>({role:'admin',navigate:vi.fn()}));
+const state=vi.hoisted(()=>({role:'admin',navigate:vi.fn(),start:vi.fn()}));
 const productId='11111111-1111-4111-8111-111111111111';
 const serviceId='22222222-2222-4222-8222-222222222222';
 const orderId='33333333-3333-4333-8333-333333333333';
@@ -19,39 +19,39 @@ vi.mock('@/components/cashregister/Cart',()=>({default:({onCheckout,onLinkOrder}
 vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalEnabled})=><><button disabled={!pelecardEnabled} onClick={onPelecard}>Pelecard</button><button disabled={!physicalTerminalEnabled} onClick={onPhysicalTerminal}>Physical</button></>}));
 vi.mock('@/components/cashregister/ReceiptScreen',()=>({default:()=>null}));
 vi.mock('sonner',()=>({toast:{error:vi.fn()}}));
+vi.mock('@/payments/posPayments',async importOriginal=>({...(await importOriginal()),startPosCheckout:(...args)=>state.start(...args)}));
 import CashRegister from './CashRegister';
 
-afterEach(()=>{cleanup();state.navigate.mockReset();state.role='admin'});
+afterEach(()=>{cleanup();state.navigate.mockReset();state.start.mockReset();state.role='admin';sessionStorage.clear()});
 describe('Cash Register hosted routes',()=>{
   test('physical cart reaches its own review route without a client amount',async()=>{
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Physical'));
     expect(state.navigate).toHaveBeenCalledWith('/payment/physical',{state:{checkoutId:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}}});
   });
-  test('standalone product cart reaches POS review without a client amount',async()=>{
+  test('standalone product cart starts hosted checkout from the Pay click',async()=>{
+    state.start.mockResolvedValue({canResume:true,redirectUrl:'https://gateway20.pelecard.biz/PaymentGW?transactionId=11111111-1111-4111-8111-111111111111'});
     render(<CashRegister/>);await screen.findByText('add service');
     fireEvent.click(screen.getByText('מוצרים'));fireEvent.click(screen.getByText('add product'));
     fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
-    expect(state.navigate).toHaveBeenCalledWith('/payment/pos',{state:{checkoutId:expect.stringMatching(uuid),cart:{lines:[{kind:'product',id:productId,qty:1}],discount:null}}});
+    await waitFor(()=>expect(state.start).toHaveBeenCalledWith(expect.anything(),{requestKey:expect.stringMatching(uuid),cart:{lines:[{kind:'product',id:productId,qty:1}],discount:null},billing:{kind:'person',name:'',identity:'',email:''}}));
+    expect(state.navigate).not.toHaveBeenCalledWith('/payment/pos',expect.anything());
   });
-  test('standalone service cart reaches POS review',async()=>{
+  test('standalone activity cart starts the same direct checkout',async()=>{
+    state.start.mockResolvedValue({canResume:true,redirectUrl:'https://gateway20.pelecard.biz/PaymentGW?transactionId=11111111-1111-4111-8111-111111111111'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
-    expect(state.navigate).toHaveBeenCalledWith('/payment/pos',{state:{checkoutId:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}}});
+    await waitFor(()=>expect(state.start).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
   });
-  test('repeat click on one checkout keeps its key; a new visit gets a different key',async()=>{
+  test('repeat click cannot start a second attempt',async()=>{
+    state.start.mockImplementation(()=>new Promise(()=>{}));
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));fireEvent.click(screen.getByText('Pelecard'));
-    const first=state.navigate.mock.calls[0][1].state.checkoutId;
-    expect(state.navigate.mock.calls[1][1].state.checkoutId).toBe(first);
-    cleanup();state.navigate.mockReset();render(<CashRegister/>);await screen.findByText('add service');
-    fireEvent.click(screen.getByText('add service'));fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
-    expect(state.navigate.mock.calls[0][1].state.checkoutId).not.toBe(first);
+    expect(state.start).toHaveBeenCalledTimes(1);
   });
-  test('linked saved order uses order review, and shift manager cannot start hosted checkout',async()=>{
+  test('linked order opens cashier collection, and shift manager cannot start hosted checkout',async()=>{
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('link order'));fireEvent.click(screen.getByText('checkout'));
-    fireEvent.click(screen.getByText('Pelecard'));expect(state.navigate).toHaveBeenCalledWith(`/payment/order?orderId=${orderId}`);
+    fireEvent.click(screen.getByText('link order'));expect(state.navigate).toHaveBeenCalledWith(`/cashregister?orderId=${orderId}`);
     cleanup();state.navigate.mockReset();state.role='אחמ"ש';
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));expect(screen.getByText('Pelecard')).toBeDisabled();

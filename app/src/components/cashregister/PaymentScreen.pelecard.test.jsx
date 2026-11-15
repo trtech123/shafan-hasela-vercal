@@ -26,6 +26,9 @@ describe("PaymentScreen payment-method separation", () => {
     const props = renderPayment();
     fireEvent.click(screen.getByRole("button", { name: /מזומן/ }));
     expect(props.onConfirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('cashier-pay'));
+    fireEvent.change(screen.getByLabelText('מזומן שהתקבל (₪)'), { target: { value: '150' } });
+    expect(screen.getByText('עודף: 30.00 ₪')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('סוג לקוח'), { target: { value: 'organization' } });
     fireEvent.change(screen.getByLabelText('שם לחיוב'), { target: { value: 'Club' } });
     fireEvent.change(screen.getByLabelText('מספר זהות / חברה'), { target: { value: '123456789' } });
@@ -38,6 +41,8 @@ describe("PaymentScreen payment-method separation", () => {
   test("keeps אשראי as an explicitly external/manual payment", () => {
     const props = renderPayment();
     fireEvent.click(screen.getByRole("button", { name: /אשראי.*חיצוני/s }));
+    expect(props.onConfirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('cashier-pay'));
     expect(props.onConfirm).toHaveBeenCalledWith("אשראי");
     expect(props.onPelecard).not.toHaveBeenCalled();
   });
@@ -45,6 +50,8 @@ describe("PaymentScreen payment-method separation", () => {
   test("starts Pelecard for an eligible linked order or standalone cart", () => {
     const props = renderPayment({ pelecardEnabled: true });
     fireEvent.click(screen.getByRole("button", { name: /פלאקארד/s }));
+    expect(props.onPelecard).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('cashier-pay'));
     expect(props.onPelecard).toHaveBeenCalledTimes(1);
     expect(props.onConfirm).not.toHaveBeenCalled();
   });
