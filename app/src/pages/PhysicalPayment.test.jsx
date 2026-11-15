@@ -1,17 +1,20 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import PhysicalPayment from './PhysicalPayment.jsx';
 import { requestPhysicalPayment } from '@/payments/physical/client';
+import { supabase } from '@/api/supabaseClient';
 
 vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: 'admin' } }) }));
-vi.mock('@/api/supabaseClient', () => ({ supabase: {} }));
+vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: vi.fn() } } }));
 vi.mock('@/payments/physical/client', () => ({ requestPhysicalPayment: vi.fn() }));
 
 describe('physical POS checkout', () => {
-  beforeEach(() => { localStorage.clear(); vi.mocked(requestPhysicalPayment).mockReset(); });
+  beforeEach(() => { localStorage.clear(); vi.mocked(requestPhysicalPayment).mockReset();
+    vi.mocked(supabase.functions.invoke).mockReset(); });
+  afterEach(() => cleanup());
   test('shows assigned CT20 and reserves once without a browser charge', async () => {
     vi.mocked(requestPhysicalPayment).mockImplementation(async (_client, body) => {
       if (body.action === 'devices') return [{ registerNumber: '004', model: 'CT20', label: 'Front CT20', workstationCode: 'FRONT_DESK' }];
@@ -30,5 +33,67 @@ describe('physical POS checkout', () => {
     await waitFor(() => expect(requestPhysicalPayment).toHaveBeenCalledWith(expect.anything(),
       expect.objectContaining({ action: 'prepare', workstationCode: 'FRONT_DESK' })));
     expect(screen.getByText(/הבקשה נשמרה/)).toBeTruthy();
+  });
+  test('loads an existing order and reserves a partial balance without recreating a cart', async () => {
+    const orderId = '44444444-4444-4444-8444-444444444444';
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: {
+      orderId, orderNumber: 'ORD-42', clientName: 'Group customer', organization: 'School',
+      totalMinor: 10000, paidMinor: 3000, balanceMinor: 7000, unresolvedPayment: false,
+      billing: { name: 'School', identity: '123456782', email: 'school@example.com' },
+      payments: [], documents: [],
+    }, error: null });
+    vi.mocked(requestPhysicalPayment).mockImplementation(async (_client, body) => {
+      if (body.action === 'devices') return [{ registerNumber: '004', model: 'CT20',
+        label: 'Front CT20', workstationCode: 'FRONT_DESK' }];
+      if (body.action === 'status') throw new Error('not_found');
+      if (body.action === 'prepareOrder') return { paymentId: '11111111-1111-4111-8111-111111111111',
+        orderId, state: 'reserved', amountMinor: 2500, registerNumber: '004', saleId: null };
+    });
+    render(<MemoryRouter initialEntries={[`/payment/physical?orderId=${orderId}`]}>
+      <PhysicalPayment /></MemoryRouter>);
+    expect(await screen.findByText(/ORD-42/)).toBeTruthy();
+    expect(screen.getByText(/70\.00/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/סכום לגבייה/), { target: { value: '25.00' } });
+    fireEvent.click(screen.getByRole('button', { name: /שמור.*הזמנה/ }));
+    await waitFor(() => expect(requestPhysicalPayment).toHaveBeenCalledWith(expect.anything(),
+      { action: 'prepareOrder', requestKey: expect.any(String), workstationCode: 'FRONT_DESK',
+        orderId, amountMinor: 2500 }));
+    expect(screen.getByText(/25\.00/)).toBeTruthy();
+  });
+  test('recovers an uncertain order payment after browser closure without preparing another', async () => {
+    const orderId = '44444444-4444-4444-8444-444444444444';
+    localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({
+      requestKey: '22222222-2222-4222-8222-222222222222', orderId }));
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: {
+      orderId, orderNumber: 'ORD-42', clientName: 'Group customer', organization: 'School',
+      totalMinor: 10000, paidMinor: 3000, balanceMinor: 7000, unresolvedPayment: true,
+      billing: {}, payments: [], documents: [],
+    }, error: null });
+    vi.mocked(requestPhysicalPayment).mockImplementation(async (_client, body) => {
+      if (body.action === 'devices') return [{ registerNumber: '004', model: 'CT20',
+        label: 'Front CT20', workstationCode: 'FRONT_DESK' }];
+      if (body.action === 'status') return { paymentId: '11111111-1111-4111-8111-111111111111',
+        orderId, state: 'uncertain', amountMinor: 2500, registerNumber: '004', saleId: null };
+    });
+    render(<MemoryRouter initialEntries={['/payment/physical']}><PhysicalPayment /></MemoryRouter>);
+    expect(await screen.findByText(/ORD-42/)).toBeTruthy();
+    expect(screen.getByText(/קיים תשלום שמצבו אינו ודאי/)).toBeTruthy();
+    expect(requestPhysicalPayment).not.toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ action: 'prepareOrder' }));
+  });
+  test('recovers a pending standalone charge before opening a different order', async () => {
+    const orderId = '44444444-4444-4444-8444-444444444444';
+    localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({
+      requestKey: '22222222-2222-4222-8222-222222222222', cart: '{}', orderId: null }));
+    vi.mocked(requestPhysicalPayment).mockImplementation(async (_client, body) => {
+      if (body.action === 'devices') return [{ registerNumber: '004', model: 'CT20',
+        label: 'Front CT20', workstationCode: 'FRONT_DESK' }];
+      if (body.action === 'status') return { paymentId: '11111111-1111-4111-8111-111111111111',
+        orderId: null, state: 'reserved', amountMinor: 2400, registerNumber: '004', saleId: null };
+    });
+    render(<MemoryRouter initialEntries={[`/payment/physical?orderId=${orderId}`]}>
+      <PhysicalPayment /></MemoryRouter>);
+    expect(await screen.findByText(/24\.00/)).toBeTruthy();
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
   });
 });

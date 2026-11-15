@@ -32,6 +32,20 @@ export function createPhysicalRepository(database) {
   }
   return {
     registerForWorkstation: createPhysicalRegisterResolver(database),
+    async reserveOrder({ actorId, workstationId, requestKey, register: assigned, orderId, amountMinor }) {
+      if (!uuid.test(actorId) || !uuid.test(requestKey) || !uuid.test(orderId) ||
+        !register.test(assigned) || !Number.isSafeInteger(amountMinor) ||
+        amountMinor < 1 || amountMinor > 2_147_483_647)
+        throw new Error('physical_reservation_invalid');
+      const result = single(await database.query(
+        'SELECT public.reserve_physical_order_payment($1::uuid,$2::uuid,$3::text,$4::uuid,$5::integer) AS result',
+        [actorId, requestKey, workstationId, orderId, amountMinor]));
+      if (!result || result.registerNumber !== assigned || result.orderId !== orderId ||
+        result.amountMinor !== amountMinor || !uuid.test(result.paymentId))
+        throw new Error('physical_reservation_mismatch');
+      return { id: result.paymentId, register: result.registerNumber,
+        orderId, amountMinor, state: result.state };
+    },
     async listDevices() {
       const { rows } = await database.query(`
         SELECT d.register_number AS "registerNumber", d.model, d.label,

@@ -25,6 +25,20 @@ function validApproval(result, intent, merchantTerminal) {
 export function createPhysicalWorkflow(deps) {
   const merchantTerminal = deps.merchantTerminal;
   return {
+    async startOrder({ actorId, actorRole, workstationId, requestKey, orderId, amountMinor }) {
+      if (deps.enabled !== true) throw new Error('physical_disabled');
+      if (typeof merchantTerminal !== 'string' || !/^\d{10}$/.test(merchantTerminal))
+        throw new Error('physical_terminal_required');
+      if (!workstationId || !requestKey || !orderId || !validAmount(amountMinor))
+        throw new Error('physical_request_invalid');
+      const register = await deps.registerForWorkstation(workstationId);
+      if (!PHYSICAL_REGISTERS.includes(register)) throw new Error('physical_register_unassigned');
+      const intent = await deps.reserveOrder({ actorId, actorRole, workstationId,
+        requestKey, register, orderId, amountMinor });
+      if (intent.register !== register || intent.amountMinor !== amountMinor || intent.orderId !== orderId)
+        throw new Error('physical_intent_conflict');
+      return { id: intent.id, state: intent.state ?? 'reserved' };
+    },
     async start({ actorId, actorRole, workstationId, requestKey, cart, billing }) {
       if (deps.enabled !== true) throw new Error('physical_disabled');
       if (typeof merchantTerminal !== 'string' || !/^\d{10}$/.test(merchantTerminal))

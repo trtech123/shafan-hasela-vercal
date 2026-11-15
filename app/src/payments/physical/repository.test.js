@@ -34,6 +34,18 @@ describe('physical database adapter', () => {
       expect.stringContaining('observe_physical_result'), expect.stringContaining('finalize_physical_payment'),
     ]);
   });
+  test('reserves an order through the dedicated database balance validator', async () => {
+    const orderId = '10000000-0000-4000-8000-000000000004';
+    const database = { query: vi.fn(async () => ({ rows: [{ result: {
+      paymentId, orderId, amountMinor: 1200, registerNumber: '004', state: 'reserved',
+    } }] })) };
+    const result = await createPhysicalRepository(database).reserveOrder({ actorId: actor,
+      actorRole: 'admin', workstationId: 'FRONT', requestKey, register: '004', orderId, amountMinor: 1200 });
+    expect(result).toMatchObject({ id: paymentId, orderId, amountMinor: 1200 });
+    const [sql, args] = database.query.mock.calls[0];
+    expect(sql).toContain('reserve_physical_order_payment');
+    expect(args).toEqual([actor, requestKey, 'FRONT', orderId, 1200]);
+  });
   test('rejects invalid person identity before reserving an invoice-linked payment', async () => {
     const database = { query: vi.fn() };
     await expect(createPhysicalRepository(database).reserve({ actorId: actor, workstationId: 'FRONT', requestKey,

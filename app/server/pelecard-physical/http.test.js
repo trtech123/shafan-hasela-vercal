@@ -15,6 +15,7 @@ function setup() {
       listDevices: async () => [{ registerNumber: '004', workstationCode: 'FRONT_DESK', label: 'CT20 front', model: 'CT20' }] },
     workflow: {
       start: async input => { calls.push(['start', input]); return { id: paymentId, state: 'reserved' }; },
+      startOrder: async input => { calls.push(['startOrder', input]); return { id: paymentId, state: 'reserved' }; },
       verify: async id => { calls.push(['verify', id]); return { state: 'uncertain' }; },
     },
   };
@@ -34,6 +35,18 @@ test('authenticated prepare reserves a server-priced physical intent without dis
   assert.equal(s.calls.length, 1);
   assert.equal(s.calls[0][0], 'start');
   assert.equal(s.calls[0][1].actorId, actor.id);
+});
+test('order preparation passes only the order identity and requested amount to the physical workflow', async () => {
+  const s = setup();
+  const orderId = '44444444-4444-4444-8444-444444444444';
+  const response = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder', requestKey,
+    workstationCode: 'FRONT_DESK', orderId, amountMinor: 1200 }));
+  assert.equal(response.status, 201);
+  assert.deepEqual(s.calls, [['startOrder', { actorId: actor.id, actorRole: actor.role,
+    workstationId: 'FRONT_DESK', requestKey, orderId, amountMinor: 1200 }]]);
+  const polluted = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder', requestKey,
+    workstationCode: 'FRONT_DESK', orderId, amountMinor: 1200, cart: { lines: [] } }));
+  assert.equal(polluted.status, 400);
 });
 test('status and verify cannot dispatch a financial request', async () => {
   const s = setup();

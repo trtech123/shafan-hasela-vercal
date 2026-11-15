@@ -31,6 +31,19 @@ export function createPhysicalHttpHandler(deps) {
         const saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
         return saved ? json(saved, 201) : json({ error: 'reservation_unavailable' }, 502);
       }
+      if (body.action === 'prepareOrder') {
+        if (!deps.enabled) return json({ error: 'physical_disabled' }, 503);
+        if (Object.keys(body).sort().join(',') !== 'action,amountMinor,orderId,requestKey,workstationCode' ||
+          !uuid.test(body.requestKey) || !uuid.test(body.orderId) ||
+          !workstation.test(body.workstationCode) || !Number.isSafeInteger(body.amountMinor) ||
+          body.amountMinor < 1 || body.amountMinor > 2_147_483_647)
+          return json({ error: 'invalid_input' }, 400);
+        await deps.workflow.startOrder({ actorId: actor.id, actorRole: actor.role,
+          workstationId: body.workstationCode, requestKey: body.requestKey,
+          orderId: body.orderId, amountMinor: body.amountMinor });
+        const saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
+        return saved ? json(saved, 201) : json({ error: 'reservation_unavailable' }, 502);
+      }
       if (!['status', 'verify', 'cancel'].includes(body.action) ||
         Object.keys(body).sort().join(',') !== 'action,requestKey' || !uuid.test(body.requestKey))
         return json({ error: 'invalid_input' }, 400);

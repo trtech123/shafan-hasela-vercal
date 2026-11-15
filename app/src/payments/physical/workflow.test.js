@@ -10,6 +10,7 @@ function dependencies(overrides = {}) {
     registerForWorkstation: vi.fn(async () => '003'),
     calculateCart: vi.fn(async () => ({ amountMinor: 2400, items: [{ id: 'p1', qty: 2, unitMinor: 1200 }] })),
     reserve: vi.fn(async () => intent),
+    reserveOrder: vi.fn(async ({ orderId }) => ({ ...intent, orderId, amountMinor: 1200 })),
     claimDispatch: vi.fn(async () => true),
     markDispatched: vi.fn(async () => {}),
     markUncertain: vi.fn(async () => {}),
@@ -46,6 +47,17 @@ describe('physical terminal workflow', () => {
       amountMinor: 2400, register: '003', merchantTerminal: '2814926015', intentId: 'intent-1',
     });
     expect(deps.finalize).not.toHaveBeenCalled();
+  });
+  test('reserves an existing order amount without cart repricing or provider dispatch', async () => {
+    const deps = dependencies();
+    const orderId = '20000000-0000-4000-8000-000000000001';
+    const result = await createPhysicalWorkflow(deps).startOrder({ actorId: 'actor', actorRole: 'admin',
+      workstationId: 'FRONT', requestKey: 'key-1', orderId, amountMinor: 1200 });
+    expect(deps.reserveOrder).toHaveBeenCalledWith({ actorId: 'actor', actorRole: 'admin',
+      workstationId: 'FRONT', requestKey: 'key-1', register: '003', orderId, amountMinor: 1200 });
+    expect(deps.calculateCart).not.toHaveBeenCalled();
+    expect(deps.provider.send).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'intent-1', state: 'reserved' });
   });
   test('same request never dispatches twice', async () => {
     const deps = dependencies();
