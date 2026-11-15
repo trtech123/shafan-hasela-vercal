@@ -255,6 +255,9 @@ BEGIN
     OR EXISTS(SELECT 1 FROM public.payper_document_ledger l WHERE l.order_id=o.id
       AND l.state IN ('dispatch_reserved','reconciliation_required','succeeded'))
     INTO document_review;
+  -- An invoice line cannot assume VAT on an order whose saved billing snapshot
+  -- does not explicitly require it. Keep the received payment and hold issuance.
+  document_review:=document_review OR o.vat_applicable IS DISTINCT FROM true;
   IF pg_catalog.jsonb_typeof(p_billing)<>'object' OR
     coalesce(p_billing->>'kind','') NOT IN ('person','organization') OR
     pg_catalog.length(pg_catalog.btrim(coalesce(p_billing->>'name',''))) NOT BETWEEN 1 AND 200 OR
@@ -307,10 +310,11 @@ BEGIN
       p_reference_document_id,p_check,p_billing,p_amount_minor);
   INSERT INTO public.payper_document_ledger(payment_id,order_id,sale_id,state,reconciliation_code,source_facts,source_frozen_at)
     VALUES(payment_id,o.id,sale_id,CASE WHEN document_review THEN 'source_blocked' ELSE 'source_frozen' END,
-      CASE WHEN document_review THEN 'existing_document_review_required' ELSE NULL END,pg_catalog.jsonb_build_object(
+      CASE WHEN o.vat_applicable IS DISTINCT FROM true THEN 'vat_review_required'
+        WHEN document_review THEN 'existing_document_review_required' ELSE NULL END,pg_catalog.jsonb_build_object(
       'sourceType',CASE WHEN p_method='check' THEN 'manual_check' ELSE 'manual_cash' END,
       'saleId',sale_id,'orderId',o.id,'paymentId',payment_id,'amountMinor',p_amount_minor,
-      'items',frozen,'vatApplicable',true,'documentType',p_document_type,
+      'items',frozen,'vatApplicable',o.vat_applicable,'documentType',p_document_type,
       'referenceDocumentId',p_reference_document_id),pg_catalog.clock_timestamp());
   INSERT INTO public.accounting_events(source_type,source_id,purpose,accounting_provider,status)
     VALUES('payment_transaction',payment_id::text,'noncard_payment','payper',
