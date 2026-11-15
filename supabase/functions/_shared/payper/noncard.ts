@@ -9,7 +9,8 @@ export interface NoncardSource {
   receiptNumber: string;
   paidDate: string;
   items: Array<{ name: string; qty: number; customPrice: number }>;
-  billing: { name: string; identity: string; email: string };
+  billing: { kind: "person" | "organization"; name: string; identity: string; email: string };
+  vatApplicable: boolean;
   check: null | { check_number: string; bank: string; branch: string;
     account_number: string; account_holder: string; amount: string | number;
     received_date: string; due_date: string };
@@ -18,14 +19,22 @@ export interface NoncardSource {
 
 export function noncardCollectionEnabled(method: "cash" | "check", env: (name: string) => string | undefined) {
   return env("PAYPER_NONCARD_COLLECTION_ENABLED") === "true" &&
-    env(method === "cash" ? "PAYPER_CASH_DISPATCH_ENABLED" : "PAYPER_CHECK_DISPATCH_ENABLED") === "true";
+    env(method === "cash" ? "PAYPER_CASH_DISPATCH_ENABLED" : "PAYPER_CHECK_DISPATCH_ENABLED") === "true" &&
+    (method === "cash" || env("PAYPER_CHECK_DETAILS_CONTRACT_CONFIRMED") === "true");
 }
 
 const clean = (value: unknown, max: number): value is string => typeof value === "string"
   && value.length > 0 && value.length <= max && value.trim() === value
   && !/[\x00-\x1f\x7f]/.test(value);
+const validPersonId = (identity: string) => identity !== "000000000" &&
+  identity.split("").reduce((sum, character, index) => {
+    const product = Number(character) * (index % 2 === 0 ? 1 : 2);
+    return sum + Math.floor(product / 10) + product % 10;
+  }, 0) % 10 === 0;
 const date = (value: string): string => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`)))
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value)
     throw new Error("payper_check_date_invalid");
   const [year, month, day] = value.split("-");
   return `${day}-${month}-${year}`;
@@ -46,9 +55,13 @@ export function buildNoncardPayperRequest(source: NoncardSource, auth: GatewayCr
     !clean(source.receiptNumber, 100) || source.documentType !== "invoice-receipt"
     || source.referenceDocumentId !== null)
     throw new Error("payper_source_incomplete");
-  if (!clean(source.billing.name, 200) || !/^[0-9]{9}$/.test(source.billing.identity)
+  if (!["person", "organization"].includes(source.billing.kind) ||
+    !clean(source.billing.name, 200) || !/^[0-9]{9}$/.test(source.billing.identity) ||
+    source.billing.identity === "000000000" ||
+    (source.billing.kind === "person" && !validPersonId(source.billing.identity))
     || !clean(source.billing.email, 320) || !/^\S+@\S+\.\S+$/.test(source.billing.email))
     throw new Error("payper_billing_incomplete");
+  if (source.vatApplicable !== true) throw new Error("payper_vat_review_required");
   if (!Array.isArray(source.items) || source.items.length === 0 || source.items.length > 100)
     throw new Error("payper_items_required");
   let sum = 0;
@@ -61,7 +74,7 @@ export function buildNoncardPayperRequest(source: NoncardSource, auth: GatewayCr
       price_per_unit: String(price), include_vat: "true" as const };
   });
   if (source.discount != null && sum !== source.amountMinor) {
-    const description = `תשלום עבור ${source.receiptNumber}`;
+    const description = source.items.map(item => item.name).join(", ").slice(0, 200);
     lines.splice(0, lines.length, { description, quantity: "1",
       price_per_unit: String(source.amountMinor), include_vat: "true" });
   } else if (sum !== source.amountMinor) throw new Error("payper_amount_mismatch");
@@ -81,13 +94,13 @@ export function buildNoncardPayperRequest(source: NoncardSource, auth: GatewayCr
   return {
     terminalNumber: auth.terminalNumber, user: auth.user, password: auth.password,
     trxRecordId: "" as const, Uid: "" as const,
-    PayperParameters: { typeDocument: source.documentType, DataPayper: {
+    PayperParameters: { typeDocument: "Invoice-Receipt" as const, DataPayper: {
       document_lang: "hb" as const, customer_name: source.billing.name,
       customer_unique_id: source.billing.identity, customer_mail: source.billing.email,
       send_by_mail: "true" as const, document_subject: source.receiptNumber,
-      document_rounded: "false" as const, invoice_lines: lines,
-      receipt_lines: [{ payment_type: source.method === "check" ? "Check" as const : "Cash" as const,
-        date: date(paidOn), amount: source.amountMinor }],
+      document_rounded: "false" as const, document_no_vat: "false" as const, invoice_lines: lines,
+      receipt_lines: [{ payment_type: source.method === "check" ? "Cheque" as const : "Cash" as const,
+        date: date(paidOn), amount: String(source.amountMinor) }],
       ...(remarks ? { document_remarks: remarks } : {}),
     } },
   };
