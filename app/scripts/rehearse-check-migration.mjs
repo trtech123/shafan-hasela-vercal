@@ -28,6 +28,7 @@ try {
       payment_status text NOT NULL, archived_at timestamptz, activity_id uuid,
       activity_date date, num_participants integer, price_per_person numeric, quote_id uuid,
       billing_institution_name text, billing_company_id text, billing_accounting_email text,
+      vat_applicable boolean DEFAULT true,
       CONSTRAINT orders_payment_status_check CHECK
         (payment_status IN ('לא שולם','שובר','אשראי','צ''ק','מזומן','פלאקארד')));
     CREATE SEQUENCE receipt_sequence START 2000;

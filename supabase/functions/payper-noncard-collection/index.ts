@@ -79,8 +79,10 @@ Deno.serve(async request => {
         state: ledger.state, documentNumber: ledger.document_number,
         documentUrl: ledger.document_url, code: ledger.reconciliation_code,
       } });
+    const dispatchFlag = body.method === "cash"
+      ? "PAYPER_CASH_DISPATCH_ENABLED" : "PAYPER_CHECK_DISPATCH_ENABLED";
     if (!saved.created || ledger.state !== "source_frozen" ||
-      Deno.env.get("PAYPER_CHECK_DISPATCH_ENABLED") !== "true")
+      Deno.env.get(dispatchFlag) !== "true")
       return paymentJson(view(), 200, cors);
     // Only the creator of a new, frozen obligation may dispatch. An existing
     // request key returns its status and can never send the document again.

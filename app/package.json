@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:migration": "node scripts/rehearse-check-migration.mjs",
+    "test:full-schema": "node scripts/rehearse-full-schema.mjs",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
     "physical:worker": "node scripts/physical-terminal-worker.mjs",
