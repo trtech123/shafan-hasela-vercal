@@ -41,6 +41,8 @@ try {
     .sort((left, right) => basename(left).localeCompare(basename(right), 'en'));
   const physicalIncluded = migrations.some(filename =>
     basename(filename) === '202611150002_physical_order_collection.sql');
+  const hostedIncluded = migrations.some(filename =>
+    basename(filename) === '202611150004_physical_hosted_emv.sql');
   for (const filename of migrations) {
     current = basename(filename);
     await db.exec((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
@@ -291,6 +293,40 @@ try {
     const physical = (await db.query(`SELECT public.reserve_physical_order_payment(
       $1,gen_random_uuid(),'GENERAL',$2,60000) AS value`, [cashier, physicalOrder])).rows[0].value;
     assert.equal(physical.amountMinor, 60000);
+    if (hostedIncluded) {
+      current = 'hosted EMV exact payment and document association on combined schema';
+      const hostedOrder = '00000000-0000-4000-8000-000000000010';
+      await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
+        activity_id,activity_date,num_participants,price_per_person,payment_status)
+        VALUES($1,'Synthetic Hosted','0500000000','billing@example.invalid','Test Group',
+          $2,current_date,1,1000,'לא שולם')`, [hostedOrder, activity]);
+      await db.query('SELECT public.link_order_customer($1,$2,0)', [hostedOrder, customer]);
+      await db.query("UPDATE public.physical_terminal_devices SET enabled=false,cash_register_code=NULL WHERE register_number='003'");
+      await db.query("UPDATE public.physical_terminal_devices SET enabled=true,cash_register_code='GENERAL' WHERE register_number='004'");
+      const pending = (await db.query(`SELECT public.reserve_physical_order_payment(
+        $1,gen_random_uuid(),'GENERAL',$2,100000) AS value`, [cashier, hostedOrder])).rows[0].value;
+      assert.equal((await db.query('SELECT public.claim_physical_hosted_init($1) AS value',
+        [pending.paymentId])).rows[0].value, true);
+      const hostedId = '11111111-1111-4111-8111-111111111111';
+      const redirect = `https://gateway21.pelecard.biz/PaymentGW?transactionId=${hostedId}`;
+      await db.query('SELECT public.persist_physical_hosted_session($1,$2,$3,$4)',
+        [pending.paymentId, hostedId, 'synthetic-confirmation', redirect]);
+      await db.query(`SELECT public.observe_physical_result($1,$2::jsonb)`, [pending.paymentId,
+        JSON.stringify({ status: 'approved', intentId: pending.paymentId,
+          merchantTerminal: '2814926015', register: '004', amountMinor: 100000,
+          transactionId: '12345', approvalId: '123456', uid: 'uid123' })]);
+      const completed = (await db.query('SELECT public.finalize_physical_payment($1) AS value',
+        [pending.paymentId])).rows[0].value;
+      assert.equal(completed.state, 'succeeded');
+      const officialUrl = 'https://app.payper.co.il/public/invoice_show/595170';
+      const record = 'SELECT public.record_physical_hosted_document($1,$2,$3,$4) AS value';
+      assert.equal((await db.query(record, [pending.paymentId, '595170', officialUrl, '595170']))
+        .rows[0].value, true);
+      assert.equal((await db.query(record, [pending.paymentId, '595170', officialUrl, '595170']))
+        .rows[0].value, true);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM public.payper_document_ledger WHERE payment_id=$1 AND state=$2',
+        [pending.paymentId, 'succeeded'])).rows[0].n, 1);
+    }
   }
   const installed = (await db.query(`SELECT count(*)::int AS tables FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relkind='r'`)).rows[0].tables;
@@ -308,7 +344,8 @@ try {
     tables: installed, functions, policies, triggers, constraints, unvalidated,
     digitalOrderMockApproval: 'passed',
     cashOrderCollection: 'passed',
-    physicalRemainingBalance: physicalIncluded ? 'passed' : 'not_requested' }));
+    physicalRemainingBalance: physicalIncluded ? 'passed' : 'not_requested',
+    hostedDocumentAssociation: hostedIncluded ? 'passed' : 'not_requested' }));
   if (process.env.AUDIT_CATALOG_NAMES === '1') {
     const names = (await db.query(`SELECT c.relname FROM pg_class c
       JOIN pg_namespace n ON n.oid=c.relnamespace

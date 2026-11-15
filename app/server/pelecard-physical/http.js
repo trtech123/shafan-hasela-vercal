@@ -3,6 +3,8 @@ const workstation = /^[A-Z][A-Z0-9_]{0,39}$/;
 const json = (body, status) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 
 export function createPhysicalHttpHandler(deps) {
+  const withHosted = saved => deps.hostedEnabled === true && deps.hostedInitEnabled === true
+    ? { ...saved, hostedAvailable: true } : saved;
   return async request => {
     try {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -29,7 +31,8 @@ export function createPhysicalHttpHandler(deps) {
           workstationId: body.workstationCode, requestKey: body.requestKey,
           cart: body.cart, billing: body.billing });
         const saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
-        return saved ? json(saved, 201) : json({ error: 'reservation_unavailable' }, 502);
+        return saved ? json(withHosted(saved), 201)
+          : json({ error: 'reservation_unavailable' }, 502);
       }
       if (body.action === 'prepareOrder') {
         if (!deps.enabled) return json({ error: 'physical_disabled' }, 503);
@@ -42,23 +45,31 @@ export function createPhysicalHttpHandler(deps) {
           workstationId: body.workstationCode, requestKey: body.requestKey,
           orderId: body.orderId, amountMinor: body.amountMinor });
         const saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
-        return saved ? json(saved, 201) : json({ error: 'reservation_unavailable' }, 502);
+        return saved ? json(withHosted(saved), 201)
+          : json({ error: 'reservation_unavailable' }, 502);
       }
-      if (!['status', 'verify', 'cancel'].includes(body.action) ||
+      if (!['status', 'verify', 'cancel', 'openHosted'].includes(body.action) ||
         Object.keys(body).sort().join(',') !== 'action,requestKey' || !uuid.test(body.requestKey))
         return json({ error: 'invalid_input' }, 400);
       let saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
       if (!saved) return json({ error: 'payment_not_found' }, 404);
+      if (body.action === 'openHosted') {
+        if (deps.hostedEnabled !== true || deps.hostedInitEnabled !== true)
+          return json({ error: 'physical_hosted_disabled' }, 503);
+        await deps.workflow.openHosted(saved.paymentId);
+        saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
+      }
       if (body.action === 'cancel') {
         if (saved.state !== 'reserved' || !await deps.repository.cancelReserved(actor.id, body.requestKey))
           return json({ error: 'payment_already_dispatched' }, 409);
         saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
       }
-      if (body.action === 'verify' && saved.state !== 'succeeded') {
+      if (body.action === 'verify' && (saved.state !== 'succeeded' ||
+        (saved.route === 'hosted' && saved.documentState !== 'succeeded'))) {
         await deps.workflow.verify(saved.paymentId);
         saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
       }
-      return json(saved, 200);
+      return json(withHosted(saved), 200);
     } catch {
       return json({ error: 'payment_operation_unresolved' }, 502);
     }

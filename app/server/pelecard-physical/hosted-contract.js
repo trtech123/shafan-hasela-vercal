@@ -89,6 +89,8 @@ export function parseHostedPayperData(value) {
     url.pathname !== `/public/invoice_show/${number}` ||
     (url.search && !/^\?ak=[A-Za-z0-9_-]{16,128}$/.test(url.search))) return blocked;
   let systemId = null;
+  if (/^[1-9][0-9]{0,29}$/.test(String(value.document_system_id ?? '')))
+    systemId = String(value.document_system_id);
   try {
     const raw = typeof value.RawResponse === 'string' && value.RawResponse.length <= 65_536
       ? JSON.parse(value.RawResponse) : null;
@@ -105,6 +107,7 @@ export function classifyHostedEmvResult(value, expected) {
   if (value?.StatusCode !== '000' || !data ||
     expected?.register !== '004' || !/^\d{10}$/.test(expected?.merchantTerminal ?? '') ||
     data.TransactionId !== expected.transactionId ||
+    !text(expected?.confirmationKey, 512) || data.ConfirmationKey !== expected.confirmationKey ||
     String(data.DebitTotal ?? '') !== String(expected.amountMinor) ||
     data.DebitCurrency !== '1' || data.ShvaResult !== '000' ||
     data.ShvaResultEmv !== '000' ||

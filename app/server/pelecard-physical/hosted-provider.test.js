@@ -26,6 +26,13 @@ test('initialization creates only a hosted session and returns a validated URL',
   assert.equal(body.ShopNo, '004');
   assert.equal(body.Total, '11800');
 });
+test('gateway20 hosted URL remains accepted when gateway21 initializes the session', async () => {
+  const provider = createHostedEmvProvider(credentials, async () => new Response(JSON.stringify({
+    URL: `https://gateway20.pelecard.biz/PaymentGW?transactionId=${hostedId}`,
+    TransactionId: hostedId, ConfirmationKey: 'synthetic-confirmation',
+  })));
+  assert.equal((await provider.initialize(intent, urls)).transactionId, hostedId);
+});
 test('invalid redirect, duplicate session mismatch and transport ambiguity cannot produce a session', async () => {
   for (const response of [
     { URL: `https://evil.example/PaymentGW?transactionId=${hostedId}`, TransactionId: hostedId,
@@ -37,7 +44,7 @@ test('invalid redirect, duplicate session mismatch and transport ambiguity canno
   await assert.rejects(createHostedEmvProvider(credentials, async () => {
     throw Error('transport'); }).initialize(intent, urls));
 });
-test('GetTransaction lookup only projects financial fields; it does not infer a Payper document', async () => {
+test('GetTransaction lookup projects financial fields and only present Payper metadata', async () => {
   const provider = createHostedEmvProvider(credentials, async (url, options) => {
     assert.equal(url, 'https://gateway21.pelecard.biz/PaymentGW/GetTransaction');
     assert.equal(JSON.parse(options.body).TransactionId, hostedId);
@@ -49,6 +56,14 @@ test('GetTransaction lookup only projects financial fields; it does not infer a 
   });
   const response = await provider.lookup(hostedId);
   assert.equal(response.ResultData.DebitTotal, '11800');
-  assert.equal(response.PayperData, undefined);
+  assert.deepEqual(response.PayperData, { InvoiceStatus: '000', InvoiceNumber: '595170',
+    InvoiceLink: 'https://app.payper.co.il/public/invoice_show/595170',
+    InvoiceError: '', document_system_id: null });
   assert.ok(!JSON.stringify(response).includes('sensitive-card'));
+});
+test('a missing GetTransaction PayperData leaves the invoice for reconciliation', async () => {
+  const provider = createHostedEmvProvider(credentials, async () => new Response(JSON.stringify({
+    StatusCode: '000', ResultData: { TransactionId: hostedId },
+  })));
+  assert.equal((await provider.lookup(hostedId)).PayperData, undefined);
 });

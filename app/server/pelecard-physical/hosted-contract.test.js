@@ -9,12 +9,14 @@ const base = { id, register: '004', amountMinor: 11800,
     email: 'synthetic@example.test', vatApplicable: true } };
 const credentials = { terminal: '1234567890', user: 'synthetic-user', password: 'synthetic-secret' };
 const result = { StatusCode: '000', ResultData: { TransactionId: 'hosted-1',
+  ConfirmationKey: 'synthetic-confirmation',
   TransactionPelecardId: '12345', ShvaResult: '000', ShvaResultEmv: '000',
   DebitTotal: '11800', DebitCurrency: '1', Uid: 'uid-1', DebitApproveNumber: '1234567' },
   PayperData: { InvoiceStatus: '000', InvoiceNumber: '595170',
     InvoiceLink: 'https://app.payper.co.il/public/invoice_show/595170?ak=abcdefghijklmnop',
     RawResponse: 'private' } };
 const expected = { transactionId: 'hosted-1', amountMinor: 11800, register: '004',
+  confirmationKey: 'synthetic-confirmation',
   merchantTerminal: '1234567890', deviceDetails: { StatusCode: '000', Uid: 'uid-1',
     termNo: '004', Amount: '11800', retailer: '1234567890' } };
 
