@@ -1,5 +1,7 @@
 # Rivhit technical readiness: read-only probe and local verification
 
+**Update after the approved Production probe:** The temporary function was deployed, used for fixed read calls, and removed. The verified results and remaining gaps are in [rivhit-production-read-probe-20261115.md](./rivhit-production-read-probe-20261115.md). The pre-probe approval and unverified-status text below is historical planning context.
+
 ## Production connection
 
 The deployed accounting endpoints either issue documents or execute payment workflows; none exposes a fixed read-only Rivhit company/chart/journal check using the Production secret. Supabase's secret inventory shows `RIVHIT_API_TOKEN` exists but does not reveal its value. Therefore token validity, company identity, account cards, sort codes and journal-report permissions remain unverified.
