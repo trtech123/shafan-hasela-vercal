@@ -73,14 +73,17 @@ export default function PhysicalPayment() {
   useEffect(() => {
     if (!view || !unresolved.has(view.state)) return;
     const timer = setInterval(() => {
-      requestPhysicalPayment(supabase, { action: 'status', requestKey })
+      requestPhysicalPayment(supabase, { action: view.route === 'hosted' && view.redirectUrl
+        ? 'verify' : 'status', requestKey })
         .then(setView).catch(() => setError('מצב התשלום אינו זמין כרגע. בדקו את העסקה הקיימת.'));
     }, 5000);
     return () => clearInterval(timer);
   }, [view, requestKey]);
 
   useEffect(() => {
-    if (view && ['succeeded', 'declined', 'canceled'].includes(view.state)) localStorage.removeItem(pointerKey);
+    if (view && (['declined', 'canceled'].includes(view.state) ||
+      (view.state === 'succeeded' && view.documentState === 'succeeded')))
+      localStorage.removeItem(pointerKey);
   }, [view]);
 
   const selected = devices.find(row => row.workstationCode === workstationCode);
@@ -116,6 +119,17 @@ export default function PhysicalPayment() {
     catch { setError('תוצאת התשלום עדיין אינה ודאית. אין לשלוח חיוב נוסף.'); }
     finally { setBusy(false); }
   };
+  const openHosted = async () => {
+    if (busy || view?.state !== 'reserved' || !view.hostedAvailable ||
+      view.registerNumber !== '004') return;
+    setBusy(true); setError('');
+    try { setView(await requestPhysicalPayment(supabase, { action: 'openHosted', requestKey })); }
+    catch {
+      setError('לא ניתן לאמת את פתיחת דף התשלום. בדקו את העסקה הקיימת לפני ניסיון נוסף.');
+      try { setView(await requestPhysicalPayment(supabase, { action: 'status', requestKey })); }
+      catch { /* Keep the frozen request pointer for recovery. */ }
+    } finally { setBusy(false); }
+  };
   const cancel = async () => {
     if (busy || view?.state !== 'reserved') return;
     setBusy(true); setError('');
@@ -140,12 +154,31 @@ export default function PhysicalPayment() {
     </section>}
     {view ? <section className="space-y-4 rounded-xl border p-5">
       {view.state === 'reserved' || view.state === 'approved' || view.state === 'canceled'
-        ? <p role="status">{view.state === 'reserved' ? 'הבקשה נשמרה. ממתינים לשליחה למסופון.' :
+        ? <p role="status">{view.state === 'reserved' ? (view.hostedAvailable
+          ? 'הבקשה נשמרה. פתחו את דף התשלום של פלאקארד כדי להמשיך למסופון.'
+          : 'הבקשה נשמרה. ממתינים לשליחה למסופון.') :
           view.state === 'approved' ? 'התשלום אושר. משלימים את שמירת המכירה.' : 'הבקשה בוטלה לפני שליחה למסופון.'}</p>
         : <PhysicalTerminalStatus state={view.state === 'dispatching' ? 'pending' : view.state}
+          hosted={view.route === 'hosted'}
           deviceName={`${view.registerNumber} · ${selected?.label || 'מסופון פיזי'}`}
           amount={view.amountMinor / 100} onCheckStatus={verify} onBack={() => navigate(orderMode ? `/cashregister?orderId=${encodeURIComponent(orderId)}` : '/cashregister')} />}
       <p>מסופון: {view.registerNumber} · סכום מאומת: {(view.amountMinor / 100).toFixed(2)} ₪</p>
+      {view.state === 'reserved' && view.hostedAvailable && view.registerNumber === '004' &&
+        <button type="button" onClick={openHosted} disabled={busy}
+          className="rounded-lg bg-indigo-700 px-4 py-2 text-white">פתחו דף תשלום למסופון</button>}
+      {view.route === 'hosted' && view.redirectUrl &&
+        ['pending', 'uncertain'].includes(view.state) &&
+        <a href={view.redirectUrl} className="block rounded-lg bg-indigo-700 px-4 py-2 text-white">
+          המשך לדף פלאקארד — לחצו שם על כפתור PINPAD</a>}
+      {view.state === 'succeeded' && view.documentState !== 'succeeded' &&
+        <p role="alert" className="rounded-lg bg-amber-50 p-3 text-amber-900">
+          התשלום אושר, אך פרטי החשבונית דורשים התאמה. אין לבצע חיוב נוסף.</p>}
+      {view.state === 'succeeded' && view.documentState !== 'succeeded' &&
+        <button type="button" onClick={verify} disabled={busy}
+          className="rounded-lg border px-4 py-2">בדיקה חוזרת של החשבונית הקיימת</button>}
+      {view.state === 'succeeded' && view.documentState === 'succeeded' && view.documentNumber &&
+        <p>חשבונית מס־קבלה מספר {view.documentNumber}{view.documentUrl &&
+          <> · <a href={view.documentUrl} className="underline">צפייה בחשבונית</a></>}</p>}
       {['reserved', 'approved'].includes(view.state) && <button type="button" onClick={verify} disabled={busy}
         className="rounded-lg bg-indigo-700 px-4 py-2 text-white">בדיקת מצב העסקה</button>}
       {view.state === 'reserved' && <button type="button" onClick={cancel} disabled={busy}

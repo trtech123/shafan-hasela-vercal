@@ -54,6 +54,19 @@ test('status and verify cannot dispatch a financial request', async () => {
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'verify', requestKey }))).status, 200);
   assert.deepEqual(s.calls, [['verify', paymentId]]);
 });
+test('hosted open is authenticated, separately gated, and returns only the saved session', async () => {
+  const s = setup();
+  s.deps.hostedEnabled = true;
+  s.deps.hostedInitEnabled = true;
+  s.deps.workflow.openHosted = async id => { s.calls.push(['openHosted', id]);
+    return { state: 'pending' }; };
+  const response = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'openHosted', requestKey }));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).hostedAvailable, true);
+  assert.deepEqual(s.calls, [['openHosted', paymentId]]);
+  s.deps.hostedEnabled = false;
+  assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'openHosted', requestKey }))).status, 503);
+});
 test('cancel only invokes the pre-dispatch reservation release', async () => {
   const s = setup();
   const response = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'cancel', requestKey }));

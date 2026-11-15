@@ -3,6 +3,7 @@ import { readPhysicalConfig } from './config.js';
 import { createPhysicalDatabase } from './database.js';
 import { createPhysicalRepository } from './repository.js';
 import { createPhysicalPelecardProvider } from './provider.js';
+import { createHostedEmvProvider } from './hosted-provider.js';
 import { createPhysicalWorkflow } from './workflow.js';
 
 export function createPhysicalRuntime(env, overrides = {}) {
@@ -15,11 +16,18 @@ export function createPhysicalRuntime(env, overrides = {}) {
     ? createPhysicalPelecardProvider({ terminalNumber: config.terminalNumber,
       user: config.user, password: config.password, fetcher: overrides.fetcher })
     : { inspect: async () => { throw new Error('physical_disabled'); } };
+  const hostedProvider = config.hostedEnabled
+    ? createHostedEmvProvider({ terminal: config.terminalNumber,
+      user: config.user, password: config.password }, overrides.fetcher)
+    : null;
   const workflow = createPhysicalWorkflow({ ...repository, provider,
+    hostedProvider, hostedEnabled: config.hostedEnabled,
+    hostedInitEnabled: config.hostedInitEnabled, hostedUrls: config.hostedUrls,
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
     merchantTerminal: config.terminalNumber });
   return {
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
+    hostedEnabled: config.hostedEnabled, hostedInitEnabled: config.hostedInitEnabled,
     workerMaxMs: config.workerMaxMs, database, repository, workflow,
     async authenticate(token) {
       const { data: { user } = {}, error } = await authClient.auth.getUser(token);

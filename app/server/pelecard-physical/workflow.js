@@ -2,6 +2,7 @@
 // a separate physical-only gate and a worker that can wait for the PINPAD.
 // Support supplied merchant prefix. The device displays a different full
 // terminal number; only a separately configured physical terminal can be sent.
+import { classifyHostedEmvResult } from './hosted-contract.js';
 export const PHYSICAL_MERCHANT_PREFIX = '2814926';
 export const PHYSICAL_REGISTERS = Object.freeze(['003', '004', '005', '006']);
 
@@ -24,7 +25,68 @@ function validApproval(result, intent, merchantTerminal) {
 
 export function createPhysicalWorkflow(deps) {
   const merchantTerminal = deps.merchantTerminal;
+  async function verifyHosted(intent) {
+    if (!intent.hostedTransactionId || !intent.hostedConfirmationKey)
+      return { id: intent.id, state: intent.state === 'succeeded' ? 'succeeded' : 'uncertain' };
+    let classified;
+    try {
+      const lookup = await deps.hostedProvider.lookup(intent.hostedTransactionId);
+      const uid = lookup?.ResultData?.Uid;
+      const detail = typeof uid === 'string' && uid
+        ? await deps.provider.getTransactionDetailsByUid(uid) : null;
+      classified = classifyHostedEmvResult(lookup, { transactionId: intent.hostedTransactionId,
+        confirmationKey: intent.hostedConfirmationKey, register: intent.register,
+        merchantTerminal, amountMinor: intent.amountMinor, deviceDetails: detail });
+    } catch { classified = { paymentState: 'uncertain' }; }
+    if (classified.paymentState !== 'approved') {
+      if (intent.state !== 'succeeded') await deps.markUncertain(intent.id);
+      return { id: intent.id, state: intent.state === 'succeeded' ? 'succeeded' : 'uncertain',
+        documentState: 'reconciliation_required' };
+    }
+    let finalized = {};
+    if (intent.state !== 'succeeded') {
+      finalized = await deps.finalize(intent.id, { status: 'approved', intentId: intent.id,
+        merchantTerminal, register: intent.register, amountMinor: intent.amountMinor,
+        transactionId: classified.providerTransactionId,
+        approvalId: classified.approvalId, uid: classified.uid });
+    }
+    let documentState = await deps.hostedDocumentState(intent.id);
+    if (documentState !== 'succeeded' && classified.document.state === 'succeeded') {
+      try {
+        await deps.recordHostedDocument(intent.id, classified.document);
+        documentState = 'succeeded';
+      } catch { documentState = 'reconciliation_required'; }
+    }
+    return { id: intent.id, state: 'succeeded', ...finalized,
+      documentState: documentState === 'succeeded' ? 'succeeded' : 'reconciliation_required' };
+  }
   return {
+    async openHosted(intentId) {
+      if (deps.enabled !== true || deps.hostedEnabled !== true ||
+        deps.hostedInitEnabled !== true) throw new Error('physical_hosted_disabled');
+      const intent = await deps.status(intentId);
+      if (!intent || intent.register !== '004' || !validAmount(intent.amountMinor))
+        throw new Error('physical_hosted_intent_invalid');
+      if (intent.route === 'hosted' && intent.hostedTransactionId)
+        return { state: intent.state, redirectUrl: intent.hostedRedirectUrl ?? null };
+      if (!(await deps.claimHostedInit(intentId)))
+        return { state: intent.state, redirectUrl: null };
+      try {
+        const source = await deps.hostedSource(intentId);
+        const callbackUrl = new URL(deps.hostedUrls.callbackBase);
+        callbackUrl.searchParams.set('paymentId', intentId);
+        const session = await deps.hostedProvider.initialize(source, {
+          goodUrl: deps.hostedUrls.goodUrl, errorUrl: deps.hostedUrls.errorUrl,
+          callbackUrl: callbackUrl.href });
+        await deps.persistHostedSession(intentId, session);
+        return { state: 'pending', redirectUrl: session.redirectUrl };
+      } catch {
+        // Unknown initialization outcome may have created a usable hosted page.
+        // Never initialize a second session for this intent.
+        await deps.markUncertain(intentId);
+        return { state: 'uncertain', redirectUrl: null };
+      }
+    },
     async startOrder({ actorId, actorRole, workstationId, requestKey, orderId, amountMinor }) {
       if (deps.enabled !== true) throw new Error('physical_disabled');
       if (typeof merchantTerminal !== 'string' || !/^\d{10}$/.test(merchantTerminal))
@@ -67,6 +129,7 @@ export function createPhysicalWorkflow(deps) {
         throw new Error('physical_terminal_required');
       const intent = await deps.status(intentId);
       if (!intent) throw new Error('physical_intent_missing');
+      if (intent.route === 'hosted') throw new Error('physical_direct_route_required');
       if (!PHYSICAL_REGISTERS.includes(intent.register) || !validAmount(intent.amountMinor))
         throw new Error('physical_intent_invalid');
       if (!(await deps.claimDispatch(intent.id))) return { id: intent.id, state: 'pending' };
@@ -88,6 +151,7 @@ export function createPhysicalWorkflow(deps) {
         throw new Error('physical_terminal_required');
       const intent = await deps.status(intentId);
       if (!intent) throw new Error('physical_intent_missing');
+      if (intent.route === 'hosted') return verifyHosted(intent);
       if (intent.state === 'succeeded') return intent;
       if (intent.state === 'approved') {
         const finalized = await deps.finishApproved(intent.id);
