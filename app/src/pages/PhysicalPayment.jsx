@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/api/supabaseClient';
 import { requestPhysicalPayment } from '@/payments/physical/client';
@@ -65,10 +65,10 @@ export default function PhysicalPayment() {
       setWorkstationCode(current => rows.some(row => row.workstationCode === current)
         ? current : (rows.length === 1 ? rows[0].workstationCode : ''));
     }).catch(() => { if (active) setError('לא ניתן לטעון מסופונים משויכים.'); });
-    requestPhysicalPayment(supabase, { action: 'status', requestKey })
+    if (entryPointer) requestPhysicalPayment(supabase, { action: 'status', requestKey })
       .then(saved => { if (active) setView(saved); }).catch(() => {});
     return () => { active = false; };
-  }, [allowed, requestKey]);
+  }, [allowed, entryPointer, requestKey]);
 
   useEffect(() => {
     if (!view || !unresolved.has(view.state)) return;
@@ -141,6 +141,17 @@ export default function PhysicalPayment() {
   };
 
   if (!allowed) return <main dir="rtl" className="p-8">התשלום זמין למנהל ולקופאי בלבד.</main>;
+  // New payments start from the cashier's single Pay action. This route only
+  // recovers an already reserved intent; it must not offer a second preparation step.
+  if (!entryPointer) return <Navigate to={requestedOrderId
+    ? `/cashregister?orderId=${encodeURIComponent(requestedOrderId)}` : '/cashregister'} replace />;
+  if (!view) return <main dir="rtl" className="mx-auto max-w-xl space-y-4 p-6">
+    <h1 className="text-2xl font-bold">בדיקת תשלום קיים במסופון</h1>
+    <p role="status">בודקים את מצב הניסיון הקיים. אין להתחיל חיוב נוסף עד לבירור.</p>
+    {error && <p role="alert">{error}</p>}
+    <Link to={orderMode ? `/cashregister?orderId=${encodeURIComponent(orderId)}` : '/cashregister'}
+      className="text-primary underline">חזרה לקופה</Link>
+  </main>;
   return <main dir="rtl" className="mx-auto max-w-xl space-y-5 p-6">
     <Link to={orderMode ? `/cashregister?orderId=${encodeURIComponent(orderId)}` : '/cashregister'} className="text-primary underline">חזרה לקופה</Link>
     <h1 className="text-2xl font-bold">תשלום במסופון פיזי</h1>

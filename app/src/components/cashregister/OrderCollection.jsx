@@ -8,6 +8,7 @@ import { publishOrderChange } from '@/lib/orderEvents';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import OrderCustomerLink from '@/components/customers/OrderCustomerLink';
+import { startHostedPhysical } from '@/payments/physical/client';
 
 const validId = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
 const shekels = minor => `${(Number(minor) / 100).toFixed(2)} ₪`;
@@ -43,6 +44,9 @@ export default function OrderCollection({ orderId }) {
   const [result, setResult] = useState(null);
   const [billingOrder, setBillingOrder] = useState(null);
   const [billingOpen, setBillingOpen] = useState(false);
+  const [physicalBusy, setPhysicalBusy] = useState(false);
+  const [physicalReview, setPhysicalReview] = useState(false);
+  const physicalKey = useRef(null);
   const requestKey = useRef(null);
   const locked = useRef(false);
 
@@ -88,6 +92,28 @@ export default function OrderCollection({ orderId }) {
     const { data, error: failure } = await supabase.from('orders').select('*').eq('id', orderId).single();
     if (failure || !data) { setError('לא ניתן לפתוח את פרטי החיוב של ההזמנה.'); return; }
     setBillingOrder(data); setBillingOpen(true);
+  };
+  const payPhysical = async () => {
+    if (physicalBusy || !view || view.balanceMinor <= 0 || view.unresolvedPayment || !accountingReady) return;
+    physicalKey.current ||= crypto.randomUUID();
+    const key = physicalKey.current;
+    localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({ requestKey: key, orderId, cart: null }));
+    setPhysicalBusy(true); setError('');
+    try {
+      const result = await startHostedPhysical(supabase, { requestKey: key, orderId,
+        amountMinor: view.balanceMinor,
+        workstationCode: localStorage.getItem('pelecard.physicalWorkstation.v1') || null });
+      if (result.state !== 'pending' || !result.redirectUrl) setPhysicalReview(true);
+    } catch (reason) {
+      if (reason?.message === 'physical_register_004_unavailable') {
+        localStorage.removeItem('pelecard.physicalPending.v1');
+        physicalKey.current = null;
+        setError('לא נמצא מסופון CT20 משויך לקופה 004. בדקו את הגדרות המסופון.');
+      } else {
+        setError('מצב התשלום הפיזי אינו ודאי. בדקו את הניסיון הקיים לפני פעולה נוספת.');
+        setPhysicalReview(true);
+      }
+    } finally { setPhysicalBusy(false); }
   };
   const submit = async () => {
     if (locked.current || !validAmount || !checkReady || !billingReady || !accountingReady || !view || view.unresolvedPayment) return;
@@ -136,10 +162,11 @@ export default function OrderCollection({ orderId }) {
         </p>)}
       </section>
       {import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true' && view.balanceMinor > 0 &&
-        <Link className="inline-block rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 font-medium text-indigo-900"
-          to={`/payment/physical?orderId=${encodeURIComponent(orderId)}`}>
-          {view.unresolvedPayment ? 'בדיקת תשלום קיים במסופון פיזי' : 'תשלום במסופון פיזי להזמנה זו'}
-        </Link>}
+        (view.unresolvedPayment || physicalReview
+          ? <Link className="inline-block rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 font-medium text-indigo-900"
+              to={`/payment/physical?orderId=${encodeURIComponent(orderId)}`}>בדיקת תשלום קיים במסופון פיזי</Link>
+          : <Button type="button" disabled={physicalBusy || !accountingReady} onClick={payPhysical}>
+              {physicalBusy ? 'פותח מסופון…' : 'שלם במסופון פיזי'}</Button>)}
       {view.balanceMinor > 0 && view.paidMinor === 0 &&
         <OrderDigitalCheckout orderId={orderId} balanceMinor={view.balanceMinor}
           onStatus={() => refresh(false).catch(() => setError('לא ניתן לרענן את יתרת ההזמנה.'))} />}

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { requestPhysicalPayment } from './client.js';
+import { requestPhysicalPayment, startHostedPhysical } from './client.js';
 
 describe('physical POS client', () => {
   test('uses authenticated same-origin physical API and accepts a frozen intent view', async () => {
@@ -32,4 +32,42 @@ describe('physical POS client', () => {
       new Response(JSON.stringify({ ...base, redirectUrl: 'https://evil.example/PaymentGW' })))).rejects
       .toThrow('physical_status_unavailable');
   });
+});
+
+test('one cashier Pay action reserves register 004 and opens the hosted PINPAD page', async () => {
+  const auth = { getSession: async () => ({ data: { session: { access_token: 'token' } } }) };
+  const id = '11111111-1111-4111-8111-111111111111';
+  const url = 'https://gateway21.pelecard.biz/PaymentGW?transactionId=22222222-2222-4222-8222-222222222222';
+  const actions = [];
+  const fetcher = async (_path, options) => {
+    const body = JSON.parse(options.body); actions.push(body);
+    const data = body.action === 'devices' ? [{ workstationCode: 'CT20', registerNumber: '004', label: 'CT20', model: 'CT20' }]
+      : body.action === 'prepareOrder' ? { paymentId: id, state: 'reserved', registerNumber: '004',
+        amountMinor: 1500, saleId: null, hostedAvailable: true }
+        : { paymentId: id, state: 'pending', route: 'hosted', registerNumber: '004', amountMinor: 1500,
+          saleId: null, redirectUrl: url };
+    return new Response(JSON.stringify(data), { status: 200 });
+  };
+  const redirect = vi.fn();
+  await startHostedPhysical({ auth }, { requestKey: id, orderId: id, amountMinor: 1500,
+    redirect, fetcher });
+  expect(actions.map(row => row.action)).toEqual(['devices', 'prepareOrder', 'openHosted']);
+  expect(actions[1]).toMatchObject({ amountMinor: 1500, workstationCode: 'CT20' });
+  expect(redirect).toHaveBeenCalledWith(url);
+});
+
+test('an uncertain physical intent is never opened again', async () => {
+  const auth = { getSession: async () => ({ data: { session: { access_token: 'token' } } }) };
+  const actions = [];
+  const fetcher = async (_path, options) => {
+    const body = JSON.parse(options.body); actions.push(body.action);
+    return new Response(JSON.stringify(body.action === 'devices'
+      ? [{ workstationCode: 'CT20', registerNumber: '004', label: 'CT20', model: 'CT20' }]
+      : { paymentId: '11111111-1111-4111-8111-111111111111', state: 'uncertain', registerNumber: '004',
+        amountMinor: 1500, saleId: null }), { status: 200 });
+  };
+  await startHostedPhysical({ auth }, { requestKey: '11111111-1111-4111-8111-111111111111',
+    orderId: '11111111-1111-4111-8111-111111111111', amountMinor: 1500, fetcher,
+    redirect: vi.fn() });
+  expect(actions).toEqual(['devices', 'prepareOrder']);
 });

@@ -10,6 +10,7 @@ import ReceiptScreen from "@/components/cashregister/ReceiptScreen";
 import OrderCollection from "@/components/cashregister/OrderCollection";
 import { calculateCheckoutTotals } from "@/payments/pelecardPayments";
 import { posCheckoutRequestKey, posPendingKey, startPosCheckout, posPaymentErrorMessage } from '@/payments/posPayments';
+import { startHostedPhysical } from '@/payments/physical/client';
 import { buildStandaloneCheckout } from "@/payments/standaloneCart";
 import { useAuth } from "@/lib/AuthContext";
 import { BRAND } from "@/lib/orderDocText";
@@ -27,7 +28,6 @@ export default function CashRegister() {
   const [loading, setLoading] = useState(true);
   const [cartItems, setCartItems] = useState([]);
   const [screen, setScreen] = useState("menu");
-  const [paymentMethod, setPaymentMethod] = useState(null);
   const [receiptData, setReceiptData] = useState(null);
   // null = no discount; else { type, mode: 'percentage'|'fixed', value }
   const [discount, setDiscount] = useState(null);
@@ -37,6 +37,7 @@ export default function CashRegister() {
   const digitalInFlight = useRef(false);
   const [digitalBusy, setDigitalBusy] = useState(false);
   const physicalCheckoutId = useRef(null);
+  const [physicalBusy, setPhysicalBusy] = useState(false);
   const manualSaleSubmitted = useRef(false);
   const checkRequestKey = useRef(null);
   const [manualSaleSaving, setManualSaleSaving] = useState(false);
@@ -142,7 +143,6 @@ export default function CashRegister() {
             original_total: subtotal } : null,
           linkedOrder: null, timestamp: new Date(), receiptNumber: data.receiptNumber,
           accounting: data.accounting });
-        setPaymentMethod(method);
         setScreen('receipt');
       } catch {
         toast.error('תוצאת שמירת התשלום אינה ודאית. יש לבדוק את דוח המכירות והנהלת החשבונות לפני ניסיון נוסף.');
@@ -194,7 +194,6 @@ export default function CashRegister() {
       receiptNumber: data.receipt_number,
     };
     setReceiptData(receipt);
-    setPaymentMethod(method);
     setManualSaleSaving(false);
     setScreen("receipt");
   };
@@ -230,13 +229,32 @@ export default function CashRegister() {
     }
   };
 
-  const handlePhysicalStart = () => {
+  const handlePhysicalStart = async billing => {
     if (!canPayOrder || linkedOrder?.id || !canHostedCart) return;
     physicalCheckoutId.current ||= crypto.randomUUID();
-    navigate('/payment/physical', { state: { checkoutId: physicalCheckoutId.current, cart: {
+    const cart = {
       lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
       discount: discount ? { type: discount.type, mode: discount.mode, value: Number(discount.value) } : null,
-    } } });
+    };
+    const requestKey = physicalCheckoutId.current;
+    localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({ requestKey,
+      orderId: null, cart: JSON.stringify(cart) }));
+    setPhysicalBusy(true);
+    try {
+      const result = await startHostedPhysical(supabase, { requestKey, cart, billing,
+        workstationCode: localStorage.getItem('pelecard.physicalWorkstation.v1') || null });
+      if (result.state !== 'pending' || !result.redirectUrl)
+        navigate('/payment/physical', { state: { checkoutId: requestKey, cart } });
+    } catch (reason) {
+      if (reason?.message === 'physical_register_004_unavailable') {
+        localStorage.removeItem('pelecard.physicalPending.v1');
+        physicalCheckoutId.current = null;
+        toast.error('לא נמצא מסופון CT20 משויך לקופה 004. בדקו את הגדרות המסופון.');
+      } else {
+        toast.error('מצב התשלום הפיזי אינו ודאי. בדקו את הניסיון הקיים לפני פעולה נוספת.');
+        navigate('/payment/physical', { state: { checkoutId: requestKey, cart } });
+      }
+    } finally { setPhysicalBusy(false); }
   };
 
   const handleNewSale = () => {
@@ -246,9 +264,9 @@ export default function CashRegister() {
     digitalInFlight.current = false;
     setDigitalBusy(false);
     physicalCheckoutId.current = null;
+    setPhysicalBusy(false);
     setCartItems([]);
     setScreen("menu");
-    setPaymentMethod(null);
     setReceiptData(null);
     setDiscount(null);
     setLinkedOrder(null);
@@ -278,8 +296,9 @@ export default function CashRegister() {
         onPelecard={handlePelecardStart}
         pelecardBusy={digitalBusy}
         onPhysicalTerminal={handlePhysicalStart}
+        physicalTerminalBusy={physicalBusy}
         physicalTerminalVisible={import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true'}
-        physicalTerminalEnabled={Boolean(canPayOrder && canHostedCart && !linkedOrder?.id)}
+        physicalTerminalEnabled={Boolean(canPayOrder && canHostedCart && !linkedOrder?.id && !physicalBusy)}
         pelecardEnabled={canPayOrder && (Boolean(linkedOrder?.id)||canHostedCart)}
         pelecardHint={linkedOrder?.id?'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה':
           canHostedCart?'מחירי הקטלוג והסכום יאומתו בשרת לפני מעבר לפלאקארד':

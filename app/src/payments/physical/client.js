@@ -36,3 +36,29 @@ export async function requestPhysicalPayment(client, body, fetcher = fetch) {
     throw new Error('physical_status_unavailable');
   return result;
 }
+
+// One cashier action performs the existing reservation and one-shot hosted
+// initialization. The provider's own PINPAD button remains mandatory.
+export async function startHostedPhysical(client, { requestKey, orderId = null,
+  amountMinor = null, cart = null, billing = null, workstationCode = null,
+  redirect = url => window.location.assign(url), fetcher = fetch }) {
+  const devices = await requestPhysicalPayment(client, { action: 'devices' }, fetcher);
+  const eligible = devices.filter(row => row.registerNumber === '004');
+  const selected = workstationCode
+    ? eligible.find(row => row.workstationCode === workstationCode)
+    : eligible.length === 1 ? eligible[0] : null;
+  if (!selected) throw new Error('physical_register_004_unavailable');
+  const prepared = await requestPhysicalPayment(client, orderId
+    ? { action: 'prepareOrder', requestKey, workstationCode: selected.workstationCode,
+      orderId, amountMinor }
+    : { action: 'prepare', requestKey, workstationCode: selected.workstationCode,
+      cart, billing }, fetcher);
+  if (prepared.registerNumber !== '004' ||
+    (orderId && prepared.amountMinor !== amountMinor)) throw new Error('physical_amount_changed');
+  const current = prepared.state === 'reserved' && prepared.hostedAvailable
+    ? await requestPhysicalPayment(client, { action: 'openHosted', requestKey }, fetcher)
+    : prepared;
+  if (current.route === 'hosted' && current.state === 'pending' &&
+    current.redirectUrl && validRedirect(current.redirectUrl)) redirect(current.redirectUrl);
+  return current;
+}

@@ -45,7 +45,13 @@ test('physical action stays separate from hosted checkout when explicitly enable
   fireEvent.click(screen.getByRole('button', { name: /תשלום במסופון פיזי/ }));
   expect(onPhysical).not.toHaveBeenCalled();
   fireEvent.click(screen.getByTestId('cashier-pay'));
-  expect(onPhysical).toHaveBeenCalledTimes(1);
+  expect(onPhysical).not.toHaveBeenCalled();
+  expect(screen.getByRole('dialog', { name: 'פרטי חיוב למסופון' })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('שם לחיוב'), { target: { value: 'Test Customer' } });
+  fireEvent.change(screen.getByLabelText('מספר זהות / חברה'), { target: { value: '123456782' } });
+  fireEvent.change(screen.getByLabelText('דוא״ל למסמך'), { target: { value: 'test@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'המשך למסופון' }));
+  expect(onPhysical).toHaveBeenCalledWith(expect.objectContaining({ name: 'Test Customer', identity: '123456782' }));
   expect(onDigital).not.toHaveBeenCalled();
   expect(screen.getByText('הסכום נשלח אוטומטית למסופון המשויך לקופה')).toBeInTheDocument();
 });

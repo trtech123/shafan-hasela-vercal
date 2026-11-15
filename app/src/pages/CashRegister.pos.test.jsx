@@ -3,7 +3,7 @@ import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import {afterEach,describe,expect,test,vi} from 'vitest';
 
-const state=vi.hoisted(()=>({role:'admin',navigate:vi.fn(),start:vi.fn()}));
+const state=vi.hoisted(()=>({role:'admin',navigate:vi.fn(),start:vi.fn(),physical:vi.fn()}));
 const productId='11111111-1111-4111-8111-111111111111';
 const serviceId='22222222-2222-4222-8222-222222222222';
 const orderId='33333333-3333-4333-8333-333333333333';
@@ -20,14 +20,18 @@ vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pel
 vi.mock('@/components/cashregister/ReceiptScreen',()=>({default:()=>null}));
 vi.mock('sonner',()=>({toast:{error:vi.fn()}}));
 vi.mock('@/payments/posPayments',async importOriginal=>({...(await importOriginal()),startPosCheckout:(...args)=>state.start(...args)}));
+vi.mock('@/payments/physical/client',()=>({startHostedPhysical:(...args)=>state.physical(...args)}));
 import CashRegister from './CashRegister';
 
-afterEach(()=>{cleanup();state.navigate.mockReset();state.start.mockReset();state.role='admin';sessionStorage.clear()});
+afterEach(()=>{cleanup();state.navigate.mockReset();state.start.mockReset();state.physical.mockReset();state.role='admin';sessionStorage.clear();localStorage.clear()});
 describe('Cash Register hosted routes',()=>{
-  test('physical cart reaches its own review route without a client amount',async()=>{
+  test('physical cart starts hosted EMV directly after the Pay click',async()=>{
+    state.physical.mockResolvedValue({state:'pending',route:'hosted',redirectUrl:'https://gateway21.pelecard.biz/PaymentGW?transactionId=22222222-2222-4222-8222-222222222222'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Physical'));
-    expect(state.navigate).toHaveBeenCalledWith('/payment/physical',{state:{checkoutId:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}}});
+    await waitFor(()=>expect(state.physical).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({
+      requestKey:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
+    expect(state.navigate).not.toHaveBeenCalledWith('/payment/physical',expect.anything());
   });
   test('standalone product cart starts hosted checkout from the Pay click',async()=>{
     state.start.mockResolvedValue({canResume:true,redirectUrl:'https://gateway20.pelecard.biz/PaymentGW?transactionId=11111111-1111-4111-8111-111111111111'});

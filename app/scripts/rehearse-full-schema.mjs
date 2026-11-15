@@ -295,7 +295,7 @@ try {
     assert.equal(physical.amountMinor, 60000);
     if (hostedIncluded) {
       current = 'hosted EMV exact payment and document association on combined schema';
-      const hostedOrder = '00000000-0000-4000-8000-000000000010';
+      const hostedOrder = '00000000-0000-4000-8000-000000000012';
       await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
         activity_id,activity_date,num_participants,price_per_person,payment_status)
         VALUES($1,'Synthetic Hosted','0500000000','billing@example.invalid','Test Group',

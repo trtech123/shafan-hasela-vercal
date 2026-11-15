@@ -57,9 +57,10 @@ export default function PaymentScreen({
   cartItems,
   onConfirm,
   onPelecard = () => {},
-  onPhysicalTerminal = () => {},
+  onPhysicalTerminal = (_billing) => {},
   physicalTerminalVisible = false,
   physicalTerminalEnabled = false,
+  physicalTerminalBusy = false,
   physicalTerminalState = null,
   physicalDeviceName = '',
   onPhysicalStatusCheck = () => {},
@@ -72,6 +73,7 @@ export default function PaymentScreen({
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
   const [detailFor, setDetailFor] = useState(null);
   const [selectedMethod, setSelectedMethod] = useState(null);
+  const [physicalBillingOpen, setPhysicalBillingOpen] = useState(false);
   const [check, setCheck] = useState({ ...emptyCheck, amount: String(total) });
   const [checkBilling, setCheckBilling] = useState({ kind: 'person', name: '', identity: '', email: '' });
   const [cashReceived, setCashReceived] = useState(String(total));
@@ -94,7 +96,10 @@ export default function PaymentScreen({
 
   const paySelected = () => {
     if (selectedMethod === 'digital') return onPelecard();
-    if (selectedMethod === 'physical') return onPhysicalTerminal();
+    if (selectedMethod === 'physical') {
+      if (billingReviewIssues(checkBilling).length) return setPhysicalBillingOpen(true);
+      return onPhysicalTerminal(checkBilling);
+    }
     if (selectedMethod === SPLIT_METHOD) return enterSplit();
     if (selectedMethod) return handleMethodClick(selectedMethod);
   };
@@ -190,7 +195,7 @@ export default function PaymentScreen({
           </div>
 
           <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
-            {lines.map((l, idx) => (
+            {lines.map((l) => (
               <div key={l.id} className="bg-slate-800/60 border border-slate-700 rounded-2xl p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <select
@@ -268,6 +273,19 @@ export default function PaymentScreen({
           !Number.isFinite(Number(cashReceived)) || Math.round(Number(cashReceived) * 100) < Math.round(total * 100)}>אשר קבלת מזומן</Button>
     </DialogContent>
   </Dialog>;
+  const physicalBillingDialog = <Dialog open={physicalBillingOpen} onOpenChange={setPhysicalBillingOpen}>
+    <DialogContent dir="rtl" aria-describedby="physical-billing-help" className="max-h-[90vh] overflow-y-auto bg-slate-900 text-white">
+      <DialogTitle>פרטי חיוב למסופון</DialogTitle>
+      <p id="physical-billing-help">פלאקארד ו־Payper דורשים פרטי חיוב מאומתים למסמך הרשמי. השלימו רק את החסר.</p>
+      <Field label="סוג לקוח"><select className={inputCls} value={checkBilling.kind} onChange={e => setCheckBilling({ ...checkBilling, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></Field>
+      <Field label="שם לחיוב"><input className={inputCls} autoComplete="off" value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
+      <Field label="מספר זהות / חברה"><input className={inputCls} autoComplete="off" inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
+      <Field label="דוא״ל למסמך"><input className={inputCls} autoComplete="off" type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
+      <Button disabled={physicalTerminalBusy || billingReviewIssues(checkBilling).length > 0} onClick={() => {
+        setPhysicalBillingOpen(false); onPhysicalTerminal(checkBilling);
+      }}>המשך למסופון</Button>
+    </DialogContent>
+  </Dialog>;
 
   if (detailFor === CHECK_METHOD) {
     const set = (k) => (e) => setCheck((c) => ({ ...c, [k]: e.target.value }));
@@ -343,6 +361,7 @@ export default function PaymentScreen({
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6" dir="rtl">
       {cashDialog}
+      {physicalBillingDialog}
       <div className="w-full max-w-lg space-y-8">
 
         <div className="text-center">
@@ -423,7 +442,7 @@ export default function PaymentScreen({
             </div>
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>
-          <Button onClick={paySelected} disabled={!selectedMethod || pelecardBusy || manualSaleSaving}
+          <Button onClick={paySelected} disabled={!selectedMethod || pelecardBusy || manualSaleSaving || physicalTerminalBusy}
             className="w-full h-14 text-lg font-bold" data-testid="cashier-pay">
             {pelecardBusy || manualSaleSaving ? 'מעבד תשלום…' : 'שלם'}
           </Button>

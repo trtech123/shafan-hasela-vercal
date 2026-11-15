@@ -50,7 +50,7 @@ describe('physical POS checkout', () => {
     await waitFor(() => expect(requestPhysicalPayment).toHaveBeenCalledWith(expect.anything(),
       { action: 'verify', requestKey }));
   });
-  test('shows assigned CT20 and reserves once without a browser charge', async () => {
+  test('direct standalone visits return to the cashier without preparing a charge', async () => {
     vi.mocked(requestPhysicalPayment).mockImplementation(async (_client, body) => {
       if (body.action === 'devices') return [{ registerNumber: '004', model: 'CT20', label: 'Front CT20', workstationCode: 'FRONT_DESK' }];
       if (body.action === 'status') throw new Error('not_found');
@@ -60,16 +60,11 @@ describe('physical POS checkout', () => {
     render(<MemoryRouter initialEntries={[{ pathname: '/payment/physical', state: { checkoutId: '22222222-2222-4222-8222-222222222222',
       cart: { lines: [{ kind: 'product', id: '33333333-3333-4333-8333-333333333333', qty: 1 }] } } }]}>
       <PhysicalPayment /></MemoryRouter>);
-    expect(await screen.findByText(/Front CT20/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('שם מלא'), { target: { value: 'Test Customer' } });
-    fireEvent.change(screen.getByLabelText('תעודת זהות'), { target: { value: '123456782' } });
-    fireEvent.change(screen.getByLabelText('דואר אלקטרוני'), { target: { value: 'test@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /שמור סל/ }));
-    await waitFor(() => expect(requestPhysicalPayment).toHaveBeenCalledWith(expect.anything(),
-      expect.objectContaining({ action: 'prepare', workstationCode: 'FRONT_DESK' })));
-    expect(screen.getByText(/הבקשה נשמרה/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /שמור סל/ })).toBeNull();
+    expect(requestPhysicalPayment).not.toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ action: 'prepare' }));
   });
-  test('loads an existing order and reserves a partial balance without recreating a cart', async () => {
+  test('direct order visits return to the cashier without preparing a payment', async () => {
     const orderId = '44444444-4444-4444-8444-444444444444';
     vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: {
       orderId, orderNumber: 'ORD-42', clientName: 'Group customer', organization: 'School',
@@ -86,14 +81,9 @@ describe('physical POS checkout', () => {
     });
     render(<MemoryRouter initialEntries={[`/payment/physical?orderId=${orderId}`]}>
       <PhysicalPayment /></MemoryRouter>);
-    expect(await screen.findByText(/ORD-42/)).toBeTruthy();
-    expect(screen.getByText(/70\.00/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText(/סכום לגבייה/), { target: { value: '25.00' } });
-    fireEvent.click(screen.getByRole('button', { name: /שמור.*הזמנה/ }));
-    await waitFor(() => expect(requestPhysicalPayment).toHaveBeenCalledWith(expect.anything(),
-      { action: 'prepareOrder', requestKey: expect.any(String), workstationCode: 'FRONT_DESK',
-        orderId, amountMinor: 2500 }));
-    expect(screen.getByText(/25\.00/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /שמור.*הזמנה/ })).toBeNull();
+    expect(requestPhysicalPayment).not.toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ action: 'prepareOrder' }));
   });
   test('recovers an uncertain order payment after browser closure without preparing another', async () => {
     const orderId = '44444444-4444-4444-8444-444444444444';

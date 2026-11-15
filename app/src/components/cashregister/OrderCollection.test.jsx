@@ -3,12 +3,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, test, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({ role: 'admin', invoke: vi.fn(), order: vi.fn() }));
+const state = vi.hoisted(() => ({ role: 'admin', invoke: vi.fn(), order: vi.fn(), physical: vi.fn() }));
 vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: state.role } }) }));
 vi.mock('react-router-dom', () => ({ Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a> }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: state.invoke },
   from: () => ({ select: () => ({ eq: () => ({ single: () => state.order() }) }) }) } }));
 vi.mock('@/components/customers/OrderCustomerLink', () => ({ default: () => <p>customer link control</p> }));
+vi.mock('@/payments/physical/client', () => ({ startHostedPhysical: (...args) => state.physical(...args) }));
 import OrderCollection from './OrderCollection';
 
 const orderId = '33333333-3333-4333-8333-333333333333';
@@ -18,7 +19,7 @@ const view = (paidMinor = 0) => ({ orderId, orderNumber: 'ORD-123', clientName: 
   collectionEnabled: { cash: true, check: true },
   billing: { kind: 'organization', name: 'Group A', identity: '123456789', email: 'group@example.com' },
   payments: paidMinor ? [{ id: 'p1', status: 'succeeded', amountMinor: paidMinor }] : [], documents: [] });
-afterEach(() => { cleanup(); state.invoke.mockReset(); state.order.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); });
+afterEach(() => { cleanup(); state.invoke.mockReset(); state.order.mockReset(); state.physical.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); localStorage.clear(); });
 
 test('scheduled order shows saved total and balance without creating a cart', async () => {
   state.invoke.mockResolvedValue({ data: view(2000), error: null });
@@ -31,12 +32,24 @@ test('scheduled order shows saved total and balance without creating a cart', as
     { body: { action: 'status', orderId } });
 });
 
-test('offers physical terminal payment for the saved order and keeps its link available for uncertain recovery', async () => {
+test('keeps an uncertain physical intent on its recovery link', async () => {
   vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
   state.invoke.mockResolvedValue({ data: { ...view(2000), unresolvedPayment: true }, error: null });
   render(<OrderCollection orderId={orderId} />);
   const link = await screen.findByRole('link', { name: /מסופון פיזי/ });
   expect(link).toHaveAttribute('href', `/payment/physical?orderId=${orderId}`);
+});
+
+test('eligible saved order starts hosted EMV directly for the server balance', async () => {
+  vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
+  state.invoke.mockResolvedValue({ data: view(2000), error: null });
+  state.physical.mockResolvedValue({ state: 'pending', route: 'hosted',
+    redirectUrl: 'https://gateway21.pelecard.biz/PaymentGW?transactionId=22222222-2222-4222-8222-222222222222' });
+  render(<OrderCollection orderId={orderId} />);
+  fireEvent.click(await screen.findByRole('button', { name: /שלם במסופון פיזי/ }));
+  await waitFor(() => expect(state.physical).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    orderId, amountMinor: 8000, requestKey: expect.any(String) })));
+  expect(screen.queryByRole('link', { name: /תשלום במסופון פיזי להזמנה זו/ })).toBeNull();
 });
 
 test('keeps the physical order link hidden while the browser gate is off', async () => {
