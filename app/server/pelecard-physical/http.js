@@ -19,6 +19,8 @@ export function createPhysicalHttpHandler(deps) {
       try { body = JSON.parse(raw); } catch { return json({ error: 'invalid_input' }, 400); }
       if (!body || Array.isArray(body) || typeof body !== 'object')
         return json({ error: 'invalid_input' }, 400);
+      if (deps.testActorId && ['prepare', 'prepareOrder', 'openHosted'].includes(body.action) &&
+        actor.id !== deps.testActorId) return json({ error: 'physical_test_cashier_only' }, 403);
       if (body.action === 'devices' && Object.keys(body).join(',') === 'action')
         return json(await deps.repository.listDevices(), 200);
       if (body.action === 'prepare') {

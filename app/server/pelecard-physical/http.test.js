@@ -36,6 +36,21 @@ test('authenticated prepare reserves a server-priced physical intent without dis
   assert.equal(s.calls[0][0], 'start');
   assert.equal(s.calls[0][1].actorId, actor.id);
 });
+test('controlled activation admits only the selected cashier to reserve or open hosted EMV', async () => {
+  const s = setup();
+  s.deps.testActorId = '55555555-5555-4555-8555-555555555555';
+  s.deps.hostedEnabled = true;
+  s.deps.hostedInitEnabled = true;
+  const prepare = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder',
+    requestKey, workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 1500 }));
+  const hosted = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'openHosted', requestKey }));
+  assert.equal(prepare.status, 403);
+  assert.equal(hosted.status, 403);
+  assert.deepEqual(s.calls, []);
+  s.deps.testActorId = actor.id;
+  assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder',
+    requestKey, workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 1500 }))).status, 201);
+});
 test('order preparation passes only the order identity and requested amount to the physical workflow', async () => {
   const s = setup();
   const orderId = '44444444-4444-4444-8444-444444444444';

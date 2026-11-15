@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildNoncardPayperRequest, dispatchNoncardPayper, noncardCollectionEnabled } from "./noncard.ts";
+import { buildNoncardPayperRequest, dispatchNoncardPayper, noncardCollectionAllowed, noncardCollectionEnabled } from "./noncard.ts";
 
 const source = () => ({
   amountMinor: 11800, method: "check" as const, documentType: "invoice-receipt" as const,
@@ -14,6 +14,18 @@ const source = () => ({
 const auth = { terminalNumber: "123", user: "user", password: "secret" };
 
 describe("non-card Payper check documents", () => {
+  it("restricts live test collection to the selected cashier when configured", () => {
+    const actor = "11111111-1111-4111-8111-111111111111";
+    const flags = new Map([["PAYPER_NONCARD_COLLECTION_ENABLED", "true"],
+      ["PAYPER_CASH_DISPATCH_ENABLED", "true"], ["PAYPER_NONCARD_TEST_ACTOR_ID", actor]]);
+    const env = (name: string) => flags.get(name);
+    expect(noncardCollectionAllowed("cash", actor, env)).toBe(true);
+    expect(noncardCollectionAllowed("cash", "22222222-2222-4222-8222-222222222222", env)).toBe(false);
+    flags.set("PAYPER_NONCARD_TEST_ACTOR_ID", "invalid");
+    expect(noncardCollectionAllowed("cash", actor, env)).toBe(false);
+    flags.delete("PAYPER_NONCARD_TEST_ACTOR_ID");
+    expect(noncardCollectionAllowed("cash", actor, env)).toBe(true);
+  });
   it("cannot record a cash or check payment while its document dispatch is off", () => {
     const flags = new Map([["PAYPER_NONCARD_COLLECTION_ENABLED", "true"],
       ["PAYPER_CASH_DISPATCH_ENABLED", "true"], ["PAYPER_CHECK_DISPATCH_ENABLED", "false"]]);

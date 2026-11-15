@@ -23,6 +23,14 @@ export function noncardCollectionEnabled(method: "cash" | "check", env: (name: s
     (method === "cash" || env("PAYPER_CHECK_DETAILS_CONTRACT_CONFIRMED") === "true");
 }
 
+export function noncardCollectionAllowed(method: "cash" | "check", actorId: string,
+  env: (name: string) => string | undefined) {
+  const testActor = env("PAYPER_NONCARD_TEST_ACTOR_ID");
+  return noncardCollectionEnabled(method, env) &&
+    (!testActor || (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(testActor) &&
+      testActor === actorId));
+}
+
 const clean = (value: unknown, max: number): value is string => typeof value === "string"
   && value.length > 0 && value.length <= max && value.trim() === value
   && !/[\x00-\x1f\x7f]/.test(value);
