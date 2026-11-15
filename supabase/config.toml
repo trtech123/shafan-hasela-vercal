@@ -44,3 +44,6 @@ verify_jwt = true
 
 [functions.chatbot-handoff-admin]
 verify_jwt = true
+
+[functions.rivhit-connection-check]
+verify_jwt = true
