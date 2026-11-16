@@ -16,6 +16,14 @@ const issueLabels = {
   digital_partial_unsupported: 'בהזמנה זו קיימת גבייה קודמת או יתרה לא ודאית. אין לפתוח חיוב דיגיטלי על הסכום המקורי; יש לבדוק את היתרה עם מנהל.'
 };
 const billingIssueCodes = ['billing_identity_required', 'billing_email_required'];
+const payperUrl = value => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && ['payper.co.il', 'app.payper.co.il'].includes(url.hostname)
+      && /^\/(?:app\/)?public\/invoice_show\/[1-9][0-9]*$/.test(url.pathname)
+      && !url.username && !url.password && !url.port && !url.hash ? url.href : null;
+  } catch { return null; }
+};
 
 export default function OrderPayment() {
   const { user } = useAuth();
@@ -26,6 +34,8 @@ export default function OrderPayment() {
   const [view, setView] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [document, setDocument] = useState(null);
+  const [documentError, setDocumentError] = useState(false);
   const [, tick] = useState(0);
   const locked = useRef(false);
   const generation = useRef(0);
@@ -41,6 +51,34 @@ export default function OrderPayment() {
     const timer = setTimeout(() => tick(value => value + 1), Math.min(delay + 1, 900001));
     return () => clearTimeout(timer);
   }, [view]);
+
+  useEffect(() => {
+    if (!view?.paid || !view.payment?.id) { setDocument(null); return; }
+    let active = true;
+    let timer;
+    let checks = 0;
+    const check = async () => {
+      try {
+        const { data, error: failure } = await supabase.functions.invoke('payper-noncard-collection', {
+          body: { action: 'status', orderId },
+        });
+        if (!active) return;
+        if (failure || data?.error) throw new Error('document_status_unavailable');
+        const found = data?.documents?.find(row => row.paymentId === view.payment.id) ?? null;
+        setDocument(found);
+        setDocumentError(false);
+        if (found?.state === 'succeeded') return;
+      } catch {
+        if (!active) return;
+        setDocumentError(true);
+      }
+      if (++checks < 6) timer = setTimeout(check, 5000);
+    };
+    setDocument(null);
+    setDocumentError(false);
+    check();
+    return () => { active = false; clearTimeout(timer); };
+  }, [view, orderId]);
 
   useEffect(() => {
     const current = ++generation.current;
@@ -115,7 +153,13 @@ export default function OrderPayment() {
       {!view.paid && (view.payment?.hostedState === 'expired' || locallyExpired) && <p className="text-amber-800">פג תוקף דף התשלום הקודם. {view.payment?.status === 'expired' ? `הניסיון הקודם נסגר ללא תשלום. ${view.canInitialize ? 'ניתן לפתוח ניסיון חדש.' : 'פתיחת ניסיון חדש אינה זמינה כרגע.'}` : 'יש לבדוק את תוצאת התשלום. אם התוצאה אינה ודאית, לא ייפתח ניסיון נוסף עד לסיום הבירור מול פלאקארד.'}</p>}
       {!view.paid && view.verification?.approved === false && <p className="text-amber-800">{view.verification.resolution === 'unknown' ? 'לא התקבלה הוכחה סופית לתוצאת התשלום. הניסיון הקיים נשמר לבירור, ללא ניסיון חיוב נוסף.' : 'התשלום לא אושר בבדיקה האחרונה. יש לבדוק את התשלום הקיים לפני ניסיון נוסף.'}</p>}
       {view.paid && <p>אמצעי תשלום: אשראי — פלאקארד</p>}
-      {view.accountingHeld && <p className="text-amber-800">לא יופק מסמך חשבונאי אוטומטי עבור תשלום זה.</p>}
+      {view.paid && view.payment?.id && (document?.state === 'succeeded'
+        && /^[1-9][0-9]*$/.test(String(document.documentNumber)) && payperUrl(document.documentUrl)
+        ? <p role="status">הופק <a className="text-primary underline" href={payperUrl(document.documentUrl)}
+            target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">מסמך Payper רשמי {document.documentNumber}</a>. שליחה לדוא״ל התבקשה; יש לוודא מסירה בנפרד.</p>
+        : <p role="status" className="text-amber-800">{documentError
+          ? 'לא ניתן לבדוק כרגע את מצב המסמך החשבונאי. רעננו מצב תשלום או בדקו בבקרת הנהלת חשבונות.'
+          : 'המסמך החשבונאי עדיין בבדיקה או בהפקה. המצב יתעדכן כאן; אין לפתוח תשלום נוסף.'}</p>)}
       {!view.paid && sourceIssues.length>0 && <div role="alert" className="rounded-md bg-amber-50 p-3 text-sm text-amber-950">{sourceIssues.map(issue => <p key={issue}>{issueLabels[issue] || 'יש לבדוק את פרטי ההזמנה לפני תשלום.'}</p>)}<Link className="underline" to={`/orders?billingOrderId=${encodeURIComponent(orderId)}`}>פתחו את פרטי החיוב של ההזמנה לקישור לקוח ועדכון מע״מ</Link></div>}
       {view.paid && view.payment?.saleId && <Link className="block text-primary underline" to="/sales-report">דוח קופה — צפייה במכירה המקושרת</Link>}
       {!view.paid && <div className="flex flex-wrap gap-3">

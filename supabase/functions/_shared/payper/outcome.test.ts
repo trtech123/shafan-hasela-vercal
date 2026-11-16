@@ -20,12 +20,20 @@ describe("Payper post-dispatch outcome", () => {
     });
   });
 
+  test("accepts Payper's numeric invoice record ID when it differs from the printed invoice number", () => {
+    expect(classifyDispatchedPayperOutcome({ kind: "response", body: {
+      StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "200004",
+        InvoiceLink: "https://app.payper.co.il/public/invoice_show/3630819?ak=opaqueproviderkey123" },
+    } })).toMatchObject({ state: "succeeded", documentNumber: "200004",
+      automaticRetryAllowed: false });
+  });
+
   test.each([
     { StatusCode: "000", PayperData: { InvoiceStatus: "", InvoiceNumber: "", InvoiceLink: "" } },
     { StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "", InvoiceLink: "" } },
     { StatusCode: "111", PayperData: { InvoiceStatus: "Error", InvoiceError: "unknown IP" } },
     { StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "1", InvoiceLink: "http://example.test/doc" } },
-    { StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "1", InvoiceLink: "https://app.payper.co.il/public/invoice_show/2?ak=opaque" } },
+    { StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "1", InvoiceLink: "https://app.payper.co.il/public/invoice_show/x?ak=opaque" } },
     { StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "1", InvoiceLink: "https://app.payper.co.il/unrelated/1" } },
     null,
   ])("requires reconciliation after a dispatched ambiguous response", (body) => {

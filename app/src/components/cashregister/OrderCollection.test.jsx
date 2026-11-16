@@ -91,6 +91,48 @@ test('cashier sees the server-computed full balance', async () => {
   expect(amount).toHaveValue(100);
 });
 
+test('paid cash order shows its issued invoice and no obsolete billing warning', async () => {
+  state.invoke.mockResolvedValue({ data: { ...view(10000), billingIssues: ['billing_email_required'],
+    documents: [{ paymentId: 'p1', state: 'succeeded', documentNumber: '200004',
+      documentUrl: 'https://app.payper.co.il/public/invoice_show/3630819?ak=opaqueproviderkey123' }] }, error: null });
+  render(<OrderCollection orderId={orderId} />);
+  expect(await screen.findByText(/ORD-123/)).toBeInTheDocument();
+  expect(screen.getByText(/הופק 200004/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'פתיחה והדפסה' })).toHaveAttribute('href',
+    'https://app.payper.co.il/public/invoice_show/3630819?ak=opaqueproviderkey123');
+  expect(screen.queryByText(/לפני גבייה במזומן/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'השלמת פרטי חיוב להזמנה זו' })).toBeNull();
+});
+
+test('an uncertain cash invoice result asks for matching the existing document, not issuance approval', async () => {
+  state.invoke.mockImplementation((_name, { body }) => Promise.resolve({ data:
+    body.action === 'status' ? { ...view(10000), documents: [{ paymentId: 'p1',
+      state: 'reconciliation_required', code: 'provider_response_uncertain' }] }
+      : { saleId: 'sale-1', paymentId: 'p1', receiptNumber: 'RCP-1045',
+        accounting: { state: 'reconciliation_required' } }, error: null }));
+  render(<OrderCollection orderId={orderId} />);
+  await screen.findByText(/ORD-123/);
+  expect(screen.getByText(/נדרשת התאמה/)).toBeInTheDocument();
+  expect(screen.queryByText(/טרם אושר להפקה/)).toBeNull();
+});
+
+test('cash result follows refreshed ledger after an uncertain response is reconciled', async () => {
+  let statusChecks = 0;
+  state.invoke.mockImplementation((_name, { body }) => Promise.resolve({ data:
+    body.action === 'status' ? (statusChecks++ === 0 ? view() : { ...view(10000),
+      documents: [{ paymentId: 'p1', state: 'succeeded', documentNumber: '200004',
+        documentUrl: 'https://app.payper.co.il/public/invoice_show/3630819?ak=opaqueproviderkey123' }] })
+      : { saleId: 'sale-1', paymentId: 'p1', receiptNumber: 'RCP-1045',
+        accounting: { state: 'reconciliation_required' } }, error: null }));
+  render(<OrderCollection orderId={orderId} />);
+  await screen.findByLabelText('סכום לגבייה (₪)');
+  fireEvent.change(screen.getByLabelText('אמצעי תשלום'), { target: { value: 'cash' } });
+  fireEvent.click(screen.getByRole('button', { name: 'רשום תשלום והפק מסמך' }));
+  expect(await screen.findByText(/מסמך Payper רשמי 200004/)).toBeInTheDocument();
+  expect(screen.queryByText(/טרם אושר להפקה/)).toBeNull();
+  expect(state.invoke.mock.calls.filter(([, arg]) => arg.body.action === 'collect')).toHaveLength(1);
+});
+
 test('admin cash collection uses the order ID and full balance exactly once', async () => {
   state.invoke.mockImplementation((_name, { body }) => Promise.resolve({
     data: body.action === 'status' ? view() : { saleId: 'sale-1', paymentId: 'payment-1',

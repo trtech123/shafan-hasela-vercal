@@ -88,6 +88,8 @@ export default function OrderCollection({ orderId }) {
     && check.received_date && check.due_date && check.due_date >= check.received_date);
   const billingReady = billingReviewIssues(billing).length === 0;
   const accountingReady = !view?.billingIssues?.length && !view?.accountingReviewRequired;
+  const resultDocument = view?.documents?.find(doc => doc.paymentId === result?.paymentId);
+  const accountingResult = resultDocument ?? result?.accounting;
   const openBilling = async () => {
     const { data, error: failure } = await supabase.from('orders').select('*').eq('id', orderId).single();
     if (failure || !data) { setError('לא ניתן לפתוח את פרטי החיוב של ההזמנה.'); return; }
@@ -153,11 +155,12 @@ export default function OrderCollection({ orderId }) {
         {view.payments?.some(p => p.clearanceStatus === 'received_uncleared') && <p className="text-sm text-amber-800">המחאות שהתקבלו טרם נפרעו בבנק.</p>}
         {view.unresolvedPayment && <p role="alert" className="text-amber-800">קיים ניסיון תשלום שתוצאתו אינה ודאית. גבייה נוספת חסומה עד בירור.</p>}
         {view.accountingReviewRequired && <p role="alert" className="text-amber-800">כבר קיים מסמך או ניסיון הפקה חשבונאי להזמנה. גבייה נוספת חסומה עד להתאמה חשבונאית.</p>}
-      {view.billingIssues?.length > 0 && <p role="alert" className="text-amber-800">לפני גבייה במזומן או בהמחאה יש להשלים פרטי חיוב ומדיניות מע״מ מאומתים בכרטיס הלקוח. לא יירשם תשלום עד להשלמה.</p>}
-      {view.billingIssues?.some(issue => ['vat_required', 'billing_identity_required', 'billing_email_required', 'cash_vat_unsupported'].includes(issue)) &&
+      {view.balanceMinor > 0 && view.billingIssues?.length > 0 && <p role="alert" className="text-amber-800">לפני גבייה במזומן או בהמחאה יש להשלים פרטי חיוב ומדיניות מע״מ מאומתים בכרטיס הלקוח. לא יירשם תשלום עד להשלמה.</p>}
+      {view.balanceMinor > 0 && view.billingIssues?.some(issue => ['vat_required', 'billing_identity_required', 'billing_email_required', 'cash_vat_unsupported'].includes(issue)) &&
         <Button type="button" variant="outline" onClick={openBilling}>השלמת פרטי חיוב להזמנה זו</Button>}
         {view.documents?.map(doc => <p key={doc.paymentId} className="text-sm">
-          מסמך עבור תשלום {doc.paymentId}: {doc.state === 'succeeded' ? `הופק ${doc.documentNumber}` : 'ממתין או דורש התאמה'}
+          מסמך עבור תשלום {doc.paymentId}: {doc.state === 'succeeded' ? `הופק ${doc.documentNumber}` :
+            doc.state === 'reconciliation_required' ? 'נדרשת התאמה למסמך קיים מול Payper; אין להפיק מסמך נוסף' : 'ממתין להפקה'}
           {safeDocumentUrl(doc.documentUrl) && <a className="mr-2 text-primary underline" href={safeDocumentUrl(doc.documentUrl)} target="_blank" rel="noopener noreferrer">פתיחה והדפסה</a>}
         </p>)}
       </section>
@@ -172,9 +175,11 @@ export default function OrderCollection({ orderId }) {
           onStatus={() => refresh(false).catch(() => setError('לא ניתן לרענן את יתרת ההזמנה.'))} />}
       {result && <section role="status" className="rounded-xl border bg-white p-4">
         <p>התשלום נרשם במכירה {result.receiptNumber}. זהו אישור פנימי בלבד.</p>
-        {result.accounting?.state === 'succeeded' && safeDocumentUrl(result.accounting.documentUrl)
-          ? <p>מסמך Payper רשמי {result.accounting.documentNumber} · <a className="text-primary underline" href={safeDocumentUrl(result.accounting.documentUrl)} target="_blank" rel="noopener noreferrer">פתיחה והדפסה</a></p>
-          : <p>המסמך החשבונאי טרם אושר להפקה. נדרשת בדיקה בבקרת הנהלת חשבונות.</p>}
+        {accountingResult?.state === 'succeeded' && safeDocumentUrl(accountingResult.documentUrl)
+          ? <p>מסמך Payper רשמי {accountingResult.documentNumber} · <a className="text-primary underline" href={safeDocumentUrl(accountingResult.documentUrl)} target="_blank" rel="noopener noreferrer">פתיחה והדפסה</a></p>
+          : <p>{accountingResult?.state === 'reconciliation_required'
+            ? 'התשלום נשמר, אך תוצאת הפקת המסמך אינה ודאית. יש להתאים את המסמך הקיים מול Payper; אין להפיק מסמך נוסף.'
+            : 'המסמך החשבונאי בהפקה או בבדיקה. רעננו את מצב המסמכים.'}</p>}
       </section>}
       {view.balanceMinor > 0 && !view.unresolvedPayment && !result &&
         !view.collectionEnabled?.cash && !view.collectionEnabled?.check &&
