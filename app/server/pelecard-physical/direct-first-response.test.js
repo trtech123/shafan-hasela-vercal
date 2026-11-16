@@ -36,3 +36,21 @@ test('malformed invoice link cannot be treated as an issued document', () => {
     InvoiceStatus: 'Success', InvoiceNumber: '595170', InvoiceLink: 'https://evil.test/invoice/595170' } });
   assert.equal(result.document.state, 'reconciliation_required');
 });
+
+test('printed invoice number may differ from Payper invoice URL system ID', () => {
+  const result = projectDirectFirstResponse({ StatusCode: '000', PayperData: {
+    InvoiceStatus: 'Success', InvoiceNumber: '200004',
+    InvoiceLink: 'https://app.payper.co.il/public/invoice_show/3630819?ak=abcdefghijklmnop',
+    RawResponse: '{"document_system_id":3630819,"document_id":"550"}' } });
+  assert.equal(result.document.state, 'succeeded');
+  assert.equal(result.document.number, '200004');
+  assert.equal(result.document.systemId, '3630819');
+});
+
+test('conflicting Payper system ID cannot be treated as an issued document', () => {
+  const result = projectDirectFirstResponse({ StatusCode: '000', PayperData: {
+    InvoiceStatus: 'Success', InvoiceNumber: '200004',
+    InvoiceLink: 'https://app.payper.co.il/public/invoice_show/3630819',
+    RawResponse: '{"document_system_id":595170}' } });
+  assert.equal(result.document.state, 'reconciliation_required');
+});

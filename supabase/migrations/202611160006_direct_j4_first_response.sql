@@ -137,8 +137,8 @@ BEGIN
     num IS NULL OR num !~ '^[1-9][0-9]{0,29}$' OR
     link IS NULL OR link !~
       '^https://app\.payper\.co\.il/public/invoice_show/[1-9][0-9]{0,29}(\?ak=[A-Za-z0-9_-]{16,128})?$' OR
-    split_part(split_part(link,'?',1),'/',6)<>num OR
-    (system_id IS NOT NULL AND system_id !~ '^[1-9][0-9]{0,29}$') OR
+    system_id IS NULL OR system_id !~ '^[1-9][0-9]{0,29}$' OR
+    split_part(split_part(link,'?',1),'/',6)<>system_id OR
     (document_id IS NOT NULL AND document_id !~ '^[A-Za-z0-9_-]{1,100}$') OR
     p.status<>'succeeded' OR p.provider<>'pelecard' OR p.operation<>'payment' OR
     p.currency<>'ILS' OR p.sale_id IS DISTINCT FROM i.sale_id OR

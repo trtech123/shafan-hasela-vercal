@@ -44,7 +44,7 @@ try {
   const hostedIncluded = migrations.some(filename =>
     basename(filename) === '202611150004_physical_hosted_emv.sql');
   const directIncluded = migrations.some(filename =>
-    basename(filename) === '202611160001_direct_j4_first_response.sql');
+    basename(filename) === '202611160006_direct_j4_first_response.sql');
   for (const filename of migrations) {
     current = basename(filename);
     await db.exec((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
@@ -372,7 +372,7 @@ try {
         assert.equal(source.amountMinor, 1500);
         assert.equal(source.register, '004');
         const evidence = { payment: { transactionId: '12346', amountMinor: 1500 },
-          document: { state: 'succeeded', status: 'Success', number: '595171',
+          document: { state: 'succeeded', status: 'Success', number: '200005',
             url: 'https://app.payper.co.il/public/invoice_show/595171',
             systemId: '595171', documentId: '551' } };
         let cardLeakBlocked = false;
@@ -394,7 +394,7 @@ try {
         assert.equal(changedResponseBlocked, true, 'first provider response must be immutable');
         const saved = (await db.query('SELECT public.get_physical_worker_intent($1) AS value',
           [direct.paymentId])).rows[0].value;
-        assert.equal(saved.firstResponse.document.number, '595171');
+        assert.equal(saved.firstResponse.document.number, '200005');
         await db.query('SELECT public.observe_physical_result($1,$2::jsonb)', [direct.paymentId,
           JSON.stringify({ status: 'approved', intentId: direct.paymentId,
             merchantTerminal: '2814926015', register: '004', amountMinor: 1500,
@@ -414,7 +414,7 @@ try {
           [direct.paymentId])).rows[0].value, true);
         const document = (await db.query(`SELECT document_number,physical_document_id,state
           FROM public.payper_document_ledger WHERE payment_id=$1`, [direct.paymentId])).rows[0];
-        assert.deepEqual(document, { document_number: '595171', physical_document_id: '551',
+        assert.deepEqual(document, { document_number: '200005', physical_document_id: '551',
           state: 'succeeded' });
       }
     }

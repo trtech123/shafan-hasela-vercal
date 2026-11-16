@@ -33,10 +33,14 @@ export function projectDirectFirstResponse(raw) {
   try {
     if (link) {
       const parsed = new URL(link);
+      const match = /^\/public\/invoice_show\/([1-9][0-9]{0,29})$/.exec(parsed.pathname);
       if (parsed.protocol === 'https:' && parsed.hostname === 'app.payper.co.il' &&
         !parsed.port && !parsed.username && !parsed.password && !parsed.hash &&
-        parsed.pathname === `/public/invoice_show/${number}` &&
-        (!parsed.search || /^\?ak=[A-Za-z0-9_-]{16,128}$/.test(parsed.search))) url = parsed.href;
+        match && (!systemId || systemId === match[1]) &&
+        (!parsed.search || /^\?ak=[A-Za-z0-9_-]{16,128}$/.test(parsed.search))) {
+        url = parsed.href;
+        systemId = match[1];
+      }
     }
   } catch { /* Invalid links require reconciliation. */ }
   const issued = ['000', 'OK', 'Success'].includes(status) && number && url && !payper.InvoiceError;
