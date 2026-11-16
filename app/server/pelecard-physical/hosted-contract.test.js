@@ -73,8 +73,13 @@ test('ambiguous result, amount mismatch and duplicate document identity cannot c
       .paymentState, 'uncertain');
   assert.equal(classifyHostedEmvResult(result, { ...expected, deviceDetails: {
     ...expected.deviceDetails, termNo: '003' } }).paymentState, 'uncertain');
-  assert.equal(parseHostedPayperData({ ...result.PayperData, InvoiceNumber: '595171' }).state,
-    'reconciliation_required');
+  assert.deepEqual(parseHostedPayperData({ ...result.PayperData,
+    InvoiceNumber: '200004',
+    InvoiceLink: 'https://app.payper.co.il/public/invoice_show/3630819?ak=abcdefghijklmnop',
+    RawResponse: '{"document_system_id":3630819}' }), {
+    state: 'succeeded', number: '200004',
+    url: 'https://app.payper.co.il/public/invoice_show/3630819?ak=abcdefghijklmnop',
+    systemId: '3630819' });
   assert.equal(parseHostedPayperData({ ...result.PayperData, InvoiceStatus: 'Success' }).state,
     'reconciliation_required');
 });

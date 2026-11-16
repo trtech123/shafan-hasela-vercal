@@ -84,9 +84,10 @@ export function parseHostedPayperData(value) {
   if (!text(value.InvoiceLink, 2048)) return blocked;
   let url;
   try { url = new URL(value.InvoiceLink); } catch { return blocked; }
+  const documentPath = /^\/public\/invoice_show\/([1-9][0-9]{0,29})$/.exec(url.pathname);
   if (url.protocol !== 'https:' || url.hostname !== 'app.payper.co.il' ||
     url.port || url.username || url.password || url.hash ||
-    url.pathname !== `/public/invoice_show/${number}` ||
+    !documentPath ||
     (url.search && !/^\?ak=[A-Za-z0-9_-]{16,128}$/.test(url.search))) return blocked;
   let systemId = null;
   if (/^[1-9][0-9]{0,29}$/.test(String(value.document_system_id ?? '')))
@@ -97,6 +98,8 @@ export function parseHostedPayperData(value) {
     if (record(raw) && /^[1-9][0-9]{0,29}$/.test(String(raw.document_system_id ?? '')))
       systemId = String(raw.document_system_id);
   } catch { /* An opaque raw response is never stored or logged. */ }
+  if (systemId && systemId !== documentPath[1]) return blocked;
+  systemId ??= documentPath[1];
   return { state: 'succeeded', number, url: url.href, systemId };
 }
 

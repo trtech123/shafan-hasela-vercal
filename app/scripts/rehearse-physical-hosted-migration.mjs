@@ -36,6 +36,8 @@ try {
   `);
   const migration = new URL('../../supabase/migrations/202611150004_physical_hosted_emv.sql', import.meta.url);
   await db.exec((await readFile(migration, 'utf8')).replace(/^\uFEFF/, ''));
+  const documentLinkFix = new URL('../../supabase/migrations/202611160004_hosted_document_link_identity.sql', import.meta.url);
+  await db.exec((await readFile(documentLinkFix, 'utf8')).replace(/^\uFEFF/, ''));
   await call(`INSERT INTO public.payment_transactions(id,provider,operation,amount,currency,status)
     VALUES($1,'pelecard','payment',118,'ILS','initiated')`, [payment]);
   await call(`INSERT INTO public.physical_payment_intents(payment_id,request_key,created_by,
@@ -64,13 +66,14 @@ try {
     provider_transaction_id='12345',provider_uid='uid-1' WHERE payment_id=$1`, [payment, sale]);
   await call(`INSERT INTO public.payper_document_ledger(payment_id,sale_id,state,reconciliation_code)
     VALUES($1,$2,'source_blocked','physical_provider_confirmation_required')`, [payment, sale]);
-  const document = 'https://app.payper.co.il/public/invoice_show/595170';
+  const document = 'https://app.payper.co.il/public/invoice_show/3630819';
   const record = 'SELECT public.record_physical_hosted_document($1,$2,$3,$4) AS result';
-  assert.equal((await call(record, [payment, '595170', document, '595170']))[0].result, true);
-  assert.equal((await call(record, [payment, '595170', document, '595170']))[0].result, true);
-  await assert.rejects(() => call(record, [payment, '595171', document, '595171']));
+  await assert.rejects(() => call(record, [payment, '200004', document, '595170']));
+  assert.equal((await call(record, [payment, '200004', document, '3630819']))[0].result, true);
+  assert.equal((await call(record, [payment, '200004', document, '3630819']))[0].result, true);
+  await assert.rejects(() => call(record, [payment, '200005', document, '3630819']));
   const ledger = (await call('SELECT state,physical_document_system_id FROM public.payper_document_ledger'))[0];
-  assert.deepEqual(ledger, { state: 'succeeded', physical_document_system_id: '595170' });
+  assert.deepEqual(ledger, { state: 'succeeded', physical_document_system_id: '3630819' });
   console.log('Isolated hosted migration passed: one-shot claim, direct-worker exclusion, session persistence, exact document association and duplicate refusal.');
 } catch (error) {
   console.error('Isolated hosted migration failed:', error.message);
