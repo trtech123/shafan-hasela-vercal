@@ -103,7 +103,7 @@ describe('physical terminal workflow', () => {
     const verified = await workflow.verify('intent-1');
     expect(deps.provider.inspect).toHaveBeenCalledWith(expect.objectContaining({ id: 'intent-1', register: '003', amountMinor: 2400 }));
     expect(deps.finalize).toHaveBeenCalledWith('intent-1', expect.objectContaining({ transactionId: 'trx-1', amountMinor: 2400 }));
-    expect(verified).toMatchObject({ saleId: 'sale-1', documentState: 'eligible' });
+    expect(verified).toMatchObject({ saleId: 'sale-1', documentState: 'reconciliation_required' });
   });
   test('repeated status checks return the existing sale without a second finalization', async () => {
     const deps = dependencies();

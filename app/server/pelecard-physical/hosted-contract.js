@@ -18,7 +18,7 @@ const safeUrl = value => {
   return url.href;
 };
 
-export function buildHostedEmvRequest(intent, credentials, urls) {
+export function buildPhysicalPayperParameters(intent) {
   if (!record(intent) || intent.register !== '004' ||
     !Number.isSafeInteger(intent.amountMinor) || intent.amountMinor < 1 ||
     !text(intent.id, 100) || !/^[A-Za-z0-9_-]+$/.test(intent.id))
@@ -58,6 +58,16 @@ export function buildHostedEmvRequest(intent, credentials, urls) {
       include_vat: billing.vatApplicable ? 'true' : 'false',
       no_vat: billing.vatApplicable ? 'false' : 'true', currency_symbol: 'ILS' });
   } else if (sum !== intent.amountMinor) throw new Error('physical_amount_mismatch');
+  return { typeDocument: 'Invoice-Receipt', DataPayper: {
+    customer_unique_id: billing.identity, customer_mail: billing.email,
+    customer_name: billing.name, send_by_mail: 'true', document_rounded: 'false',
+    document_no_vat: billing.vatApplicable ? 'false' : 'true',
+    invoice_lines: invoiceLines, receipt_lines: [],
+  } };
+}
+
+export function buildHostedEmvRequest(intent, credentials, urls) {
+  const payperParameters = buildPhysicalPayperParameters(intent);
   if (!record(credentials) || !/^\d{10}$/.test(credentials.terminal) ||
     !text(credentials.user, 100) || !text(credentials.password, 200) || !record(urls))
     throw new Error('physical_credentials_required');
@@ -67,12 +77,7 @@ export function buildHostedEmvRequest(intent, credentials, urls) {
     UserKey: intent.id, GoodURL: safeUrl(urls.goodUrl), ErrorURL: safeUrl(urls.errorUrl),
     CancelURL: safeUrl(urls.errorUrl), ServerSideGoodFeedbackURL: safeUrl(urls.callbackUrl),
     ServerSideErrorFeedbackURL: safeUrl(urls.callbackUrl), resultDataKeyName: 'result',
-    PayperParameters: { typeDocument: 'Invoice-Receipt', DataPayper: {
-      customer_unique_id: billing.identity, customer_mail: billing.email,
-      customer_name: billing.name, send_by_mail: 'true', document_rounded: 'false',
-      document_no_vat: billing.vatApplicable ? 'false' : 'true',
-      invoice_lines: invoiceLines, receipt_lines: [],
-    } } };
+    PayperParameters: payperParameters };
 }
 
 export function parseHostedPayperData(value) {

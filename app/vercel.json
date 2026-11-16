@@ -1,5 +1,9 @@
 {
   "functions": {
+    "api/pelecard-physical-worker.js": {
+      "maxDuration": 360,
+      "includeFiles": "server/pelecard-live/certs/**"
+    },
     "api/pelecard-physical.js": {
       "maxDuration": 30
     },
@@ -22,6 +26,9 @@
       "includeFiles": "server/pelecard-live/certs/**"
     }
   },
+  "crons": [
+    { "path": "/api/pelecard-physical-worker", "schedule": "* * * * *" }
+  ],
   "rewrites": [
     {
       "source": "/((?!api/).*)",

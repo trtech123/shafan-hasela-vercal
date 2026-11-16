@@ -1,5 +1,7 @@
 // Pelecard Services API. Appendix D documents the card-present PINPAD J4
 // variant with empty card fields and a five-minute response window.
+import { buildPhysicalPayperParameters } from './hosted-contract.js';
+import { projectDirectFirstResponse } from './direct-first-response.js';
 const BASE = 'https://gateway21.pelecard.biz/services/';
 const DEBIT = `${BASE}DebitRegularType`;
 const LOOKUP = `${BASE}CheckGoodParamXEMV`;
@@ -48,11 +50,14 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
   }
 
   return {
-    async send({ merchantTerminal, register, amountMinor, intentId }) {
+    async send({ merchantTerminal, register, amountMinor, intentId, payperSource }) {
       if (merchantTerminal !== terminalNumber || !registerNumber.test(register) ||
         !Number.isSafeInteger(amountMinor) || amountMinor < 1 || amountMinor > 2_147_483_647 ||
         typeof intentId !== 'string' || !reference.test(intentId))
         throw new Error('physical_dispatch_invalid');
+      if (payperSource && (payperSource.id !== intentId ||
+        payperSource.register !== register || payperSource.amountMinor !== amountMinor))
+        throw new Error('physical_payper_source_mismatch');
       // All fields in Appendix D's J4 example are serialized. In particular,
       // card number and expiry are present as empty strings, never as raw data.
       const body = await post(DEBIT, {
@@ -60,8 +65,10 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
         total: String(amountMinor), currency: '1', cvv2: '', id: '',
         authorizationNumber: '', paramX: intentId, QAResultStatus: '',
         eci: '', xid: '', cavv: '',
+        ...(payperSource ? { PayperParameters: buildPhysicalPayperParameters(payperSource) } : {}),
       }, 300_000);
-      return { ...safeProjection(body), StatusCode: statusCode(body.StatusCode) };
+      return { ...safeProjection(body), StatusCode: statusCode(body.StatusCode),
+        firstResponse: projectDirectFirstResponse(body) };
     },
     async lookupByParamX(paramX) {
       if (typeof paramX !== 'string' || !reference.test(paramX))
