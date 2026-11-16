@@ -76,11 +76,12 @@ describe("non-card Payper check documents", () => {
   });
   it("accepts only documented success evidence as an issued document", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "1500",
-        InvoiceLink: "https://app.payper.co.il/public/invoice_show/1500" },
+      StatusCode: "000", PayperData: { InvoiceStatus: "Success", InvoiceNumber: "200004",
+        InvoiceLink: "https://app.payper.co.il/public/invoice_show/3630819?ak=opaqueproviderkey123" },
     }), { status: 200 }));
     const outcome = await dispatchNoncardPayper(buildNoncardPayperRequest(source(), auth), fetcher);
-    expect(outcome).toMatchObject({ state: "succeeded", documentNumber: "1500",
+    expect(outcome).toMatchObject({ state: "succeeded", documentNumber: "200004",
+      documentUrl: "https://app.payper.co.il/public/invoice_show/3630819?ak=opaqueproviderkey123",
       automaticRetryAllowed: false });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
