@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {Link,useLocation} from 'react-router-dom';
 import {useAuth} from '@/lib/AuthContext';
 import {supabase} from '@/api/supabaseClient';
@@ -18,19 +18,20 @@ export default function PosPayment(){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const locked=useRef(false);const handledReturn=useRef(null);
-  const [requestKey]=useState(()=>{
+  const requestKey=useMemo(()=>{
+    if(!validOrderId(user?.id))return null;
     const scoped=pendingKey?sessionStorage.getItem(pendingKey):null;
     if(scoped||validOrderId(location.state?.checkoutId))
       return posCheckoutRequestKey(location.state?.checkoutId,cart,scoped,()=>crypto.randomUUID(),user?.id);
     // Older checkout pointers remain available for status/recovery only. The
     // server checks ownership before returning or acting on an intent.
     return posCheckoutRequestKey(null,cart,sessionStorage.getItem(posPendingKey));
-  });
+  },[user?.id,pendingKey,location.state?.checkoutId,cart]);
   const allowed=(user?.role==='admin'||user?.role==='קופאי')&&validOrderId(user?.id);
   useEffect(()=>{if(view?.paid)sessionStorage.removeItem(pendingKey);},[view?.paid]);
 
   useEffect(()=>{
-    if(!allowed)return;
+    if(!allowed||!requestKey)return;
     let active=true;
     const locate=returnedId&&validOrderId(returnedId)?{paymentId:returnedId}:{requestKey};
     const load=async()=>{
