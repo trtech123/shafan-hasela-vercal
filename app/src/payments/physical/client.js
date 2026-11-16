@@ -63,8 +63,8 @@ export async function startHostedPhysical(client, { requestKey, orderId = null,
   return current;
 }
 
-// Reserve the direct J4 intent. The cloud worker owns financial dispatch;
-// callers inspect the same request key until a verified result is durable.
+// Reserve the direct J4 intent and await a durable queue publish. The private
+// cloud consumer owns financial dispatch; callers poll the same request key.
 export async function startDirectPhysical(client, { requestKey, orderId = null,
   amountMinor = null, cart = null, billing = null, workstationCode = null,
   fetcher = fetch }) {
@@ -81,5 +81,11 @@ export async function startDirectPhysical(client, { requestKey, orderId = null,
       cart, billing }, fetcher);
   if (prepared.registerNumber !== '004' ||
     (orderId && prepared.amountMinor !== amountMinor)) throw new Error('physical_amount_changed');
-  return prepared;
+  if (prepared.state !== 'reserved') return prepared;
+  const queued = await requestPhysicalPayment(client,
+    { action: 'enqueueDirect', requestKey }, fetcher);
+  if (queued.paymentId !== prepared.paymentId ||
+    queued.registerNumber !== prepared.registerNumber ||
+    queued.amountMinor !== prepared.amountMinor) throw new Error('physical_intent_conflict');
+  return queued;
 }

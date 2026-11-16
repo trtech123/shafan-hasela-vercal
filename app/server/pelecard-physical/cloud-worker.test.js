@@ -25,3 +25,16 @@ test('cloud worker reports failed recovery without retrying a financial send', a
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { processed: 1, failed: 1, unresolved: 0 });
 });
+test('minute cron monitors reserved intents but never starts J4', async () => {
+  let sends = 0;
+  const runtime = { enabled: true, dispatchEnabled: true, workerMaxMs: 360_000,
+    database: { query: async () => ({ rows: [{ result: [{ paymentId: 'synthetic-1', state: 'reserved' }] }] }) },
+    workflow: { dispatch: async () => { sends++; } } };
+  const handler = createCloudPhysicalWorkerHandler({ CRON_SECRET: 'synthetic-secret',
+    PELECARD_PHYSICAL_CLOUD_WORKER_ENABLED: 'true' }, () => runtime);
+  const response = await handler(new Request('https://example.test/api/pelecard-physical-worker',
+    { headers: { authorization: 'Bearer synthetic-secret' } }));
+  assert.equal(response.status, 200);
+  assert.equal(sends, 0);
+  assert.deepEqual(await response.json(), { processed: 1, failed: 0, unresolved: 1 });
+});

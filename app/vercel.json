@@ -4,6 +4,19 @@
       "maxDuration": 360,
       "includeFiles": "server/pelecard-live/certs/**"
     },
+    "api/pelecard-physical-queue.js": {
+      "maxDuration": 360,
+      "includeFiles": "server/pelecard-live/certs/**",
+      "experimentalTriggers": [
+        { "type": "queue/v2beta", "topic": "physical-j4-dispatch" }
+      ]
+    },
+    "api/pelecard-physical-queue-smoke.js": {
+      "maxDuration": 360,
+      "experimentalTriggers": [
+        { "type": "queue/v2beta", "topic": "physical-j4-smoke" }
+      ]
+    },
     "api/pelecard-physical.js": {
       "maxDuration": 30
     },

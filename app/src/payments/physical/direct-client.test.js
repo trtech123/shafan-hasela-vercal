@@ -17,7 +17,7 @@ test('one cashier action reserves existing order for direct worker without hoste
   const saved = await startDirectPhysical(client, { requestKey, orderId,
     amountMinor: 1500, fetcher });
   expect(saved.state).toBe('reserved');
-  expect(actions).toEqual(['devices', 'prepareOrder']);
+  expect(actions).toEqual(['devices', 'prepareOrder', 'enqueueDirect']);
   expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({
     orderId, amountMinor: 1500, workstationCode: 'GENERAL' });
 });
