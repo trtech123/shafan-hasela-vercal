@@ -10,7 +10,7 @@ import ReceiptScreen from "@/components/cashregister/ReceiptScreen";
 import OrderCollection from "@/components/cashregister/OrderCollection";
 import { calculateCheckoutTotals } from "@/payments/pelecardPayments";
 import { posCheckoutRequestKey, posPendingKey, startPosCheckout, posPaymentErrorMessage } from '@/payments/posPayments';
-import { startHostedPhysical } from '@/payments/physical/client';
+import { startDirectPhysical, startHostedPhysical } from '@/payments/physical/client';
 import { buildStandaloneCheckout } from "@/payments/standaloneCart";
 import { useAuth } from "@/lib/AuthContext";
 import { BRAND } from "@/lib/orderDocText";
@@ -258,13 +258,14 @@ export default function CashRegister() {
       discount: discount ? { type: discount.type, mode: discount.mode, value: Number(discount.value) } : null,
     };
     const requestKey = physicalCheckoutId.current;
+    const direct = import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED === 'true';
     localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({ requestKey,
-      orderId: null, cart: JSON.stringify(cart) }));
+      orderId: null, cart: JSON.stringify(cart), mode: direct ? 'direct' : 'hosted' }));
     setPhysicalBusy(true);
     try {
-      const result = await startHostedPhysical(supabase, { requestKey, cart, billing,
+      const result = await (direct ? startDirectPhysical : startHostedPhysical)(supabase, { requestKey, cart, billing,
         workstationCode: localStorage.getItem('pelecard.physicalWorkstation.v1') || null });
-      if (result.state !== 'pending' || !result.redirectUrl)
+      if (direct || result.state !== 'pending' || !result.redirectUrl)
         navigate('/payment/physical', { state: { checkoutId: requestKey, cart } });
     } catch (reason) {
       if (reason?.message === 'physical_register_004_unavailable') {

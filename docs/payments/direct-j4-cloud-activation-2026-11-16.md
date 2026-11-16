@@ -8,6 +8,10 @@ Vercel accepted the private queue triggers and the 360-second function configura
 
 The hosted ORD-1060 page omitted the PINPAD button. Pelecard confirmed by phone that its exact expired session made no charge. The historical outgoing initialization body was not retained, so the provider's server trace is needed to establish what it received and whether hosted PINPAD is enabled for this merchant/register. The user is requesting that trace. Do not start another hosted attempt or enable direct J4 before the respective provider and acceptance checks pass.
 
+Pelecard's email from PeleOp (`op@pelecard.co.il`) on 16 November 2026 at 09:12 Israel time, subject “Re: תגובה על פנייתך”, is the attributable direct J4 reference. It says `DebitRegularType` (J4) with `ShopNumber` and empty card fields sends the transaction to the device, and only the first J4 response contains invoice number and link. It does **not** explicitly confirm automatic Payper Invoice-Receipt issuance for merchant terminal `2814926015` with `PayperParameters`. The user corrected that distinction; the direct financial and Payper gates remain OFF until the exact merchant contract is confirmed. The current source adds a separate browser flag for direct cashier routing, but that frontend change is not in deployment `dpl_EvfCQiQZsD133pEnpPsp7qdEbBwN`.
+
+The previous hosted ORD-1060 attempt is closed and the user now reserves that still-unpaid ₪15 order for an eventual direct J4 controlled acceptance. It must not be sent through hosted and direct routes concurrently. No new payment is authorized at this checkpoint.
+
 The sections below record the candidate's earlier review and activation procedure. Statements about an undeployed queue or unapplied migration describe that earlier checkpoint; the production status above supersedes them.
 
 ## Scope and evidence

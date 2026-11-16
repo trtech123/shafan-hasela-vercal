@@ -22,6 +22,7 @@ export default function PhysicalPayment() {
   const navigate = useNavigate();
   const requestedOrderId = new URLSearchParams(search).get('orderId');
   const [entryPointer] = useState(storedPointer);
+  const directMode = entryPointer?.mode === 'direct';
   const orderId = entryPointer ? entryPointer.orderId : requestedOrderId;
   const orderMode = Boolean(orderId);
   const cart = state?.cart;
@@ -120,7 +121,7 @@ export default function PhysicalPayment() {
     finally { setBusy(false); }
   };
   const openHosted = async () => {
-    if (busy || view?.state !== 'reserved' || !view.hostedAvailable ||
+    if (busy || directMode || view?.state !== 'reserved' || !view.hostedAvailable ||
       view.registerNumber !== '004') return;
     setBusy(true); setError('');
     try { setView(await requestPhysicalPayment(supabase, { action: 'openHosted', requestKey })); }
@@ -165,7 +166,7 @@ export default function PhysicalPayment() {
     </section>}
     {view ? <section className="space-y-4 rounded-xl border p-5">
       {view.state === 'reserved' || view.state === 'approved' || view.state === 'canceled'
-        ? <p role="status">{view.state === 'reserved' ? (view.hostedAvailable
+        ? <p role="status">{view.state === 'reserved' ? (view.hostedAvailable && !directMode
           ? 'הבקשה נשמרה. פתחו את דף התשלום של פלאקארד כדי להמשיך למסופון.'
           : 'הבקשה נשמרה. ממתינים לשליחה למסופון.') :
           view.state === 'approved' ? 'התשלום אושר. משלימים את שמירת המכירה.' : 'הבקשה בוטלה לפני שליחה למסופון.'}</p>
@@ -174,7 +175,7 @@ export default function PhysicalPayment() {
           deviceName={`${view.registerNumber} · ${selected?.label || 'מסופון פיזי'}`}
           amount={view.amountMinor / 100} onCheckStatus={verify} onBack={() => navigate(orderMode ? `/cashregister?orderId=${encodeURIComponent(orderId)}` : '/cashregister')} />}
       <p>מסופון: {view.registerNumber} · סכום מאומת: {(view.amountMinor / 100).toFixed(2)} ₪</p>
-      {view.state === 'reserved' && view.hostedAvailable && view.registerNumber === '004' &&
+      {view.state === 'reserved' && !directMode && view.hostedAvailable && view.registerNumber === '004' &&
         <button type="button" onClick={openHosted} disabled={busy}
           className="rounded-lg bg-indigo-700 px-4 py-2 text-white">פתחו דף תשלום למסופון</button>}
       {view.route === 'hosted' && view.redirectUrl &&

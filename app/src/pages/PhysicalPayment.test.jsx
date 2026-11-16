@@ -35,6 +35,21 @@ describe('physical POS checkout', () => {
       { action: 'openHosted', requestKey: '22222222-2222-4222-8222-222222222222' }));
     expect((await screen.findByRole('link', { name: /המשך לדף פלאקארד/ })).getAttribute('href')).toBe(url);
   });
+  test('queued direct J4 intent never offers the hosted page on the status screen', async () => {
+    localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({
+      requestKey: '22222222-2222-4222-8222-222222222222', orderId: null, mode: 'direct' }));
+    vi.mocked(requestPhysicalPayment).mockImplementation(async (_client, body) =>
+      body.action === 'devices' ? [{ registerNumber: '004', model: 'CT20',
+        label: 'Front CT20', workstationCode: 'FRONT_DESK' }] : {
+        paymentId: '11111111-1111-4111-8111-111111111111', state: 'reserved',
+        route: 'direct', hostedAvailable: true, amountMinor: 1500,
+        registerNumber: '004', saleId: null });
+    render(<MemoryRouter initialEntries={['/payment/physical']}><PhysicalPayment /></MemoryRouter>);
+    expect(await screen.findByText(/ממתינים לשליחה למסופון/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /פתחו דף תשלום למסופון/ })).toBeNull();
+    expect(requestPhysicalPayment).not.toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ action: 'openHosted' }));
+  });
   test('a paid physical transaction with missing invoice stays recoverable without a new charge', async () => {
     const requestKey = '22222222-2222-4222-8222-222222222222';
     localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({ requestKey, orderId: null }));

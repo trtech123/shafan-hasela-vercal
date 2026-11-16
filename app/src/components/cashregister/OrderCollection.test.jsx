@@ -3,13 +3,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, test, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({ role: 'admin', invoke: vi.fn(), order: vi.fn(), physical: vi.fn() }));
+const state = vi.hoisted(() => ({ role: 'admin', invoke: vi.fn(), order: vi.fn(), physical: vi.fn(), direct: vi.fn() }));
 vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: state.role } }) }));
 vi.mock('react-router-dom', () => ({ Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a> }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: state.invoke },
   from: () => ({ select: () => ({ eq: () => ({ single: () => state.order() }) }) }) } }));
 vi.mock('@/components/customers/OrderCustomerLink', () => ({ default: () => <p>customer link control</p> }));
-vi.mock('@/payments/physical/client', () => ({ startHostedPhysical: (...args) => state.physical(...args) }));
+vi.mock('@/payments/physical/client', () => ({ startHostedPhysical: (...args) => state.physical(...args),
+  startDirectPhysical: (...args) => state.direct(...args) }));
 import OrderCollection from './OrderCollection';
 
 const orderId = '33333333-3333-4333-8333-333333333333';
@@ -19,7 +20,7 @@ const view = (paidMinor = 0) => ({ orderId, orderNumber: 'ORD-123', clientName: 
   collectionEnabled: { cash: true, check: true },
   billing: { kind: 'organization', name: 'Group A', identity: '123456789', email: 'group@example.com' },
   payments: paidMinor ? [{ id: 'p1', status: 'succeeded', amountMinor: paidMinor }] : [], documents: [] });
-afterEach(() => { cleanup(); state.invoke.mockReset(); state.order.mockReset(); state.physical.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); localStorage.clear(); });
+afterEach(() => { cleanup(); state.invoke.mockReset(); state.order.mockReset(); state.physical.mockReset(); state.direct.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); localStorage.clear(); });
 
 test('scheduled order shows saved total and balance without creating a cart', async () => {
   state.invoke.mockResolvedValue({ data: view(2000), error: null });
@@ -50,6 +51,20 @@ test('eligible saved order starts hosted EMV directly for the server balance', a
   await waitFor(() => expect(state.physical).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
     orderId, amountMinor: 8000, requestKey: expect.any(String) })));
   expect(screen.queryByRole('link', { name: /תשלום במסופון פיזי להזמנה זו/ })).toBeNull();
+});
+
+test('direct activation sends scheduled order to the queue without opening hosted EMV', async () => {
+  vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
+  vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED', 'true');
+  state.invoke.mockResolvedValue({ data: view(), error: null });
+  state.direct.mockResolvedValue({ state: 'reserved', route: 'direct', amountMinor: 10000,
+    paymentId: '11111111-1111-4111-8111-111111111111', registerNumber: '004' });
+  render(<OrderCollection orderId={orderId} />);
+  fireEvent.click(await screen.findByRole('button', { name: /שלם במסופון פיזי/ }));
+  await waitFor(() => expect(state.direct).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    orderId, amountMinor: 10000, requestKey: expect.any(String) })));
+  expect(state.physical).not.toHaveBeenCalled();
+  expect(JSON.parse(localStorage.getItem('pelecard.physicalPending.v1'))).toMatchObject({ mode: 'direct', orderId });
 });
 
 test('keeps the physical order link hidden while the browser gate is off', async () => {

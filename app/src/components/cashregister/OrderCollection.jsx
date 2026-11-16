@@ -8,7 +8,7 @@ import { publishOrderChange } from '@/lib/orderEvents';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import OrderCustomerLink from '@/components/customers/OrderCustomerLink';
-import { startHostedPhysical } from '@/payments/physical/client';
+import { startDirectPhysical, startHostedPhysical } from '@/payments/physical/client';
 
 const validId = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
 const shekels = minor => `${(Number(minor) / 100).toFixed(2)} ₪`;
@@ -99,13 +99,15 @@ export default function OrderCollection({ orderId }) {
     if (physicalBusy || !view || view.balanceMinor <= 0 || view.unresolvedPayment || !accountingReady) return;
     physicalKey.current ||= crypto.randomUUID();
     const key = physicalKey.current;
-    localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({ requestKey: key, orderId, cart: null }));
+    const direct = import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED === 'true';
+    localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({ requestKey: key, orderId, cart: null,
+      mode: direct ? 'direct' : 'hosted' }));
     setPhysicalBusy(true); setError('');
     try {
-      const result = await startHostedPhysical(supabase, { requestKey: key, orderId,
+      const result = await (direct ? startDirectPhysical : startHostedPhysical)(supabase, { requestKey: key, orderId,
         amountMinor: view.balanceMinor,
         workstationCode: localStorage.getItem('pelecard.physicalWorkstation.v1') || null });
-      if (result.state !== 'pending' || !result.redirectUrl) setPhysicalReview(true);
+      if (direct || result.state !== 'pending' || !result.redirectUrl) setPhysicalReview(true);
     } catch (reason) {
       if (reason?.message === 'physical_register_004_unavailable') {
         localStorage.removeItem('pelecard.physicalPending.v1');
@@ -169,7 +171,7 @@ export default function OrderCollection({ orderId }) {
           ? <Link className="inline-block rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 font-medium text-indigo-900"
               to={`/payment/physical?orderId=${encodeURIComponent(orderId)}`}>בדיקת תשלום קיים במסופון פיזי</Link>
           : <Button type="button" disabled={physicalBusy || !accountingReady} onClick={payPhysical}>
-              {physicalBusy ? 'פותח מסופון…' : 'שלם במסופון פיזי'}</Button>)}
+              {physicalBusy ? 'שולח למסופון…' : 'שלם במסופון פיזי'}</Button>)}
       {view.balanceMinor > 0 && view.paidMinor === 0 &&
         <OrderDigitalCheckout orderId={orderId} balanceMinor={view.balanceMinor}
           onStatus={() => refresh(false).catch(() => setError('לא ניתן לרענן את יתרת ההזמנה.'))} />}
