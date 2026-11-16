@@ -1,5 +1,15 @@
 # Direct J4 cloud payment candidate — 16 November 2026
 
+## Production status after controlled deployment
+
+The integrated source commit `6233f0c03221d4265fa189469921413903b6cc12` is deployed as `dpl_EvfCQiQZsD133pEnpPsp7qdEbBwN` (READY). The approved migration `202611160006_direct_j4_first_response.sql` is applied. Its new columns and service-only functions are present, and production counts of orders, payment transactions, sales, Payper ledger entries, and physical intents were unchanged immediately after application. The previous hosted unpaid-closure migration `202611160005` is also applied; ORD-1060's phone-confirmed unpaid, expired hosted attempt was closed through its guarded RPC with an audit record. ORD-1060 remains unpaid with ₪15 due and no approved payment, sale, or document for that attempt.
+
+Vercel accepted the private queue triggers and the 360-second function configuration. Provider-free synthetic smoke messages with 0 ms and 310,000 ms delays both completed in the deployed consumer. The temporary smoke publisher and its authentication token were removed; its production URL now returns 404. This proves queue delivery and long-running execution on this Vercel project, without sending J4 or issuing a document. It does not establish a merchant-specific financial or accounting result. Direct J4 financial dispatch and its Payper gate remain OFF; the hosted, digital, and cash routes remain in their existing configurations.
+
+The hosted ORD-1060 page omitted the PINPAD button. Pelecard confirmed by phone that its exact expired session made no charge. The historical outgoing initialization body was not retained, so the provider's server trace is needed to establish what it received and whether hosted PINPAD is enabled for this merchant/register. The user is requesting that trace. Do not start another hosted attempt or enable direct J4 before the respective provider and acceptance checks pass.
+
+The sections below record the candidate's earlier review and activation procedure. Statements about an undeployed queue or unapplied migration describe that earlier checkpoint; the production status above supersedes them.
+
 ## Scope and evidence
 
 The integrated branch starts at verified cashier source `2997702` and includes the hosted Payper document fix `5449721`. It leaves the hosted route, digital payment path, cashier page and production financial settings intact. The previous disabled direct J4 adapter, physical intent table, register lock, order reservation, and verified sale finalizer are reused. The first J4 response now keeps the printed invoice number distinct from Payper's invoice URL system ID, matching the observed hosted document contract.
