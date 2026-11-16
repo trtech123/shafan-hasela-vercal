@@ -4,13 +4,15 @@ import '@testing-library/jest-dom/vitest';
 import {afterEach, expect, test, vi} from 'vitest';
 import PosPayment from './PosPayment';
 
-vi.mock('@/lib/AuthContext',()=>({useAuth:()=>({user:{role:'admin'}})}));
+vi.mock('@/lib/AuthContext',()=>({useAuth:()=>({user:{role:'admin',id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}})}));
 vi.mock('react-router-dom',()=>({
   Link:({children})=><span>{children}</span>,
   useLocation:()=>({search:'',state:null}),
 }));
 vi.mock('@/api/supabaseClient',()=>({supabase:{}}));
 vi.mock('@/payments/posPayments',()=>({
+  posPendingKey:'pelecard.posPending.v1',
+  posPendingKeyForActor:()=> 'pelecard.posPending.v1.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   posCheckoutRequestKey:()=> '22222222-2222-4222-8222-222222222222',
   requestPosPayment:vi.fn(async()=>({
     paymentId:'11111111-1111-4111-8111-111111111111',

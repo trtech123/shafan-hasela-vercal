@@ -8,7 +8,7 @@ const productId='11111111-1111-4111-8111-111111111111';
 const serviceId='22222222-2222-4222-8222-222222222222';
 const orderId='33333333-3333-4333-8333-333333333333';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-vi.mock('@/lib/AuthContext',()=>({useAuth:()=>({user:{role:state.role}})}));
+vi.mock('@/lib/AuthContext',()=>({useAuth:()=>({user:{role:state.role,id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}})}));
 vi.mock('react-router-dom',()=>({useLocation:()=>({search:''}),useNavigate:()=>state.navigate}));
 vi.mock('@/api/supabaseClient',()=>({supabase:{from:table=>({select:()=>({eq:async()=>({data:table==='products'
   ?[{id:'11111111-1111-4111-8111-111111111111',name:'Water',price:1,status:'פעיל'}]

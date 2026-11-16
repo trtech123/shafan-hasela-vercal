@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, test, vi } from 'vitest';
 
 const failure = vi.hoisted(() => ({ toast: vi.fn(), insert: vi.fn(), invoke: vi.fn() }));
-vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: 'admin' } }) }));
+vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: 'admin', id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } }) }));
 vi.mock('react-router-dom', () => ({ useLocation: () => ({ search: '' }), useNavigate: () => vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: failure.toast } }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: failure.invoke }, from: table => ({

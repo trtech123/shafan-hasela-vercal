@@ -9,7 +9,8 @@ import PaymentScreen from "@/components/cashregister/PaymentScreen";
 import ReceiptScreen from "@/components/cashregister/ReceiptScreen";
 import OrderCollection from "@/components/cashregister/OrderCollection";
 import { calculateCheckoutTotals } from "@/payments/pelecardPayments";
-import { posCheckoutRequestKey, posPendingKey, startPosCheckout, posPaymentErrorMessage } from '@/payments/posPayments';
+import { posCheckoutRequestKey, posPendingKeyForActor, startPosCheckout, posPaymentErrorMessage } from '@/payments/posPayments';
+import { validOrderId } from '@/payments/orderPayments';
 import { startDirectPhysical, startHostedPhysical } from '@/payments/physical/client';
 import { buildStandaloneCheckout } from "@/payments/standaloneCart";
 import { useAuth } from "@/lib/AuthContext";
@@ -21,7 +22,7 @@ export default function CashRegister() {
   const collectionOrderId = new URLSearchParams(location.search).get('orderId');
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canPayOrder = user?.role === 'admin' || user?.role === 'קופאי';
+  const canPayOrder = (user?.role === 'admin' || user?.role === 'קופאי') && validOrderId(user?.id);
   const [activities, setActivities] = useState([]);
   const [products, setProducts] = useState([]);
   const [catalogTab, setCatalogTab] = useState('service');
@@ -236,9 +237,16 @@ export default function CashRegister() {
       lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
       discount: appliedDiscount ? { type: appliedDiscount.type, mode: appliedDiscount.mode, value: Number(appliedDiscount.value) } : null,
     };
-    posCheckoutId.current ||= posCheckoutRequestKey(null, cart, sessionStorage.getItem(posPendingKey));
-    const requestKey = posCheckoutId.current;
-    sessionStorage.setItem(posPendingKey, JSON.stringify({ requestKey, cart: JSON.stringify(cart) }));
+    const actorId = user.id;
+    const cartIdentity = JSON.stringify(cart);
+    const pendingKey = posPendingKeyForActor(actorId);
+    if (posCheckoutId.current?.actorId !== actorId || posCheckoutId.current?.cart !== cartIdentity) {
+      posCheckoutId.current = { actorId, cart: cartIdentity,
+        requestKey: posCheckoutRequestKey(null, cart, sessionStorage.getItem(pendingKey),
+          () => crypto.randomUUID(), actorId) };
+    }
+    const requestKey = posCheckoutId.current.requestKey;
+    sessionStorage.setItem(pendingKey, JSON.stringify({ requestKey, cart: cartIdentity, actorId }));
     try {
       const result = await startPosCheckout(supabase, { requestKey, cart,
         billing: { kind: 'person', name: '', identity: '', email: '' } });
@@ -247,7 +255,8 @@ export default function CashRegister() {
       if (!result.canResume || !result.redirectUrl) navigate('/payment/pos', { state: { checkoutId: requestKey, cart } });
     } catch (reason) {
       const safe = ['capability_disabled', 'catalog_item_unavailable', 'cart_invalid',
-        'cart_line_invalid', 'cart_amount_invalid', 'discount_invalid', 'pos_payment_forbidden'].includes(reason?.code);
+        'cart_line_invalid', 'cart_amount_invalid', 'discount_invalid', 'pos_payment_forbidden',
+        'request_key_conflict', 'pos_payment_in_progress'].includes(reason?.code);
       if (safe) {
         const message = posPaymentErrorMessage(reason.code);
         setPaymentError(message);

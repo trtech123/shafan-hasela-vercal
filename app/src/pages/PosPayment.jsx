@@ -3,14 +3,14 @@ import {Link,useLocation} from 'react-router-dom';
 import {useAuth} from '@/lib/AuthContext';
 import {supabase} from '@/api/supabaseClient';
 import {Button} from '@/components/ui/button';
-import {requestPosPayment,redirectPosPayment,posCheckoutRequestKey} from '@/payments/posPayments';
+import {requestPosPayment,redirectPosPayment,posCheckoutRequestKey,posPendingKey,posPendingKeyForActor} from '@/payments/posPayments';
 import {validOrderId} from '@/payments/orderPayments';
 
-const pendingKey='pelecard.posPending.v1';
 const labels={initiated:'הסל נשמר וממתין למעבר לדף התשלום',pending_provider:'ממתין לתוצאת פלאקארד',failed:'הבקשה בוטלה לפני מעבר לתשלום',timed_out:'תוצאת התשלום אינה ודאית',succeeded:'התשלום אומת והמכירה נשמרה'};
 
 export default function PosPayment(){
   const {user}=useAuth();const location=useLocation();
+  const pendingKey=posPendingKeyForActor(user?.id);
   const params=new URLSearchParams(location.search);
   const returnedId=params.get('returned')==='1'?params.get('paymentId'):null;
   const cart=location.state?.cart;
@@ -18,8 +18,15 @@ export default function PosPayment(){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const locked=useRef(false);const handledReturn=useRef(null);
-  const [requestKey]=useState(()=>posCheckoutRequestKey(location.state?.checkoutId,cart,sessionStorage.getItem(pendingKey)));
-  const allowed=user?.role==='admin'||user?.role==='קופאי';
+  const [requestKey]=useState(()=>{
+    const scoped=pendingKey?sessionStorage.getItem(pendingKey):null;
+    if(scoped||validOrderId(location.state?.checkoutId))
+      return posCheckoutRequestKey(location.state?.checkoutId,cart,scoped,()=>crypto.randomUUID(),user?.id);
+    // Older checkout pointers remain available for status/recovery only. The
+    // server checks ownership before returning or acting on an intent.
+    return posCheckoutRequestKey(null,cart,sessionStorage.getItem(posPendingKey));
+  });
+  const allowed=(user?.role==='admin'||user?.role==='קופאי')&&validOrderId(user?.id);
   useEffect(()=>{if(view?.paid)sessionStorage.removeItem(pendingKey);},[view?.paid]);
 
   useEffect(()=>{

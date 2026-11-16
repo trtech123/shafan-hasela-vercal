@@ -1,6 +1,8 @@
 import {validOrderId} from './orderPayments';
 
 export const posPendingKey = 'pelecard.posPending.v1';
+export const posPendingKeyForActor = actorId => validOrderId(actorId)
+  ? `${posPendingKey}.${actorId}` : null;
 
 const safeCodes=new Set(['capability_disabled','pos_payment_in_progress','catalog_item_unavailable',
   'cart_invalid','cart_line_invalid','cart_amount_invalid','discount_invalid','request_key_conflict',
@@ -20,10 +22,11 @@ export function posPaymentErrorMessage(code){
   return messages[code]||'לא ניתן לאמת את שמירת הסל. בדקו את מצב הניסיון הקיים ופנו למנהל; אין להתחיל חיוב נוסף.';
 }
 
-export function posCheckoutRequestKey(checkoutId,cart,savedRaw,create=()=>crypto.randomUUID()){
+export function posCheckoutRequestKey(checkoutId,cart,savedRaw,create=()=>crypto.randomUUID(),actorId=null){
   if(validOrderId(checkoutId))return checkoutId;
   try{const saved=JSON.parse(savedRaw||'null');
-    if(saved&&validOrderId(saved.requestKey)&&(!cart||saved.cart===JSON.stringify(cart)))return saved.requestKey;
+    if(saved&&validOrderId(saved.requestKey)&&(!actorId||saved.actorId===actorId)&&
+      (!cart||saved.cart===JSON.stringify(cart)))return saved.requestKey;
   }catch{/* An invalid prior pointer cannot identify this checkout. */}
   return create();
 }
