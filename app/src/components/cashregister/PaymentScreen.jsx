@@ -409,7 +409,7 @@ export default function PaymentScreen({
               className={`w-full bg-gradient-to-l from-indigo-600 to-indigo-700 rounded-2xl p-5 flex items-center gap-4 text-right disabled:opacity-60 disabled:cursor-not-allowed ${selectedMethod === 'physical' ? 'ring-4 ring-white' : ''}`}>
               <CreditCard className="w-8 h-8 text-white" />
               <span><strong className="block text-lg">תשלום במסופון פיזי</strong>
-                <small className="text-white/70">{physicalTerminalEnabled ? 'הסכום נשלח אוטומטית למסופון המשויך לקופה' : 'ממתין להפעלת ממשק המסופונים על ידי פלאקארד'}</small></span>
+                <small className="text-white/70">{physicalTerminalEnabled ? 'הסכום נשלח אוטומטית למסופון המשויך לקופה' : 'תשלום במסופון מושבת עד לאימות מסלול פלאקארד והפעלתו'}</small></span>
             </button>
           )}
           {PAYMENT_METHODS.map(method => {
@@ -429,7 +429,9 @@ export default function PaymentScreen({
                 </div>
                 <div>
                   <p className="font-bold text-lg">{method.label}</p>
-                  <p className="text-white/60 text-sm">{disabled ? 'אמצעי תשלום זה עדיין לא פעיל בקופה' : method.hint}</p>
+                  <p className="text-white/60 text-sm">{disabled ? method.key === CHECK_METHOD
+                    ? 'תשלום בצ׳ק עדיין לא פעיל: ממתין לאישור פרטי ההמחאה על ידי הספק'
+                    : 'אמצעי תשלום זה עדיין לא פעיל בקופה' : method.hint}</p>
                 </div>
                 <div className="mr-auto text-white/40 text-2xl">←</div>
               </button>

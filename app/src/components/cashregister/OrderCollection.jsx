@@ -96,7 +96,8 @@ export default function OrderCollection({ orderId }) {
     setBillingOrder(data); setBillingOpen(true);
   };
   const payPhysical = async () => {
-    if (physicalBusy || !view || view.balanceMinor <= 0 || view.unresolvedPayment || !accountingReady) return;
+    if (import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' ||
+      physicalBusy || !view || view.balanceMinor <= 0 || view.unresolvedPayment || !accountingReady) return;
     physicalKey.current ||= crypto.randomUUID();
     const key = physicalKey.current;
     const direct = import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED === 'true';
@@ -172,6 +173,8 @@ export default function OrderCollection({ orderId }) {
               to={`/payment/physical?orderId=${encodeURIComponent(orderId)}`}>בדיקת תשלום קיים במסופון פיזי</Link>
           : <Button type="button" disabled={physicalBusy || !accountingReady} onClick={payPhysical}>
               {physicalBusy ? 'שולח למסופון…' : 'שלם במסופון פיזי'}</Button>)}
+      {import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' && view.balanceMinor > 0 &&
+        <p role="status" className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">תשלום במסופון פיזי מושבת עד לאימות מסלול פלאקארד והפעלתו.</p>}
       {view.balanceMinor > 0 && view.paidMinor === 0 &&
         <OrderDigitalCheckout orderId={orderId} balanceMinor={view.balanceMinor}
           onStatus={() => refresh(false).catch(() => setError('לא ניתן לרענן את יתרת ההזמנה.'))} />}

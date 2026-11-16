@@ -272,7 +272,8 @@ export default function CashRegister() {
   };
 
   const handlePhysicalStart = async billing => {
-    if (!canPayOrder || linkedOrder?.id || !canHostedCart) return;
+    if (import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' ||
+      !canPayOrder || linkedOrder?.id || !canHostedCart) return;
     physicalCheckoutId.current ||= crypto.randomUUID();
     const cart = {
       lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
@@ -343,8 +344,9 @@ export default function CashRegister() {
         paymentError={paymentError}
         onPhysicalTerminal={handlePhysicalStart}
         physicalTerminalBusy={physicalBusy}
-        physicalTerminalVisible={import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true'}
-        physicalTerminalEnabled={Boolean(canPayOrder && canHostedCart && !linkedOrder?.id && !physicalBusy)}
+        physicalTerminalVisible
+        physicalTerminalEnabled={Boolean(import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true' &&
+          canPayOrder && canHostedCart && !linkedOrder?.id && !physicalBusy)}
         pelecardEnabled={canPayOrder && (Boolean(linkedOrder?.id)||canHostedCart)}
         pelecardHint={linkedOrder?.id?'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה':
           canHostedCart?'מחירי הקטלוג והסכום יאומתו בשרת לפני מעבר לפלאקארד':

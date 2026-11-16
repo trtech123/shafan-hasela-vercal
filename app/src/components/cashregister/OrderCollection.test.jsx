@@ -73,6 +73,8 @@ test('keeps the physical order link hidden while the browser gate is off', async
   render(<OrderCollection orderId={orderId} />);
   await screen.findByText(/ORD-123/);
   expect(screen.queryByRole('link', { name: /מסופון פיזי/ })).toBeNull();
+  expect(screen.getByText(/תשלום במסופון פיזי מושבת/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /שלם במסופון פיזי/ })).toBeNull();
 });
 
 test('shows the balance but disables cash and check collection while document dispatch is off', async () => {

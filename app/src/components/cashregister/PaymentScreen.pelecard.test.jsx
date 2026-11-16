@@ -27,6 +27,7 @@ describe("PaymentScreen payment-method separation", () => {
     const props = renderPayment({ noncardEnabled: { cash: false, check: false } });
     expect(screen.getByRole('button', { name: /מזומן.*עדיין לא פעיל/s })).toBeDisabled();
     expect(screen.getByRole('button', { name: /צ'ק.*עדיין לא פעיל/s })).toBeDisabled();
+    expect(screen.getByText(/ממתין לאישור פרטי ההמחאה על ידי הספק/)).toBeInTheDocument();
     expect(props.onConfirm).not.toHaveBeenCalled();
   });
   test("records received cash with billing for the required Invoice-Receipt", () => {

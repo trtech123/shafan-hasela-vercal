@@ -16,7 +16,7 @@ vi.mock('@/api/supabaseClient',()=>({supabase:{from:table=>({select:()=>({eq:asy
 vi.mock('@/components/cashregister/ActivityGrid',()=>({default:({activities,onAdd})=><div>{activities.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add service</button>)}</div>}));
 vi.mock('@/components/cashregister/ProductGrid',()=>({default:({products,onAdd})=><div>{products.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add product</button>)}</div>}));
 vi.mock('@/components/cashregister/Cart',()=>({default:({onCheckout,onLinkOrder})=><div><button onClick={onCheckout}>checkout</button><button onClick={()=>onLinkOrder({id:orderId,order_number:'ORD-1'})}>link order</button></div>}));
-vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalEnabled})=><><button disabled={!pelecardEnabled} onClick={onPelecard}>Pelecard</button><button disabled={!physicalTerminalEnabled} onClick={onPhysicalTerminal}>Physical</button></>}));
+vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalVisible,physicalTerminalEnabled})=><><button disabled={!pelecardEnabled} onClick={onPelecard}>Pelecard</button>{physicalTerminalVisible&&<button disabled={!physicalTerminalEnabled} onClick={onPhysicalTerminal}>Physical</button>}</>}));
 vi.mock('@/components/cashregister/ReceiptScreen',()=>({default:()=>null}));
 vi.mock('sonner',()=>({toast:{error:vi.fn()}}));
 vi.mock('@/payments/posPayments',async importOriginal=>({...(await importOriginal()),startPosCheckout:(...args)=>state.start(...args)}));
@@ -26,7 +26,17 @@ import CashRegister from './CashRegister';
 
 afterEach(()=>{cleanup();state.navigate.mockReset();state.start.mockReset();state.physical.mockReset();state.direct.mockReset();state.role='admin';vi.unstubAllEnvs();sessionStorage.clear();localStorage.clear()});
 describe('Cash Register hosted routes',()=>{
+  test('unaccepted physical route is shown disabled while standalone digital remains available',async()=>{
+    vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','false');
+    render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
+    fireEvent.click(screen.getByText('checkout'));
+    expect(screen.getByText('Physical')).toBeDisabled();
+    expect(screen.getByText('Pelecard')).toBeEnabled();
+    fireEvent.click(screen.getByText('Physical'));
+    expect(state.physical).not.toHaveBeenCalled();
+  });
   test('physical cart starts hosted EMV directly after the Pay click',async()=>{
+    vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
     state.physical.mockResolvedValue({state:'pending',route:'hosted',redirectUrl:'https://gateway21.pelecard.biz/PaymentGW?transactionId=22222222-2222-4222-8222-222222222222'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Physical'));
@@ -35,6 +45,7 @@ describe('Cash Register hosted routes',()=>{
     expect(state.navigate).not.toHaveBeenCalledWith('/payment/physical',expect.anything());
   });
   test('direct activation queues standalone cart without opening hosted EMV',async()=>{
+    vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
     vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
     state.direct.mockResolvedValue({state:'reserved',route:'direct',registerNumber:'004',amountMinor:100,saleId:null});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));

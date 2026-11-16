@@ -20,6 +20,7 @@ test('flag exposes separate physical action but cannot dispatch without provider
     onPelecard={onDigital} onPhysicalTerminal={onPhysical} physicalTerminalVisible />);
   const physical = screen.getByRole('button', { name: /תשלום במסופון פיזי/ });
   expect(physical).toBeDisabled();
+  expect(screen.getByText(/תשלום במסופון מושבת עד לאימות מסלול פלאקארד/)).toBeInTheDocument();
   fireEvent.click(physical);
   expect(onPhysical).not.toHaveBeenCalled();
   expect(onDigital).not.toHaveBeenCalled();
