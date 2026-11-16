@@ -10,6 +10,7 @@ const CATEGORY_COLORS = {
 
 export default function ActivityGrid({ activities, onAdd }) {
   const categories = [...new Set(activities.map(a => a.category).filter(Boolean))];
+  const uncategorized = activities.filter(activity => !activity.category);
 
   return (
     <div className="space-y-6">
@@ -26,6 +27,13 @@ export default function ActivityGrid({ activities, onAdd }) {
       {categories.length === 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           {activities.map(activity => (
+            <ActivityCard key={activity.id} activity={activity} onAdd={onAdd} />
+          ))}
+        </div>
+      )}
+      {categories.length > 0 && uncategorized.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          {uncategorized.map(activity => (
             <ActivityCard key={activity.id} activity={activity} onAdd={onAdd} />
           ))}
         </div>

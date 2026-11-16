@@ -15,6 +15,18 @@ import { startDirectPhysical, startHostedPhysical } from '@/payments/physical/cl
 import { buildStandaloneCheckout } from "@/payments/standaloneCart";
 import { useAuth } from "@/lib/AuthContext";
 import { BRAND } from "@/lib/orderDocText";
+import { filterProducts } from "@/lib/productCatalog";
+
+function CategorySelector({ label, categories, selected, onSelect }) {
+  return <nav aria-label={label} dir="rtl" className="mb-4 flex max-w-full gap-2 overflow-x-auto pb-2">
+    {['all', ...categories].map(category => <button key={category} type="button"
+      aria-pressed={selected === category} onClick={() => onSelect(category)}
+      className={`shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium ${selected === category
+        ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white text-slate-700'}`}>
+      {category === 'all' ? 'הכול' : category}
+    </button>)}
+  </nav>;
+}
 
 // SCREENS: menu | payment | receipt
 export default function CashRegister() {
@@ -26,6 +38,9 @@ export default function CashRegister() {
   const [activities, setActivities] = useState([]);
   const [products, setProducts] = useState([]);
   const [catalogTab, setCatalogTab] = useState('service');
+  const [productCategory, setProductCategory] = useState('all');
+  const [activityCategory, setActivityCategory] = useState('all');
+  const [productSearch, setProductSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [cartItems, setCartItems] = useState([]);
   const [screen, setScreen] = useState("menu");
@@ -71,7 +86,7 @@ export default function CashRegister() {
         toast.error('שגיאה בטעינת הפעילויות');
       }
       setActivities(data ?? []);
-      const {data:productRows,error:productError}=await supabase.from('products').select('id,name,price,image_url,status').eq('status','פעיל');
+      const {data:productRows,error:productError}=await supabase.from('products').select('id,name,price,image_url,status,cafeteria_category').eq('status','פעיל');
       if(productError)toast.error('שגיאה בטעינת המוצרים');
       setProducts(productRows??[]);
 
@@ -135,6 +150,13 @@ export default function CashRegister() {
   }catch{/* The server makes the final eligibility decision. */}
   const canHostedCart=cartItems.length>0&&discountValid&&(!appliedDiscount||user?.role==='admin')&&
     hostedPreview&&cartItems.every((item,index)=>Number(item.customPrice)===hostedPreview.items[index].customPrice);
+  const productCategories = [...new Set(products.map(item => item.cafeteria_category).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'he'));
+  const activityCategories = [...new Set(activities.map(item => item.category).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'he'));
+  const visibleProducts = filterProducts(products, { cafeteria: null, category: productCategory, search: productSearch });
+  const visibleActivities = activityCategory === 'all' ? activities
+    : activities.filter(item => item.category === activityCategory);
 
   const handlePaymentConfirm = async (method, paymentDetails = null) => {
     if (manualSaleSubmitted.current) return;
@@ -357,9 +379,9 @@ export default function CashRegister() {
   }
 
   return (
-    <div className="flex h-screen bg-white text-slate-900 overflow-hidden" dir="rtl">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-white text-slate-900 lg:flex-row" dir="rtl">
       {/* Left: Activity Grid */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-lg">א</div>
           <div>
@@ -367,15 +389,28 @@ export default function CashRegister() {
             <p className="text-slate-400 text-sm">בחר פעילות או מוצר להוספה לסל</p>
           </div>
         </div>
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex flex-wrap gap-2">
           <button className={`rounded-lg px-4 py-2 ${catalogTab==='service'?'bg-primary text-white':'bg-slate-100'}`} onClick={()=>setCatalogTab('service')}>פעילויות ושירותים</button>
           <button className={`rounded-lg px-4 py-2 ${catalogTab==='product'?'bg-primary text-white':'bg-slate-100'}`} onClick={()=>setCatalogTab('product')}>מוצרים</button>
         </div>
-        {catalogTab==='service'?<ActivityGrid activities={activities} onAdd={addToCart}/>:<ProductGrid products={products} onAdd={addProduct}/>}
+        {catalogTab==='service'?<>
+          <CategorySelector label="קטגוריות פעילויות ושירותים" categories={activityCategories}
+            selected={activityCategory} onSelect={setActivityCategory}/>
+          {visibleActivities.length ? <ActivityGrid activities={visibleActivities} onAdd={addToCart}/>
+            : <p className="py-8 text-center text-slate-500">לא נמצאו פעילויות בקטגוריה שנבחרה.</p>}
+        </>:<>
+          <CategorySelector label="קטגוריות מוצרים" categories={productCategories}
+            selected={productCategory} onSelect={setProductCategory}/>
+          <input type="search" aria-label="חיפוש מוצר בקופה" placeholder="חיפוש מוצר לפי שם"
+            value={productSearch} onChange={event => setProductSearch(event.target.value)}
+            className="mb-4 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900"/>
+          {visibleProducts.length ? <ProductGrid products={visibleProducts} onAdd={addProduct}/>
+            : <p className="py-8 text-center text-slate-500">לא נמצאו מוצרים בקטגוריה ובחיפוש שנבחרו.</p>}
+        </>}
       </div>
 
       {/* Right: Cart */}
-      <div className="w-80 border-r border-slate-200 flex flex-col bg-slate-50">
+      <div className="flex max-h-[44dvh] min-h-0 w-full flex-col overflow-y-auto border-t border-slate-200 bg-slate-50 lg:max-h-none lg:w-80 lg:overflow-hidden lg:border-r lg:border-t-0">
         <Cart
           items={cartItems}
           subtotal={subtotal}

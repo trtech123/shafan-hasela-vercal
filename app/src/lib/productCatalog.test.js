@@ -16,6 +16,11 @@ describe('product tabs and search', () => {
     expect(filterProducts(products, { cafeteria: true, search: ' קפה ', category: 'שתייה' }).map((p) => p.id)).toEqual([2]);
     expect(filterProducts(products, { cafeteria: true, search: 'קפה', category: 'גלידות' })).toEqual([]);
   });
+  test('cashier filters the full product catalog by saved category and search', () => {
+    expect(filterProducts(products, { cafeteria: null, category: 'all' }).map((p) => p.id)).toEqual([1, 2, 3]);
+    expect(filterProducts(products, { cafeteria: null, category: 'שתייה', search: 'קפה' }).map((p) => p.id)).toEqual([2]);
+    expect(filterProducts(products, { cafeteria: null, category: 'שתייה', search: 'גלידה' })).toEqual([]);
+  });
   test('supports all five explicit cafeteria categories', () => {
     expect(CAFETERIA_CATEGORIES).toEqual(['שתייה', 'דלפק', 'גלידות', 'מזון', 'מוצרי טיפוס']);
   });
