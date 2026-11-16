@@ -66,6 +66,7 @@ export default function PaymentScreen({
   onPhysicalStatusCheck = () => {},
   onBack,
   pelecardBusy = false,
+  paymentError = '',
   pelecardEnabled = false,
   pelecardHint,
   manualSaleSaving = false,
@@ -383,6 +384,7 @@ export default function PaymentScreen({
 
         <div className="space-y-2">
           <p className="text-slate-400 text-sm font-medium text-center mb-4">בחר אמצעי תשלום</p>
+          {paymentError && <p role="alert" className="rounded-xl border border-rose-400 bg-rose-950 p-3 text-sm text-rose-100">{paymentError}</p>}
           <button
             onClick={() => setSelectedMethod('digital')}
             aria-pressed={selectedMethod === 'digital'}

@@ -36,6 +36,7 @@ export default function CashRegister() {
   const posCheckoutId = useRef(null);
   const digitalInFlight = useRef(false);
   const [digitalBusy, setDigitalBusy] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
   const physicalCheckoutId = useRef(null);
   const [physicalBusy, setPhysicalBusy] = useState(false);
   const manualSaleSubmitted = useRef(false);
@@ -116,16 +117,22 @@ export default function CashRegister() {
   const removeItem = (id) => setCartItems(prev => prev.filter(i => i.id !== id));
 
   // Use the same integer-agorot arithmetic as server-side initiation.
-  const checkoutTotals = calculateCheckoutTotals(cartItems, discount);
+  // Selecting a discount type alone does not apply a discount. Never send a
+  // zero-value discount: the server correctly rejects it as discount_invalid.
+  const discountUnset = discount && (discount.value == null ||
+    (typeof discount.value === 'string' && discount.value.trim() === '') ||
+    Number(discount.value) === 0);
+  const appliedDiscount = discountUnset ? null : discount;
+  const checkoutTotals = calculateCheckoutTotals(cartItems, appliedDiscount);
   const { subtotal, discountAmount, total } = checkoutTotals;
-  const discountValue = Number(discount?.value) || 0;
+  const discountValue = Number(appliedDiscount?.value) || 0;
   const discountValid = checkoutTotals.valid;
   let hostedPreview=null;
   try{
     hostedPreview=buildStandaloneCheckout(cartItems.map(item=>({kind:item.kind,id:item.id,qty:item.qty})),
       cartItems.map(item=>({kind:item.kind,id:item.id,name:item.name,price:Number(item.catalogPrice),status:'פעיל'})));
   }catch{/* The server makes the final eligibility decision. */}
-  const canHostedCart=cartItems.length>0&&discountValid&&(!discount||user?.role==='admin')&&
+  const canHostedCart=cartItems.length>0&&discountValid&&(!appliedDiscount||user?.role==='admin')&&
     hostedPreview&&cartItems.every((item,index)=>Number(item.customPrice)===hostedPreview.items[index].customPrice);
 
   const handlePaymentConfirm = async (method, paymentDetails = null) => {
@@ -155,12 +162,12 @@ export default function CashRegister() {
           amountMinor: Math.round(total * 100), check: isCheck ? check : null, billing, documentType,
           referenceDocumentId, lines: cartItems.map(item => ({ kind: item.kind,
             id: item.id, qty: item.qty })),
-          discount: discount ? { type: discount.type, mode: discount.mode,
-            value: Number(discount.value) } : null,
+          discount: appliedDiscount ? { type: appliedDiscount.type, mode: appliedDiscount.mode,
+            value: Number(appliedDiscount.value) } : null,
         } });
         if (error || data?.error || !data?.receiptNumber) throw new Error('check_collection_unresolved');
         setReceiptData({ items: cartItems, total, method, paymentDetails: isCheck ? check : null,
-          discount: discount ? { type: discount.type, amount: discountAmount,
+          discount: appliedDiscount ? { type: appliedDiscount.type, amount: discountAmount,
             original_total: subtotal } : null,
           linkedOrder: null, timestamp: new Date(), receiptNumber: data.receiptNumber,
           accounting: data.accounting });
@@ -184,8 +191,8 @@ export default function CashRegister() {
         total,
         method,
         payment_details: paymentDetails,
-        discount: discount
-          ? { type: discount.type, mode: discount.mode, value: discountValue, original_total: subtotal, final_total: total }
+        discount: appliedDiscount
+          ? { type: appliedDiscount.type, mode: appliedDiscount.mode, value: discountValue, original_total: subtotal, final_total: total }
           : null,
         order_id: linkedOrder?.id || null,
         linked_order_info: linkedOrder
@@ -209,7 +216,7 @@ export default function CashRegister() {
       total,
       method,
       paymentDetails,
-      discount: discount ? { type: discount.type, amount: discountAmount, original_total: subtotal } : null,
+      discount: appliedDiscount ? { type: appliedDiscount.type, amount: discountAmount, original_total: subtotal } : null,
       linkedOrder,
       timestamp: new Date(),
       receiptNumber: data.receipt_number,
@@ -223,10 +230,11 @@ export default function CashRegister() {
     if (!canPayOrder || digitalInFlight.current) return;
     if (linkedOrder?.id) { navigate(`/cashregister?orderId=${encodeURIComponent(linkedOrder.id)}`); return; }
     if (!canHostedCart) return;
+    setPaymentError('');
     digitalInFlight.current = true; setDigitalBusy(true);
     const cart = {
       lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
-      discount: discount ? { type: discount.type, mode: discount.mode, value: Number(discount.value) } : null,
+      discount: appliedDiscount ? { type: appliedDiscount.type, mode: appliedDiscount.mode, value: Number(appliedDiscount.value) } : null,
     };
     posCheckoutId.current ||= posCheckoutRequestKey(null, cart, sessionStorage.getItem(posPendingKey));
     const requestKey = posCheckoutId.current;
@@ -241,10 +249,14 @@ export default function CashRegister() {
       const safe = ['capability_disabled', 'catalog_item_unavailable', 'cart_invalid',
         'cart_line_invalid', 'cart_amount_invalid', 'discount_invalid', 'pos_payment_forbidden'].includes(reason?.code);
       if (safe) {
-        toast.error(posPaymentErrorMessage(reason.code));
+        const message = posPaymentErrorMessage(reason.code);
+        setPaymentError(message);
+        toast.error(message);
         digitalInFlight.current = false; setDigitalBusy(false);
       } else {
-        toast.error('מצב התשלום אינו ודאי. בדקו את הניסיון הקיים לפני פעולה נוספת.');
+        const message = 'מצב התשלום אינו ודאי. בדקו את הניסיון הקיים לפני פעולה נוספת.';
+        setPaymentError(message);
+        toast.error(message);
         navigate('/payment/pos', { state: { checkoutId: requestKey, cart } });
       }
     }
@@ -255,7 +267,7 @@ export default function CashRegister() {
     physicalCheckoutId.current ||= crypto.randomUUID();
     const cart = {
       lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
-      discount: discount ? { type: discount.type, mode: discount.mode, value: Number(discount.value) } : null,
+      discount: appliedDiscount ? { type: appliedDiscount.type, mode: appliedDiscount.mode, value: Number(appliedDiscount.value) } : null,
     };
     const requestKey = physicalCheckoutId.current;
     const direct = import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED === 'true';
@@ -285,6 +297,7 @@ export default function CashRegister() {
     posCheckoutId.current = null;
     digitalInFlight.current = false;
     setDigitalBusy(false);
+    setPaymentError('');
     physicalCheckoutId.current = null;
     setPhysicalBusy(false);
     setCartItems([]);
@@ -318,6 +331,7 @@ export default function CashRegister() {
         noncardEnabled={noncardEnabled}
         onPelecard={handlePelecardStart}
         pelecardBusy={digitalBusy}
+        paymentError={paymentError}
         onPhysicalTerminal={handlePhysicalStart}
         physicalTerminalBusy={physicalBusy}
         physicalTerminalVisible={import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true'}
@@ -326,7 +340,7 @@ export default function CashRegister() {
         pelecardHint={linkedOrder?.id?'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה':
           canHostedCart?'מחירי הקטלוג והסכום יאומתו בשרת לפני מעבר לפלאקארד':
           'תשלום פלאקארד דורש מחיר קטלוג קבוע וללא שינוי ידני; הנחה מחייבת מנהל'}
-        onBack={() => setScreen("menu")}
+        onBack={() => { setPaymentError(''); setScreen("menu"); }}
       />
     );
   }

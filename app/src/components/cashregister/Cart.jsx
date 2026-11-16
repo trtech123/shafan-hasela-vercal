@@ -129,6 +129,9 @@ export default function Cart({
                 {discount.mode === "percentage" ? "אחוז חייב להיות בין 0 ל-100" : "הנחה לא יכולה לעלות על סכום הסל"}
               </p>
             )}
+            {discount && discountValid && discountAmount === 0 && (
+              <p className="text-xs text-slate-400">לא הוזן סכום הנחה; יחויב המחיר המלא.</p>
+            )}
           </div>
         )}
 
