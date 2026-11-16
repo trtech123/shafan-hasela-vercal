@@ -43,6 +43,8 @@ try {
     basename(filename) === '202611150002_physical_order_collection.sql');
   const hostedIncluded = migrations.some(filename =>
     basename(filename) === '202611150004_physical_hosted_emv.sql');
+  const directIncluded = migrations.some(filename =>
+    basename(filename) === '202611160001_direct_j4_first_response.sql');
   for (const filename of migrations) {
     current = basename(filename);
     await db.exec((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
@@ -335,6 +337,73 @@ try {
         .rows[0].value, true);
       assert.equal((await db.query('SELECT count(*)::int AS n FROM public.payper_document_ledger WHERE payment_id=$1 AND state=$2',
         [pending.paymentId, 'succeeded'])).rows[0].n, 1);
+      if (directIncluded) {
+        current = 'direct J4 first response and invoice association on combined schema';
+        const directOrder = '00000000-0000-4000-8000-000000000016';
+        await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
+          activity_id,activity_date,num_participants,price_per_person,payment_status)
+          VALUES($1,'Synthetic Direct','0500000000','billing@example.invalid','Test Group',
+            $2,current_date,1,15,'לא שולם')`, [directOrder, activity]);
+        await db.query('SELECT public.link_order_customer($1,$2,0)', [directOrder, customer]);
+        const direct = (await db.query(`SELECT public.reserve_physical_order_payment(
+          $1,gen_random_uuid(),'GENERAL',$2,1500) AS value`, [cashier, directOrder])).rows[0].value;
+        assert.equal((await db.query('SELECT public.claim_physical_dispatch($1) AS value',
+          [direct.paymentId])).rows[0].value, true);
+        assert.equal((await db.query('SELECT public.claim_physical_dispatch($1) AS value',
+          [direct.paymentId])).rows[0].value, false);
+        assert.equal((await db.query('SELECT public.list_physical_worker_intents() AS value'))
+          .rows[0].value.some(row => row.paymentId === direct.paymentId), false,
+        'overlapping cron must not inspect an in-flight J4 call');
+        const source = (await db.query('SELECT public.get_physical_direct_source($1) AS value',
+          [direct.paymentId])).rows[0].value;
+        assert.equal(source.amountMinor, 1500);
+        assert.equal(source.register, '004');
+        const evidence = { payment: { transactionId: '12346', amountMinor: 1500 },
+          document: { state: 'succeeded', status: 'Success', number: '595171',
+            url: 'https://app.payper.co.il/public/invoice_show/595171',
+            systemId: '595171', documentId: '551' } };
+        let cardLeakBlocked = false;
+        try {
+          await db.query('SELECT public.record_physical_first_response($1,$2::jsonb)',
+            [direct.paymentId, JSON.stringify({ ...evidence, pan: 'synthetic' })]);
+        } catch (error) { cardLeakBlocked = /physical_first_response_invalid/.test(error.message); }
+        assert.equal(cardLeakBlocked, true, 'first response must reject unknown card fields');
+        assert.equal((await db.query('SELECT public.record_physical_first_response($1,$2::jsonb) AS value',
+          [direct.paymentId, JSON.stringify(evidence)])).rows[0].value, true);
+        assert.equal((await db.query('SELECT public.record_physical_first_response($1,$2::jsonb) AS value',
+          [direct.paymentId, JSON.stringify(evidence)])).rows[0].value, true);
+        let changedResponseBlocked = false;
+        try {
+          await db.query('SELECT public.record_physical_first_response($1,$2::jsonb)',
+            [direct.paymentId, JSON.stringify({ ...evidence, payment: {
+              ...evidence.payment, transactionId: '99999' } })]);
+        } catch (error) { changedResponseBlocked = /physical_first_response_conflict/.test(error.message); }
+        assert.equal(changedResponseBlocked, true, 'first provider response must be immutable');
+        const saved = (await db.query('SELECT public.get_physical_worker_intent($1) AS value',
+          [direct.paymentId])).rows[0].value;
+        assert.equal(saved.firstResponse.document.number, '595171');
+        await db.query('SELECT public.observe_physical_result($1,$2::jsonb)', [direct.paymentId,
+          JSON.stringify({ status: 'approved', intentId: direct.paymentId,
+            merchantTerminal: '2814926015', register: '004', amountMinor: 1500,
+            transactionId: '12346', approvalId: 'auth-direct-1', uid: 'uid-direct-1' })]);
+        const final = (await db.query('SELECT public.finalize_physical_payment($1) AS value',
+          [direct.paymentId])).rows[0].value;
+        assert.equal(final.orderId, directOrder);
+        assert.equal((await db.query(`SELECT verified_amount_minor AS amount
+          FROM public.physical_payment_intents WHERE payment_id=$1`,
+          [direct.paymentId])).rows[0].amount, 1500);
+        assert.equal((await db.query('SELECT public.list_physical_worker_intents() AS value'))
+          .rows[0].value.some(row => row.paymentId === direct.paymentId && row.state === 'succeeded'),
+        true, 'worker must recover interrupted invoice association');
+        assert.equal((await db.query('SELECT public.record_physical_direct_document($1) AS value',
+          [direct.paymentId])).rows[0].value, true);
+        assert.equal((await db.query('SELECT public.record_physical_direct_document($1) AS value',
+          [direct.paymentId])).rows[0].value, true);
+        const document = (await db.query(`SELECT document_number,physical_document_id,state
+          FROM public.payper_document_ledger WHERE payment_id=$1`, [direct.paymentId])).rows[0];
+        assert.deepEqual(document, { document_number: '595171', physical_document_id: '551',
+          state: 'succeeded' });
+      }
     }
   }
   const installed = (await db.query(`SELECT count(*)::int AS tables FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -354,7 +423,8 @@ try {
     digitalOrderMockApproval: 'passed',
     cashOrderCollection: 'passed',
     physicalRemainingBalance: physicalIncluded ? 'passed' : 'not_requested',
-    hostedDocumentAssociation: hostedIncluded ? 'passed' : 'not_requested' }));
+    hostedDocumentAssociation: hostedIncluded ? 'passed' : 'not_requested',
+    directFirstResponse: directIncluded ? 'passed' : 'not_requested' }));
   if (process.env.AUDIT_CATALOG_NAMES === '1') {
     const names = (await db.query(`SELECT c.relname FROM pg_class c
       JOIN pg_namespace n ON n.oid=c.relnamespace

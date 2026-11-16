@@ -122,6 +122,25 @@ export function createPhysicalRepository(database) {
       return single(await database.query(
         'SELECT public.claim_physical_dispatch($1::uuid) AS result', [intentId])) === true;
     },
+    async directSource(intentId) {
+      if (!uuid.test(intentId)) throw new Error('physical_intent_invalid');
+      const source = single(await database.query(
+        'SELECT public.get_physical_direct_source($1::uuid) AS result', [intentId]));
+      if (!source || source.id !== intentId) throw new Error('physical_direct_source_unavailable');
+      return source;
+    },
+    async persistFirstResponse(intentId, evidence) {
+      if (!uuid.test(intentId) || !evidence) throw new Error('physical_first_response_invalid');
+      if (single(await database.query(
+        'SELECT public.record_physical_first_response($1::uuid,$2::jsonb) AS result',
+        [intentId, evidence])) !== true) throw new Error('physical_first_response_unavailable');
+    },
+    async recordDirectDocument(intentId) {
+      if (!uuid.test(intentId)) throw new Error('physical_intent_invalid');
+      if (single(await database.query(
+        'SELECT public.record_physical_direct_document($1::uuid) AS result', [intentId])) !== true)
+        throw new Error('physical_document_reconciliation_required');
+    },
     async markDispatched(intentId) {
       await database.query('SELECT public.mark_physical_pending($1::uuid)', [intentId]);
     },

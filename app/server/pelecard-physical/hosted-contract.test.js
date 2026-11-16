@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildHostedEmvRequest, classifyHostedEmvResult, parseHostedPayperData } from './hosted-contract.js';
+import { buildHostedEmvRequest, buildPhysicalPayperParameters, classifyHostedEmvResult, parseHostedPayperData } from './hosted-contract.js';
 
 const id = '11111111-1111-4111-8111-111111111111';
 const base = { id, register: '004', amountMinor: 11800,
@@ -19,6 +19,15 @@ const expected = { transactionId: 'hosted-1', amountMinor: 11800, register: '004
   confirmationKey: 'synthetic-confirmation',
   merchantTerminal: '1234567890', deviceDetails: { StatusCode: '000', Uid: 'uid-1',
     termNo: '004', Amount: '11800', retailer: '1234567890' } };
+
+test('direct J4 reuses frozen hosted invoice lines without a hosted session', () => {
+  assert.deepEqual(buildPhysicalPayperParameters(base).DataPayper.invoice_lines, [
+    { description: 'Group climbing', quantity: '2', price_per_unit: '5900',
+      include_vat: 'true', no_vat: 'false', currency_symbol: 'ILS' },
+  ]);
+  assert.throws(() => buildPhysicalPayperParameters({ ...base, amountMinor: 11799 }),
+    /physical_amount_mismatch/);
+});
 
 test('hosted EMV request uses frozen gross lines, VAT and register 004', () => {
   const request = buildHostedEmvRequest(base, credentials, {

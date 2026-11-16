@@ -20,8 +20,10 @@ describe('physical Pelecard provider boundary', () => {
     expect(options.signal).toBeInstanceOf(AbortSignal);
     expect(timeout).toHaveBeenCalledWith(300_000);
     timeout.mockRestore();
-    expect(result).toEqual({ StatusCode: '000', PelecardTransactionId: '12345', ShvaResult: '000',
-      DebitTotal: '2400', AdditionalDetailsParamX: 'intent-1' });
+    expect(result).toMatchObject({ StatusCode: '000', PelecardTransactionId: '12345', ShvaResult: '000',
+      DebitTotal: '2400', AdditionalDetailsParamX: 'intent-1',
+      firstResponse: { payment: { transactionId: '12345', amountMinor: 2400 },
+        document: { state: 'reconciliation_required' } } });
     expect(JSON.stringify(result)).not.toMatch(/masked|private/);
   });
   test('rejects malformed dispatch before network access', async () => {

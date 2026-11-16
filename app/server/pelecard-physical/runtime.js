@@ -24,6 +24,7 @@ export function createPhysicalRuntime(env, overrides = {}) {
     hostedProvider, hostedEnabled: config.hostedEnabled,
     hostedInitEnabled: config.hostedInitEnabled, hostedUrls: config.hostedUrls,
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
+    payperEnabled: config.payperEnabled,
     merchantTerminal: config.terminalNumber });
   return {
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,

@@ -25,6 +25,17 @@ function validApproval(result, intent, merchantTerminal) {
 
 export function createPhysicalWorkflow(deps) {
   const merchantTerminal = deps.merchantTerminal;
+  async function reconcileDirect(intent, result) {
+    if (intent.documentState === 'succeeded') return 'succeeded';
+    const first = intent.firstResponse;
+    if (first?.document?.state !== 'succeeded' ||
+      first.payment?.transactionId !== result.transactionId ||
+      first.payment?.amountMinor !== intent.amountMinor) return 'reconciliation_required';
+    try {
+      await deps.recordDirectDocument(intent.id, first.document);
+      return 'succeeded';
+    } catch { return 'reconciliation_required'; }
+  }
   async function verifyHosted(intent) {
     if (!intent.hostedTransactionId || !intent.hostedConfirmationKey)
       return { id: intent.id, state: intent.state === 'succeeded' ? 'succeeded' : 'uncertain' };
@@ -132,11 +143,15 @@ export function createPhysicalWorkflow(deps) {
       if (intent.route === 'hosted') throw new Error('physical_direct_route_required');
       if (!PHYSICAL_REGISTERS.includes(intent.register) || !validAmount(intent.amountMinor))
         throw new Error('physical_intent_invalid');
+      const payperSource = deps.payperEnabled === true
+        ? await deps.directSource(intent.id) : undefined;
       if (!(await deps.claimDispatch(intent.id))) return { id: intent.id, state: 'pending' };
       let state = 'pending';
       try {
         const result = await deps.provider.send({ merchantTerminal,
-          register: intent.register, amountMinor: intent.amountMinor, intentId: intent.id });
+          register: intent.register, amountMinor: intent.amountMinor, intentId: intent.id,
+          payperSource });
+        await deps.persistFirstResponse(intent.id, result.firstResponse);
         await deps.markDispatched(intent.id, result);
       } catch {
         // Even a broken connection can follow a completed charge. A second send
@@ -152,10 +167,14 @@ export function createPhysicalWorkflow(deps) {
       const intent = await deps.status(intentId);
       if (!intent) throw new Error('physical_intent_missing');
       if (intent.route === 'hosted') return verifyHosted(intent);
-      if (intent.state === 'succeeded') return intent;
+      if (intent.state === 'succeeded') {
+        return { ...intent, documentState: await reconcileDirect(intent, {
+          transactionId: intent.transactionId }) };
+      }
       if (intent.state === 'approved') {
         const finalized = await deps.finishApproved(intent.id);
-        return { id: intent.id, state: 'succeeded', ...finalized };
+        return { id: intent.id, state: 'succeeded', ...finalized,
+          documentState: await reconcileDirect(intent, { transactionId: intent.transactionId }) };
       }
       if (!['dispatching', 'pending', 'uncertain'].includes(intent.state)) return intent;
       let result;
@@ -175,7 +194,8 @@ export function createPhysicalWorkflow(deps) {
       // finalize must use a unique provider transaction ID and an atomic
       // payment + sale + accounting eligibility transaction in the database.
       const finalized = await deps.finalize(intent.id, result);
-      return { id: intent.id, state: 'succeeded', ...finalized };
+      return { id: intent.id, state: 'succeeded', ...finalized,
+        documentState: await reconcileDirect(intent, result) };
     },
   };
 }

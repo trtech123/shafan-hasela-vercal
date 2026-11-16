@@ -13,6 +13,7 @@ export function readPhysicalConfig(env) {
   // Appendix D documents the PINPAD J4 request. Financial dispatch has a
   // second gate so device readiness cannot authorize a charge by itself.
   const dispatchEnabled = env.PELECARD_PHYSICAL_DISPATCH_ENABLED === 'true';
+  const payperEnabled = env.PELECARD_PHYSICAL_DIRECT_PAYPER_ENABLED === 'true';
   const hostedEnabled = env.PELECARD_PHYSICAL_HOSTED_ENABLED === 'true';
   const hostedInitEnabled = hostedEnabled &&
     env.PELECARD_PHYSICAL_HOSTED_INIT_ENABLED === 'true';
@@ -34,7 +35,7 @@ export function readPhysicalConfig(env) {
   const workerMaxMs = Number(env.PELECARD_PHYSICAL_WORKER_MAX_MS || 0);
   if (dispatchEnabled && (!Number.isSafeInteger(workerMaxMs) || workerMaxMs < 330_000))
     throw new Error('physical_worker_duration_required');
-  return { enabled: true, dispatchEnabled, hostedEnabled, hostedInitEnabled,
+  return { enabled: true, dispatchEnabled, payperEnabled, hostedEnabled, hostedInitEnabled,
     hostedUrls, terminalNumber: terminal, user, password, workerMaxMs };
 }
 
