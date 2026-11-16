@@ -156,7 +156,7 @@ export default function OrderCollection({ orderId }) {
         {view.payments?.length > 0 && <p className="text-sm">היסטוריית גבייה: {view.payments.filter(p => p.status === 'succeeded').length} תשלומים שנרשמו או אומתו</p>}
         {view.payments?.some(p => p.clearanceStatus === 'received_uncleared') && <p className="text-sm text-amber-800">המחאות שהתקבלו טרם נפרעו בבנק.</p>}
         {view.unresolvedPayment && <p role="alert" className="text-amber-800">קיים ניסיון תשלום שתוצאתו אינה ודאית. גבייה נוספת חסומה עד בירור.</p>}
-        {view.accountingReviewRequired && <p role="alert" className="text-amber-800">כבר קיים מסמך או ניסיון הפקה חשבונאי להזמנה. גבייה נוספת חסומה עד להתאמה חשבונאית.</p>}
+        {view.balanceMinor > 0 && view.accountingReviewRequired && <p role="alert" className="text-amber-800">כבר קיים מסמך או ניסיון הפקה חשבונאי להזמנה. גבייה נוספת חסומה עד להתאמה חשבונאית.</p>}
       {view.balanceMinor > 0 && view.billingIssues?.length > 0 && <p role="alert" className="text-amber-800">לפני גבייה במזומן או בהמחאה יש להשלים פרטי חיוב ומדיניות מע״מ מאומתים בכרטיס הלקוח. לא יירשם תשלום עד להשלמה.</p>}
       {view.balanceMinor > 0 && view.billingIssues?.some(issue => ['vat_required', 'billing_identity_required', 'billing_email_required', 'cash_vat_unsupported'].includes(issue)) &&
         <Button type="button" variant="outline" onClick={openBilling}>השלמת פרטי חיוב להזמנה זו</Button>}

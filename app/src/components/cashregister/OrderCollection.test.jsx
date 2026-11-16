@@ -108,6 +108,7 @@ test('cashier sees the server-computed full balance', async () => {
 
 test('paid cash order shows its issued invoice and no obsolete billing warning', async () => {
   state.invoke.mockResolvedValue({ data: { ...view(10000), billingIssues: ['billing_email_required'],
+    accountingReviewRequired: true,
     documents: [{ paymentId: 'p1', state: 'succeeded', documentNumber: '200004',
       documentUrl: 'https://app.payper.co.il/public/invoice_show/3630819?ak=opaqueproviderkey123' }] }, error: null });
   render(<OrderCollection orderId={orderId} />);
@@ -116,6 +117,7 @@ test('paid cash order shows its issued invoice and no obsolete billing warning',
   expect(screen.getByRole('link', { name: 'פתיחה והדפסה' })).toHaveAttribute('href',
     'https://app.payper.co.il/public/invoice_show/3630819?ak=opaqueproviderkey123');
   expect(screen.queryByText(/לפני גבייה במזומן/)).toBeNull();
+  expect(screen.queryByText(/גבייה נוספת חסומה/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'השלמת פרטי חיוב להזמנה זו' })).toBeNull();
 });
 
