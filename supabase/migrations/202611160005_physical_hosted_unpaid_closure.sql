@@ -72,6 +72,7 @@ BEGIN
     EXISTS(SELECT 1 FROM public.sales s WHERE s.order_id=o.id OR
       s.payment_transaction_id=p_payment_id OR
       s.linked_order_info->>'order_number'=o.order_number) OR
+    EXISTS(SELECT 1 FROM public.manual_order_payments m WHERE m.order_id=o.id) OR
     EXISTS(SELECT 1 FROM public.payper_document_ledger l WHERE
       l.payment_id=p_payment_id OR l.order_id=o.id) OR
     EXISTS(SELECT 1 FROM public.accounting_documents d WHERE

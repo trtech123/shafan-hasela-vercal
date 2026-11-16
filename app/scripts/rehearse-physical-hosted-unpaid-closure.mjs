@@ -31,6 +31,7 @@ try {
       ('reserved','dispatching','pending','uncertain','approved');
     CREATE TABLE public.sales(order_id uuid,payment_transaction_id uuid,
       linked_order_info jsonb);
+    CREATE TABLE public.manual_order_payments(order_id uuid);
     CREATE TABLE public.payper_document_ledger(payment_id uuid,order_id uuid);
     CREATE TABLE public.accounting_documents(source_id text);
   `);
