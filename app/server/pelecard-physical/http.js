@@ -19,7 +19,7 @@ export function createPhysicalHttpHandler(deps) {
       try { body = JSON.parse(raw); } catch { return json({ error: 'invalid_input' }, 400); }
       if (!body || Array.isArray(body) || typeof body !== 'object')
         return json({ error: 'invalid_input' }, 400);
-      if (deps.testActorId && ['prepare', 'prepareOrder', 'openHosted'].includes(body.action) &&
+      if (deps.testActorId && ['prepare', 'prepareOrder', 'openHosted', 'enqueueDirect'].includes(body.action) &&
         actor.id !== deps.testActorId) return json({ error: 'physical_test_cashier_only' }, 403);
       if (body.action === 'devices' && Object.keys(body).join(',') === 'action')
         return json(await deps.repository.listDevices(), 200);
@@ -50,11 +50,20 @@ export function createPhysicalHttpHandler(deps) {
         return saved ? json(withHosted(saved), 201)
           : json({ error: 'reservation_unavailable' }, 502);
       }
-      if (!['status', 'verify', 'cancel', 'openHosted'].includes(body.action) ||
+      if (!['status', 'verify', 'cancel', 'openHosted', 'enqueueDirect'].includes(body.action) ||
         Object.keys(body).sort().join(',') !== 'action,requestKey' || !uuid.test(body.requestKey))
         return json({ error: 'invalid_input' }, 400);
       let saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
       if (!saved) return json({ error: 'payment_not_found' }, 404);
+      if (body.action === 'enqueueDirect') {
+        if (deps.enabled !== true || deps.dispatchEnabled !== true || deps.payperEnabled !== true ||
+          deps.cloudWorkerEnabled !== true || typeof deps.enqueueDirect !== 'function')
+          return json({ error: 'physical_direct_disabled' }, 503);
+        if (saved.route !== 'direct' || saved.registerNumber !== '004')
+          return json({ error: 'physical_direct_route_required' }, 409);
+        if (saved.state === 'reserved') await deps.enqueueDirect(saved.paymentId);
+        return json(saved, 200);
+      }
       if (body.action === 'openHosted') {
         if (deps.hostedEnabled !== true || deps.hostedInitEnabled !== true)
           return json({ error: 'physical_hosted_disabled' }, 503);

@@ -5,6 +5,8 @@ import { createPhysicalRepository } from './repository.js';
 import { createPhysicalPelecardProvider } from './provider.js';
 import { createHostedEmvProvider } from './hosted-provider.js';
 import { createPhysicalWorkflow } from './workflow.js';
+import { send } from '@vercel/queue';
+import { createDirectQueuePublisher } from './queue-publisher.js';
 
 export function createPhysicalRuntime(env, overrides = {}) {
   const config = readPhysicalConfig(env);
@@ -24,6 +26,9 @@ export function createPhysicalRuntime(env, overrides = {}) {
     hostedProvider, hostedEnabled: config.hostedEnabled,
     hostedInitEnabled: config.hostedInitEnabled, hostedUrls: config.hostedUrls,
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
+    payperEnabled: config.payperEnabled,
+    cloudWorkerEnabled: env.PELECARD_PHYSICAL_CLOUD_WORKER_ENABLED === 'true',
+    enqueueDirect: createDirectQueuePublisher(overrides.queueSend ?? send),
     payperEnabled: config.payperEnabled,
     merchantTerminal: config.terminalNumber });
   return {

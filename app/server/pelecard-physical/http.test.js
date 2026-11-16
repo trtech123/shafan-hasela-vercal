@@ -5,7 +5,7 @@ import { createPhysicalHttpHandler } from './http.js';
 const actor = { id: '11111111-1111-4111-8111-111111111111', role: 'cashier' };
 const requestKey = '22222222-2222-4222-8222-222222222222';
 const paymentId = '33333333-3333-4333-8333-333333333333';
-const view = { paymentId, state: 'reserved', registerNumber: '004', amountMinor: 2400, saleId: null };
+const view = { paymentId, route: 'direct', state: 'reserved', registerNumber: '004', amountMinor: 2400, saleId: null };
 function setup() {
   const calls = [];
   const deps = {
@@ -68,6 +68,40 @@ test('status and verify cannot dispatch a financial request', async () => {
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'status', requestKey }))).status, 200);
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'verify', requestKey }))).status, 200);
   assert.deepEqual(s.calls, [['verify', paymentId]]);
+});
+test('direct enqueue awaits durable acknowledgement and is restricted to the selected cashier', async () => {
+  const s = setup();
+  s.deps.testActorId = actor.id;
+  s.deps.dispatchEnabled = true;
+  s.deps.cloudWorkerEnabled = true;
+  s.deps.payperEnabled = true;
+  s.deps.enqueueDirect = async id => { s.calls.push(['enqueue', id]); return 'message-1'; };
+  const response = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'enqueueDirect', requestKey }));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).state, 'reserved');
+  assert.deepEqual(s.calls, [['enqueue', paymentId]]);
+  s.deps.testActorId = '55555555-5555-4555-8555-555555555555';
+  assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'enqueueDirect', requestKey }))).status, 403);
+  assert.deepEqual(s.calls, [['enqueue', paymentId]]);
+});
+test('enqueue failure never claims or sends J4 and can be retried with the same intent', async () => {
+  const s = setup();
+  s.deps.dispatchEnabled = true;
+  s.deps.cloudWorkerEnabled = true;
+  s.deps.payperEnabled = true;
+  s.deps.enqueueDirect = async id => { s.calls.push(['enqueue', id]); if (s.calls.length === 1) throw Error('network'); };
+  const handler = createPhysicalHttpHandler(s.deps);
+  assert.equal((await handler(s.request({ action: 'enqueueDirect', requestKey }))).status, 502);
+  assert.equal((await handler(s.request({ action: 'enqueueDirect', requestKey }))).status, 200);
+  assert.deepEqual(s.calls, [['enqueue', paymentId], ['enqueue', paymentId]]);
+});
+test('direct enqueue refuses a charge while merchant Payper confirmation gate is off', async () => {
+  const s = setup();
+  s.deps.dispatchEnabled = true;
+  s.deps.cloudWorkerEnabled = true;
+  s.deps.payperEnabled = false;
+  s.deps.enqueueDirect = async () => { throw Error('must not publish'); };
+  assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'enqueueDirect', requestKey }))).status, 503);
 });
 test('hosted open is authenticated, separately gated, and returns only the saved session', async () => {
   const s = setup();

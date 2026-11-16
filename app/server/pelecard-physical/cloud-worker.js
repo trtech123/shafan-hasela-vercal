@@ -11,7 +11,9 @@ export function createCloudPhysicalWorkerHandler(env, loadRuntime) {
       const runtime = loadRuntime();
       if (!runtime.enabled || runtime.workerMaxMs < 330_000)
         return Response.json({ error: 'physical_worker_duration_required' }, { status: 503 });
-      const results = await runPhysicalWorkerCycle(runtime);
+      // Scheduled invocations reconcile only. An acknowledged queue publish
+      // owns prompt checkout dispatch; cron must not surprise a cashier later.
+      const results = await runPhysicalWorkerCycle({ ...runtime, dispatchEnabled: false });
       const failed = results.filter(item => item.status === 'rejected').length;
       const unresolved = results.filter(item => item.status === 'fulfilled' &&
         ['pending', 'uncertain', 'approved', 'reserved'].includes(item.value?.state)).length;
