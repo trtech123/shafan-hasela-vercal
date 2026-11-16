@@ -1,5 +1,11 @@
 # ORD-1059 cash document reconciliation — release record
 
+## Cash production acceptance complete, 16 November 2026
+
+The customer confirmed actual receipt of ₪15 cash and approved one cashier payment on scheduled order ORD-1061 (ברד). The customer completed the production cashier action and confirmed receipt of official Payper Invoice-Receipt 200005 by email. Read-only production checks found exactly one succeeded ₪15 `manual_cash` payment, one linked sale RCP-1046, zero outstanding balance, one automatically originated Payper ledger entry in `succeeded` state with document number 200005 and system document ID 3634323, and one succeeded Payper accounting event. The existing signed Payper page returned HTTP 200 and matched ORD-1061, RCP-1046, ₪15 cash and number 200005. The cashier server view returned that number and its document link. No manual reconciliation audit exists for this payment; the cash dispatch response was received and persisted automatically.
+
+After this successful post-fix live acceptance, the sole `PAYPER_NONCARD_TEST_ACTOR_ID` restriction was removed from production. Post-activation gate verification found `PAYPER_NONCARD_COLLECTION_ENABLED=true`, `PAYPER_CASH_DISPATCH_ENABLED=true`, `PAYPER_CHECK_DISPATCH_ENABLED=false`, and no test-actor restriction. The Edge Function still requires an authenticated admin or cashier; the SQL collection guard uses those same production roles. Digital checkout and physical financial gates were not changed. No additional payment or invoice was created during activation.
+
 ## Production completion, 16 November 2026
 
 The signed existing Payper document URL recovered from the earlier production report was opened read only (HTTP 200). Payper's official page identified Invoice-Receipt **200004**, system document ID **3630819**, merchant שפן הסלע מצוקי רמים בע"מ, order **ORD-1059**, sale reference **RCP-1045**, issue date **16 November 2026**, ₪15 gross, and a ₪15 cash receipt. The customer independently confirmed receiving the invoice email. The signed access token is intentionally omitted from this record.
