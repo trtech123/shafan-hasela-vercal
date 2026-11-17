@@ -51,6 +51,16 @@ const renderAtAccounting = (role) => {
 
 afterEach(() => cleanup());
 
+test('an authenticated instructor can open the cashier for physical collection', () => {
+  currentRole = 'מדריך';
+  render(<MemoryRouter initialEntries={['/cashregister']}><Routes><Route element={<Layout />}>
+    <Route path="/cashregister" element={<h1>קופה פיזית</h1>} />
+    <Route path="/schedule" element={<h1>לוח זמנים</h1>} />
+  </Route></Routes></MemoryRouter>);
+  expect(screen.getByRole('link', { name: 'קופה' })).toHaveAttribute('href', '/cashregister');
+  expect(screen.getByRole('heading', { name: 'קופה פיזית' })).toBeInTheDocument();
+});
+
 describe("Cafeteria product navigation", () => {
   test.each(["admin", "קופאי"])("%s can reach cafeteria products", (role) => {
     currentRole = role;

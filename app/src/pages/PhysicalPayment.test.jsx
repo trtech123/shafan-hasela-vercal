@@ -7,14 +7,27 @@ import PhysicalPayment from './PhysicalPayment.jsx';
 import { requestPhysicalPayment } from '@/payments/physical/client';
 import { supabase } from '@/api/supabaseClient';
 
-vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: 'admin' } }) }));
+const auth = vi.hoisted(() => ({ role: 'admin' }));
+vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: auth.role } }) }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: vi.fn() } } }));
 vi.mock('@/payments/physical/client', () => ({ requestPhysicalPayment: vi.fn() }));
 
 describe('physical POS checkout', () => {
   beforeEach(() => { localStorage.clear(); vi.mocked(requestPhysicalPayment).mockReset();
-    vi.mocked(supabase.functions.invoke).mockReset(); });
+    vi.mocked(supabase.functions.invoke).mockReset(); auth.role = 'admin'; });
   afterEach(() => cleanup());
+  test('operations role can inspect an existing physical attempt without starting another', async () => {
+    auth.role = 'operations';
+    localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({
+      requestKey: '22222222-2222-4222-8222-222222222222', orderId: null, mode: 'direct' }));
+    vi.mocked(requestPhysicalPayment).mockImplementation(async (_client, body) =>
+      body.action === 'devices' ? [] : { paymentId: '11111111-1111-4111-8111-111111111111',
+        state: 'uncertain', route: 'direct', amountMinor: 1500, registerNumber: '004' });
+    render(<MemoryRouter initialEntries={['/payment/physical']}><PhysicalPayment /></MemoryRouter>);
+    expect(await screen.findByText(/מצב התשלום טרם אומת/)).toBeTruthy();
+    expect(requestPhysicalPayment).not.toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ action: 'prepare' }));
+  });
   test('cashier opens the hosted PINPAD page after reserving the frozen intent', async () => {
     localStorage.setItem('pelecard.physicalPending.v1', JSON.stringify({
       requestKey: '22222222-2222-4222-8222-222222222222', orderId: null }));

@@ -50,13 +50,14 @@ describe('Cash Register hosted routes',()=>{
     fireEvent.click(screen.getByText('Physical'));
     expect(state.direct).not.toHaveBeenCalled();
   });
-  test('operations staff do not gain physical payment permission',async()=>{
+  test.each(['אחמ"ש','instructor'])('%s can select physical checkout without gaining standalone digital access',async role=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
     vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
-    state.role='אחמ"ש';
+    state.role=role;
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));
-    expect(screen.queryByText('Physical')).not.toBeInTheDocument();
+    expect(await screen.findByText('Physical')).toBeEnabled();
+    expect(screen.getByText('Pelecard')).toBeDisabled();
   });
   test('unaccepted physical route is shown disabled while standalone digital remains available',async()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','false');

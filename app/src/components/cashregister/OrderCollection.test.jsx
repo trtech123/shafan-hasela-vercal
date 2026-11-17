@@ -38,14 +38,17 @@ test.each(['admin', 'קופאי'])('%s sees physical choice but cannot pay while
   expect(state.direct).not.toHaveBeenCalled();
 });
 
-test('operations staff cannot see an order payment action despite register navigation access', async () => {
+test.each(['אחמ"ש', 'instructor'])('%s sees physical order collection without gaining cash or digital access', async role => {
   vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
   vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED', 'true');
-  state.role = 'אחמ"ש';
+  state.role = role;
   state.invoke.mockResolvedValue({ data: view(), error: null });
+  state.availability.mockResolvedValue({ visible: true, ready: false, route: 'direct' });
   render(<OrderCollection orderId={orderId} />);
-  expect(await screen.findByText(/גבייה זמינה למנהל ולקופאי בלבד/)).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /שלם במסופון פיזי/ })).not.toBeInTheDocument();
+  expect(await screen.findByText(/ORD-123/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /שלם במסופון פיזי/ })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: /שלם באשראי דיגיטלי/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /רשום תשלום והפק מסמך/ })).not.toBeInTheDocument();
 });
 
 test('scheduled order shows saved total and balance without creating a cart', async () => {

@@ -31,7 +31,8 @@ const collect = async body => {
 
 export default function OrderCollection({ orderId }) {
   const { user } = useAuth();
-  const allowed = user?.role === 'admin' || user?.role === 'קופאי' || user?.role === 'cashier';
+  const allowed = Boolean(user?.role);
+  const nonphysicalAllowed = ['admin', 'קופאי', 'cashier'].includes(user?.role);
   const [view, setView] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -148,7 +149,7 @@ export default function OrderCollection({ orderId }) {
     } finally { locked.current = false; setBusy(false); }
   };
 
-  if (!allowed) return <p dir="rtl" className="p-6">גבייה זמינה למנהל ולקופאי בלבד.</p>;
+  if (!allowed) return <p dir="rtl" className="p-6">יש להתחבר כדי לפתוח גבייה להזמנה.</p>;
   if (!validId(orderId)) return <p dir="rtl" className="p-6">מזהה ההזמנה אינו תקין.</p>;
   return <main dir="rtl" className="mx-auto max-w-2xl space-y-5 p-6 text-slate-900">
     <Link to="/schedule" className="text-primary underline">חזרה ללוח הזמנים</Link>
@@ -169,8 +170,8 @@ export default function OrderCollection({ orderId }) {
         {view.payments?.some(p => p.clearanceStatus === 'received_uncleared') && <p className="text-sm text-amber-800">המחאות שהתקבלו טרם נפרעו בבנק.</p>}
         {view.unresolvedPayment && <p role="alert" className="text-amber-800">קיים ניסיון תשלום שתוצאתו אינה ודאית. גבייה נוספת חסומה עד בירור.</p>}
         {view.balanceMinor > 0 && view.accountingReviewRequired && <p role="alert" className="text-amber-800">כבר קיים מסמך או ניסיון הפקה חשבונאי להזמנה. גבייה נוספת חסומה עד להתאמה חשבונאית.</p>}
-      {view.balanceMinor > 0 && view.billingIssues?.length > 0 && <p role="alert" className="text-amber-800">לפני גבייה במזומן או בהמחאה יש להשלים פרטי חיוב ומדיניות מע״מ מאומתים בכרטיס הלקוח. לא יירשם תשלום עד להשלמה.</p>}
-      {view.balanceMinor > 0 && view.billingIssues?.some(issue => ['vat_required', 'billing_identity_required', 'billing_email_required', 'cash_vat_unsupported'].includes(issue)) &&
+      {view.balanceMinor > 0 && view.billingIssues?.length > 0 && <p role="alert" className="text-amber-800">לפני גבייה יש להשלים פרטי חיוב ומדיניות מע״מ מאומתים בהזמנה. לא יירשם תשלום עד להשלמה.</p>}
+      {nonphysicalAllowed && view.balanceMinor > 0 && view.billingIssues?.some(issue => ['vat_required', 'billing_identity_required', 'billing_email_required', 'cash_vat_unsupported'].includes(issue)) &&
         <Button type="button" variant="outline" onClick={openBilling}>השלמת פרטי חיוב להזמנה זו</Button>}
         {view.documents?.map(doc => <p key={doc.paymentId} className="text-sm">
           מסמך עבור תשלום {doc.paymentId}: {doc.state === 'succeeded' ? `הופק ${doc.documentNumber}` :
@@ -189,7 +190,7 @@ export default function OrderCollection({ orderId }) {
               : <p role="status">תשלום במסופון זמין לקופאי המורשה בלבד.</p>)}
       {import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' && view.balanceMinor > 0 &&
         <p role="status" className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">תשלום במסופון פיזי מושבת עד לאימות מסלול פלאקארד והפעלתו.</p>}
-      {view.balanceMinor > 0 && view.paidMinor === 0 &&
+      {nonphysicalAllowed && view.balanceMinor > 0 && view.paidMinor === 0 &&
         <OrderDigitalCheckout orderId={orderId} balanceMinor={view.balanceMinor}
           onStatus={() => refresh(false).catch(() => setError('לא ניתן לרענן את יתרת ההזמנה.'))} />}
       {result && <section role="status" className="rounded-xl border bg-white p-4">
@@ -200,10 +201,10 @@ export default function OrderCollection({ orderId }) {
             ? 'התשלום נשמר, אך תוצאת הפקת המסמך אינה ודאית. יש להתאים את המסמך הקיים מול Payper; אין להפיק מסמך נוסף.'
             : 'המסמך החשבונאי בהפקה או בבדיקה. רעננו את מצב המסמכים.'}</p>}
       </section>}
-      {view.balanceMinor > 0 && !view.unresolvedPayment && !result &&
+      {nonphysicalAllowed && view.balanceMinor > 0 && !view.unresolvedPayment && !result &&
         !view.collectionEnabled?.cash && !view.collectionEnabled?.check &&
         <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">גבייה במזומן ובהמחאה אינה פעילה כעת.</p>}
-      {view.balanceMinor > 0 && !view.unresolvedPayment && !result &&
+      {nonphysicalAllowed && view.balanceMinor > 0 && !view.unresolvedPayment && !result &&
         (view.collectionEnabled?.cash || view.collectionEnabled?.check) &&
         <section className="space-y-3 rounded-xl border bg-white p-5">
         <h2 className="font-bold">רישום תשלום שהתקבל</h2>

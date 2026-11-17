@@ -17,7 +17,7 @@ export function createPhysicalHttpHandler(deps) {
       if (!token) return json({ error: 'unauthorized' }, 401);
       const actor = await deps.authenticate(token);
       if (!actor) return json({ error: 'unauthorized' }, 401);
-      if (!['admin', 'cashier'].includes(actor.role)) return json({ error: 'forbidden' }, 403);
+      if (typeof actor.role !== 'string' || !actor.role) return json({ error: 'forbidden' }, 403);
       const raw = await request.text();
       if (raw.length > 16_384) return json({ error: 'invalid_input' }, 400);
       let body;

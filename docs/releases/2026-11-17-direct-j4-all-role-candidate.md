@@ -1,0 +1,9 @@
+# Direct J4 access candidate — financial dispatch held
+
+This candidate lets every authenticated application user with a saved profile open the cashier and select physical payment. The Vercel physical API authenticates the session and profile for every action. The new migration widens the service-only order status, billing eligibility, and physical reservation functions to those profiles. Existing amount, register, order, and idempotency checks remain. Digital, cash, check, and legacy manual sale permissions are unchanged.
+
+Migration `202611170001_physical_all_authenticated_roles.sql` replaces five function definitions. It performs no data updates, adds no tables, and changes no financial gate. It requires separate production approval before application.
+
+The production ORD-1060 Direct J4 intent `ab3c6849-a4ad-476f-a615-22e04287ddbf` remains uncertain. On November 17 the protected worker reported `physical_result_unverified_510_0`; no first provider response or local payment, sale, or invoice is recorded. A zero-match nonfinal lookup cannot prove that the provider did not receive or settle J4. Register 004 and this order must remain locked. Do not set a global dispatch gate or start another J4 attempt.
+
+Ask Pelecard to confirm for that exact `paramX`, terminal 2814926015, register 004, ₪15, November 17 around 15:26 Israel time: whether J4 reached them, whether a card approval or charge occurred, whether a Payper document was issued, and whether the transaction can still settle. Preserve the dated reply or ticket. Reconcile through a supported audited path only after authoritative evidence. If approved, associate the existing payment and document; if conclusively unpaid, close the attempt without deleting its history. Then run one separately approved live CT20 transaction and verify payment, sale, order balance, invoice, and email before declaring Direct J4 operational or opening global financial dispatch.

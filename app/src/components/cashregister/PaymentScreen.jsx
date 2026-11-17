@@ -71,6 +71,7 @@ export default function PaymentScreen({
   pelecardEnabled = false,
   pelecardHint,
   manualSaleSaving = false,
+  manualMethodsEnabled = true,
   noncardEnabled = { cash: false, check: false },
 }) {
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
@@ -84,7 +85,9 @@ export default function PaymentScreen({
   const selectedUnavailable = (selectedMethod === CASH_METHOD && !noncardEnabled.cash) ||
     (selectedMethod === CHECK_METHOD && !noncardEnabled.check) ||
     (selectedMethod === SPLIT_METHOD && !noncardEnabled.cash) ||
-    (selectedMethod === 'physical' && !physicalTerminalEnabled);
+    (selectedMethod === 'physical' && !physicalTerminalEnabled) ||
+    (selectedMethod && selectedMethod !== 'digital' && selectedMethod !== 'physical' &&
+      !manualMethodsEnabled);
   // Split builder: starts with the full total on a single cash line.
   const [lines, setLines] = useState([makeLine("מזומן", total)]);
 
@@ -436,7 +439,7 @@ export default function PaymentScreen({
           )}
           {PAYMENT_METHODS.map(method => {
             const Icon = method.icon;
-            const disabled = (method.key === CASH_METHOD && !noncardEnabled.cash) ||
+            const disabled = !manualMethodsEnabled || (method.key === CASH_METHOD && !noncardEnabled.cash) ||
               (method.key === CHECK_METHOD && !noncardEnabled.check);
             return (
               <button
@@ -451,7 +454,7 @@ export default function PaymentScreen({
                 </div>
                 <div>
                   <p className="font-bold text-lg">{method.label}</p>
-                  <p className="text-white/60 text-sm">{disabled ? method.key === CHECK_METHOD
+                  <p className="text-white/60 text-sm">{!manualMethodsEnabled ? 'אמצעי תשלום זה אינו זמין לתפקיד זה' : disabled ? method.key === CHECK_METHOD
                     ? 'תשלום בצ׳ק עדיין לא פעיל: ממתין לאישור פרטי ההמחאה על ידי הספק'
                     : 'אמצעי תשלום זה עדיין לא פעיל בקופה' : method.hint}</p>
                 </div>
@@ -464,7 +467,7 @@ export default function PaymentScreen({
           <button
             onClick={() => setSelectedMethod(SPLIT_METHOD)}
             aria-pressed={selectedMethod === SPLIT_METHOD}
-            disabled={manualSaleSaving || !noncardEnabled.cash}
+            disabled={manualSaleSaving || !manualMethodsEnabled || !noncardEnabled.cash}
             className={`w-full mt-2 border border-dashed border-slate-600 rounded-2xl p-4 flex items-center gap-4 hover:bg-slate-800 active:scale-[0.98] transition-all text-right ${selectedMethod === SPLIT_METHOD ? 'ring-4 ring-white' : ''}`}
           >
             <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">

@@ -28,7 +28,10 @@ Deno.serve(async request => {
     if (authError || !identity.user) throw new PaymentHttpError(401, "invalid_session");
     const { data: profile, error: profileError } = await client.from("profiles")
       .select("role").eq("id", identity.user.id).single();
-    if (profileError || !["admin", "cashier", "קופאי"].includes(String(profile?.role)))
+    const noncardRole = ["admin", "cashier", "קופאי"].includes(String(profile?.role));
+    // Other authenticated application roles need the read-only order balance
+    // for physical collection; cash and check actions keep their existing roles.
+    if (profileError || !profile || (body.action !== "status" && !noncardRole))
       throw new PaymentHttpError(403, "forbidden");
     const actorId = identity.user.id;
     const rpc = async (name: string, args: Record<string, unknown>) => {

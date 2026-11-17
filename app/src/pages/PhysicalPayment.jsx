@@ -38,7 +38,7 @@ export default function PhysicalPayment() {
   const [view, setView] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const allowed = ['admin', 'קופאי'].includes(user?.role);
+  const allowed = Boolean(user?.role);
   const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
@@ -141,7 +141,7 @@ export default function PhysicalPayment() {
     } finally { setBusy(false); }
   };
 
-  if (!allowed) return <main dir="rtl" className="p-8">התשלום זמין למנהל ולקופאי בלבד.</main>;
+  if (!allowed) return <main dir="rtl" className="p-8">יש להתחבר כדי לפתוח תשלום במסופון.</main>;
   // New payments start from the cashier's single Pay action. This route only
   // recovers an already reserved intent; it must not offer a second preparation step.
   if (!entryPointer) return <Navigate to={requestedOrderId

@@ -16,6 +16,7 @@ function setup() {
     workflow: {
       start: async input => { calls.push(['start', input]); return { id: paymentId, state: 'reserved' }; },
       startOrder: async input => { calls.push(['startOrder', input]); return { id: paymentId, state: 'reserved' }; },
+      openHosted: async () => { calls.push(['openHosted']); },
       verify: async id => { calls.push(['verify', id]); return { state: 'uncertain' }; },
     },
   };
@@ -36,7 +37,7 @@ test('authenticated prepare reserves a server-priced physical intent without dis
   assert.equal(s.calls[0][0], 'start');
   assert.equal(s.calls[0][1].actorId, actor.id);
 });
-test('physical actions admit existing cashier roles and reject operations staff', async () => {
+test('physical actions admit every authenticated application role', async () => {
   const s = setup();
   s.deps.hostedEnabled = true;
   s.deps.hostedInitEnabled = true;
@@ -44,10 +45,10 @@ test('physical actions admit existing cashier roles and reject operations staff'
   const prepare = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder',
     requestKey, workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 1500 }));
   const hosted = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'openHosted', requestKey }));
-  assert.equal(prepare.status, 403);
-  assert.equal(hosted.status, 403);
-  assert.deepEqual(s.calls, []);
-  s.deps.authenticate = async () => actor;
+  assert.equal(prepare.status, 201);
+  assert.equal(hosted.status, 200);
+  assert.equal(s.calls[0][0], 'startOrder');
+  s.deps.authenticate = async () => ({ id: actor.id, role: 'instructor' });
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder',
     requestKey, workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 1500 }))).status, 201);
 });
@@ -69,7 +70,7 @@ test('status and verify cannot dispatch a financial request', async () => {
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'verify', requestKey }))).status, 200);
   assert.deepEqual(s.calls, [['verify', paymentId]]);
 });
-test('direct enqueue awaits durable acknowledgement and rejects non-cashier roles', async () => {
+test('direct enqueue awaits durable acknowledgement for every authenticated role', async () => {
   const s = setup();
   s.deps.testActorId = '55555555-5555-4555-8555-555555555555';
   s.deps.dispatchEnabled = true;
@@ -81,7 +82,8 @@ test('direct enqueue awaits durable acknowledgement and rejects non-cashier role
   assert.equal((await response.json()).state, 'reserved');
   assert.deepEqual(s.calls, [['enqueue', paymentId]]);
   s.deps.authenticate = async () => ({ id: actor.id, role: 'operations' });
-  assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'enqueueDirect', requestKey }))).status, 403);
+  s.deps.repository.viewByRequest = async () => ({ ...view, state: 'pending' });
+  assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'enqueueDirect', requestKey }))).status, 200);
   assert.deepEqual(s.calls, [['enqueue', paymentId]]);
 });
 test('enqueue failure never claims or sends J4 and can be retried with the same intent', async () => {
@@ -128,7 +130,7 @@ test('staff can list enabled workstation assignments without credentials', async
   assert.deepEqual(await response.json(), [{ registerNumber: '004', workstationCode: 'FRONT_DESK', label: 'CT20 front', model: 'CT20' }]);
 });
 
-test('direct capability is visible to every cashier role and stays disabled before dispatch approval', async () => {
+test('direct capability is visible to every authenticated role and stays disabled before dispatch approval', async () => {
   const s = setup();
   const handler = createPhysicalHttpHandler(s.deps);
   s.deps.directUiEnabled = true;
@@ -139,7 +141,8 @@ test('direct capability is visible to every cashier role and stays disabled befo
   assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
     { visible: true, ready: false, route: 'direct', registerReady: true });
   s.deps.authenticate = async () => ({ id: actor.id, role: 'operations' });
-  assert.equal((await handler(s.request({ action: 'capability' }))).status, 403);
+  assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
+    { visible: true, ready: false, route: 'direct', registerReady: true });
   s.deps.authenticate = async () => actor;
   s.deps.dispatchEnabled = true;
   s.deps.payperEnabled = true;

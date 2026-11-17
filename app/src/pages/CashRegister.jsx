@@ -35,6 +35,8 @@ export default function CashRegister() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canPayOrder = (user?.role === 'admin' || user?.role === 'קופאי') && validOrderId(user?.id);
+  const canPayPhysical = Boolean(user?.role) && validOrderId(user?.id);
+  const canUseLegacyManualSale = ['admin', 'קופאי', 'אחמ"ש'].includes(user?.role);
   const [activities, setActivities] = useState([]);
   const [products, setProducts] = useState([]);
   const [catalogTab, setCatalogTab] = useState('service');
@@ -66,12 +68,12 @@ export default function CashRegister() {
   const physicalReady = physicalAllowed && physicalAvailability.ready === true;
 
   useEffect(() => {
-    if (collectionOrderId || screen !== 'payment' || !canPayOrder || !physicalFlag) return;
+    if (collectionOrderId || screen !== 'payment' || !canPayPhysical || !physicalFlag) return;
     let active = true;
     getPhysicalAvailability(supabase).then(value => { if (active) setPhysicalAvailability(value); })
       .catch(() => { if (active) setPhysicalAvailability(null); });
     return () => { active = false; };
-  }, [collectionOrderId, screen, canPayOrder, physicalFlag]);
+  }, [collectionOrderId, screen, canPayPhysical, physicalFlag]);
 
   useEffect(() => {
     if (collectionOrderId || screen !== 'payment' || !canPayOrder || !supabase.functions?.invoke) return;
@@ -172,6 +174,10 @@ export default function CashRegister() {
     : activities.filter(item => item.category === activityCategory);
 
   const handlePaymentConfirm = async (method, paymentDetails = null) => {
+    if (!canUseLegacyManualSale) {
+      toast.error('אמצעי תשלום זה אינו זמין לתפקיד זה');
+      return;
+    }
     if (manualSaleSubmitted.current) return;
     manualSaleSubmitted.current = true;
     setManualSaleSaving(true);
@@ -308,7 +314,7 @@ export default function CashRegister() {
 
   const handlePhysicalStart = async billing => {
     if (!physicalReady || import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' ||
-      !canPayOrder || linkedOrder?.id || !canHostedCart) return;
+      !canPayPhysical || linkedOrder?.id || !canHostedCart) return;
     physicalCheckoutId.current ||= crypto.randomUUID();
     const cart = {
       lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
@@ -373,6 +379,7 @@ export default function CashRegister() {
         cartItems={cartItems}
         onConfirm={handlePaymentConfirm}
         manualSaleSaving={manualSaleSaving}
+        manualMethodsEnabled={canUseLegacyManualSale}
         noncardEnabled={noncardEnabled}
         onPelecard={handlePelecardStart}
         pelecardBusy={digitalBusy}
@@ -381,9 +388,9 @@ export default function CashRegister() {
         physicalTerminalBusy={physicalBusy}
         physicalTerminalVisible={!physicalFlag || physicalAllowed}
         physicalTerminalSelectable={Boolean(physicalFlag && physicalAllowed &&
-          canPayOrder && canHostedCart && !linkedOrder?.id && !physicalBusy)}
+          canPayPhysical && canHostedCart && !linkedOrder?.id && !physicalBusy)}
         physicalTerminalEnabled={Boolean(physicalFlag && physicalReady &&
-          canPayOrder && canHostedCart && !linkedOrder?.id && !physicalBusy)}
+          canPayPhysical && canHostedCart && !linkedOrder?.id && !physicalBusy)}
         pelecardEnabled={canPayOrder && (Boolean(linkedOrder?.id)||canHostedCart)}
         pelecardHint={linkedOrder?.id?'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה':
           canHostedCart?'מחירי הקטלוג והסכום יאומתו בשרת לפני מעבר לפלאקארד':

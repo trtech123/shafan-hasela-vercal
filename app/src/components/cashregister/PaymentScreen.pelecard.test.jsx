@@ -55,6 +55,16 @@ describe("PaymentScreen payment-method separation", () => {
     expect(props.onPelecard).not.toHaveBeenCalled();
   });
 
+  test("a role newly admitted for physical payment cannot use legacy manual sale methods", () => {
+    const props = renderPayment({ manualMethodsEnabled: false, noncardEnabled: { cash: false, check: false } });
+    expect(screen.getByRole("button", { name: /אשראי.*חיצוני/s })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /העברה בנקאית/s })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /ביט \/ Paybox/s })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /חשבונית \/ חח״ד/s })).toBeDisabled();
+    expect(screen.getAllByText('אמצעי תשלום זה אינו זמין לתפקיד זה').length).toBeGreaterThan(0);
+    expect(props.onConfirm).not.toHaveBeenCalled();
+  });
+
   test("starts Pelecard for an eligible linked order or standalone cart", () => {
     const props = renderPayment({ pelecardEnabled: true });
     fireEvent.click(screen.getByRole("button", { name: /פלאקארד/s }));

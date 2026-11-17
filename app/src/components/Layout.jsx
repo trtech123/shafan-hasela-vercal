@@ -37,11 +37,13 @@ export default function Layout() {
   const { user, logout } = useAuth();
 
   const role = user?.role || "מדריך";
-  const navItems = allNavItems.filter((item) => item.roles.includes(role));
+  const canOpen = item => item.path === '/cashregister'
+    ? Boolean(user?.role) : item.roles.includes(role);
+  const navItems = allNavItems.filter(canOpen);
 
   // Redirect if user tries to access a page they don't have access to
   const currentItem = allNavItems.find((item) => item.path === location.pathname);
-  if (currentItem && !currentItem.roles.includes(role)) {
+  if (currentItem && !canOpen(currentItem)) {
     return <Navigate to="/schedule" replace />;
   }
 
