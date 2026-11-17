@@ -38,3 +38,16 @@ test('minute cron monitors reserved intents but never starts J4', async () => {
   assert.equal(sends, 0);
   assert.deepEqual(await response.json(), { processed: 1, failed: 0, unresolved: 1 });
 });
+test('protected worker records only nonfinancial completion counts', async () => {
+  const events = [];
+  const runtime = { enabled: true, dispatchEnabled: false, workerMaxMs: 360_000,
+    database: { query: async () => ({ rows: [{ result: [] }] }) },
+    workflow: { dispatch: async () => { throw Error('must not send'); } } };
+  const handler = createCloudPhysicalWorkerHandler({ CRON_SECRET: 'synthetic-secret',
+    PELECARD_PHYSICAL_CLOUD_WORKER_ENABLED: 'true' }, () => runtime,
+  (...args) => events.push(args));
+  const response = await handler(new Request('https://example.test/api/pelecard-physical-worker',
+    { headers: { authorization: 'Bearer synthetic-secret' } }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(events, [['physical_worker_health', { processed: 0, failed: 0, unresolved: 0 }]]);
+});

@@ -1,6 +1,6 @@
 import { runPhysicalWorkerCycle } from './worker.js';
 
-export function createCloudPhysicalWorkerHandler(env, loadRuntime) {
+export function createCloudPhysicalWorkerHandler(env, loadRuntime, log = console.info) {
   return async request => {
     if (request.method !== 'GET') return Response.json({ error: 'method_not_allowed' }, { status: 405 });
     if (!env.CRON_SECRET || request.headers.get('authorization') !== `Bearer ${env.CRON_SECRET}`)
@@ -17,7 +17,9 @@ export function createCloudPhysicalWorkerHandler(env, loadRuntime) {
       const failed = results.filter(item => item.status === 'rejected').length;
       const unresolved = results.filter(item => item.status === 'fulfilled' &&
         ['pending', 'uncertain', 'approved', 'reserved'].includes(item.value?.state)).length;
-      return Response.json({ processed: results.length, failed, unresolved }, { status: failed ? 503 : 200,
+      const summary = { processed: results.length, failed, unresolved };
+      log('physical_worker_health', summary);
+      return Response.json(summary, { status: failed ? 503 : 200,
         headers: { 'Cache-Control': 'no-store' } });
     } catch {
       return Response.json({ error: 'physical_worker_unavailable' }, { status: 503,
