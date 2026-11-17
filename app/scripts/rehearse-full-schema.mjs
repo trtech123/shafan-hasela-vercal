@@ -49,6 +49,9 @@ try {
     current = basename(filename);
     await db.exec((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
   }
+  current = 'read-only optional-customer production preflight';
+  await db.exec(await readFile(new URL('../../scripts/orders/optional-customer-production-preflight.sql',
+    import.meta.url), 'utf8'));
   current = 'order collection on full schema';
   const cashier = '00000000-0000-4000-8000-000000000001';
   const activity = '00000000-0000-4000-8000-000000000002';
@@ -58,6 +61,26 @@ try {
   await db.query('INSERT INTO auth.users(id,email) VALUES($1,$2)', [cashier, 'cashier@example.invalid']);
   await db.query("UPDATE public.profiles SET role='cashier' WHERE id=$1", [cashier]);
   await db.query("INSERT INTO public.activities(id,name,price_per_person) VALUES($1,'Group activity',1000)", [activity]);
+  current = 'optional order customer details';
+  const customerColumns = (await db.query(`SELECT attname,attnotnull FROM pg_attribute
+    WHERE attrelid='public.orders'::regclass AND attname IN ('client_name','client_phone')
+    AND NOT attisdropped ORDER BY attname`)).rows;
+  assert.deepEqual(customerColumns, [
+    { attname: 'client_name', attnotnull: false },
+    { attname: 'client_phone', attnotnull: false },
+  ]);
+  const guestOrder = '00000000-0000-4000-8000-000000000100';
+  await db.query(`INSERT INTO public.orders(id,activity_id,activity_date,num_participants,
+    price_per_person,total_price) VALUES($1,$2,current_date,1,1000,1000)`, [guestOrder, activity]);
+  assert.deepEqual((await db.query(`SELECT client_name,client_phone,client_email,customer_id
+    FROM public.orders WHERE id=$1`, [guestOrder])).rows[0],
+    { client_name: null, client_phone: null, client_email: null, customer_id: null });
+  await db.query(`UPDATE public.orders SET client_name='Guest Name',client_phone='0500000000'
+    WHERE id=$1`, [guestOrder]);
+  assert.deepEqual((await db.query(`SELECT client_name,client_phone,client_email,customer_id
+    FROM public.orders WHERE id=$1`, [guestOrder])).rows[0],
+    { client_name: 'Guest Name', client_phone: '0500000000', client_email: null, customer_id: null });
+  current = 'order collection on full schema';
   await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
     activity_id,activity_date,num_participants,price_per_person,payment_status)
     VALUES($1,'Test Group','0500000000','billing@example.invalid','Test Group',
@@ -72,11 +95,15 @@ try {
     [cashier, order])).rows[0].value;
   assert.equal(initial.balanceMinor, 100000);
   const outsider = '00000000-0000-4000-8000-000000000008';
-  await db.query('INSERT INTO auth.users(id,email) VALUES($1,$2)', [outsider, 'instructor@example.invalid']);
   let forbidden = false;
   try { await db.query('SELECT public.get_payper_order_collection($1,$2)', [outsider, order]); }
   catch (error) { forbidden = /order_collection_forbidden/.test(error.message); }
-  assert.equal(forbidden, true, 'instructor must not access POS collection');
+  assert.equal(forbidden, true, 'an actor without an application profile cannot read collection');
+  await db.query('INSERT INTO auth.users(id,email) VALUES($1,$2)', [outsider, 'instructor@example.invalid']);
+  await db.query("UPDATE public.profiles SET role='instructor' WHERE id=$1", [outsider]);
+  const instructorView = (await db.query('SELECT public.get_payper_order_collection($1,$2) AS value',
+    [outsider, order])).rows[0].value;
+  assert.equal(instructorView.orderId, order, 'current physical role policy permits read-only status');
   const billing = { kind: 'organization', name: 'Test Group', identity: '123456789', email: 'billing@example.invalid' };
   const savedBilling = (await db.query('SELECT public.get_payper_billing_defaults($1,$2) AS value',
     [order, cashier])).rows[0].value;
