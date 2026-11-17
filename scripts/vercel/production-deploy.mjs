@@ -45,9 +45,9 @@ export function preflight(io) {
     throw new Error('app/vercel.json must disable automatic Git deployments');
   }
 
-  const link = JSON.parse(requireValue(io.read('app/.vercel/project.json'), 'Link app/ to the existing Vercel project before deploying'));
+  const link = JSON.parse(requireValue(io.read('.vercel/project.json'), 'Link the repository root to the existing Vercel project before deploying'));
   if (link.projectId !== PROJECT_ID || link.orgId !== ORG_ID) {
-    throw new Error('app/ is linked to the wrong Vercel project or team');
+    throw new Error('Repository root is linked to the wrong Vercel project or team');
   }
 
   const branch = io.run('git', ['branch', '--show-current']).trim();
@@ -59,6 +59,12 @@ export function preflight(io) {
   }
   const remote = io.run('git', ['ls-remote', 'origin', `refs/heads/${branch}`]).trim().split(/\s+/)[0];
   if (remote !== commitSha) throw new Error('The remote branch must point to local HEAD before deployment');
+  const project = JSON.parse(io.run('vercel', [
+    'api', `/v9/projects/${PROJECT_ID}?teamId=${ORG_ID}`, '--cwd', '.',
+  ]));
+  if (project.id !== PROJECT_ID || project.rootDirectory !== 'app' || project.framework !== 'vite') {
+    throw new Error('Vercel project must have Root Directory app and Vite framework');
+  }
 
   return { branch, commitSha, projectId: PROJECT_ID, orgId: ORG_ID, alias: ALIAS };
 }
@@ -66,16 +72,16 @@ export function preflight(io) {
 export function deploy(io) {
   const source = preflight(io);
   const deploymentUrl = io.run('vercel', [
-    'deploy', '--prod', '--cwd', 'app',
+    'deploy', '--prod', '--cwd', '.',
     '--meta', `sourceBranch=${source.branch}`,
     '--meta', `sourceCommitSha=${source.commitSha}`,
   ]).trim();
   const host = new URL(deploymentUrl).hostname;
   if (!host.endsWith('.vercel.app')) throw new Error(`Unexpected deployment URL: ${deploymentUrl}`);
 
-  io.run('vercel', ['inspect', deploymentUrl, '--wait', '--cwd', 'app']);
+  io.run('vercel', ['inspect', deploymentUrl, '--wait', '--cwd', '.']);
   const deployment = JSON.parse(io.run('vercel', [
-    'api', `/v13/deployments/${host}?teamId=${source.orgId}`, '--cwd', 'app',
+    'api', `/v13/deployments/${host}?teamId=${source.orgId}`, '--cwd', '.',
   ]));
   if (deployment.projectId !== source.projectId || deployment.target !== 'production' || deployment.readyState !== 'READY') {
     throw new Error(`Deployment ${deployment.id ?? deployment.uid ?? deploymentUrl} is not READY in the intended Production project`);
@@ -105,7 +111,7 @@ export function deploy(io) {
 
 function getProductionAlias(io) {
   const alias = JSON.parse(io.run('vercel', [
-    'api', `/v4/aliases/${ALIAS}?projectId=${PROJECT_ID}&teamId=${ORG_ID}`, '--cwd', 'app',
+    'api', `/v4/aliases/${ALIAS}?projectId=${PROJECT_ID}&teamId=${ORG_ID}`, '--cwd', '.',
   ]));
   if (alias.alias !== ALIAS || alias.projectId !== PROJECT_ID || !alias.deploymentId) {
     throw new Error(`Could not verify production alias ${ALIAS}`);
@@ -116,7 +122,7 @@ function getProductionAlias(io) {
 export function status(io) {
   const alias = getProductionAlias(io);
   const deployment = JSON.parse(io.run('vercel', [
-    'api', `/v13/deployments/${alias.deploymentId}?teamId=${ORG_ID}`, '--cwd', 'app',
+    'api', `/v13/deployments/${alias.deploymentId}?teamId=${ORG_ID}`, '--cwd', '.',
   ]));
   if (deployment.projectId !== PROJECT_ID || (deployment.id ?? deployment.uid) !== alias.deploymentId) {
     throw new Error('Production alias resolves outside the expected Vercel project');

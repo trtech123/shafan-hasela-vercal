@@ -1,8 +1,8 @@
 # Manual Production deployment
 
-The Vercel project uses `app/` as its Root Directory. Keep the GitHub integration connected; `app/vercel.json` disables automatic Git deployments. Production is deployed only by an operator running the Vercel CLI.
+The Vercel project uses `app/` as its Root Directory. Submit the **repository root** to Vercel so it can find `app/package.json`, install Vite, and build the application. Keep the GitHub integration connected; `app/vercel.json` disables automatic Git deployments. Production is deployed only by an operator running the Vercel CLI.
 
-Prerequisites: Node.js, Vercel CLI 50.5.1 or newer (for `vercel api`), CLI authentication to the project team, and `app/.vercel/project.json` linked to the existing `shafan-hasela-vercal` project. If the local link is absent, run `vercel link --cwd app` and select the **existing** project. The script verifies its project and team IDs before deploying. The link and deployment records are ignored by Git.
+Prerequisites: Node.js, Vercel CLI 50.5.1 or newer (for `vercel api`), CLI authentication to the project team, and the repository-root `.vercel/project.json` linked to the existing `shafan-hasela-vercal` project. If the local link is absent, run `vercel link --cwd .` from the repository root and select the **existing** project. The script verifies its project/team IDs and the Vercel Root Directory and framework before deploying. The link and deployment records are ignored by Git. The root `.vercelignore` excludes local secrets, dependencies, tests, and temporary tooling without excluding `app/package.json` or its lockfile.
 
 On Windows, place the npm-installed `vercel.cmd` on `PATH`. The script locates its `vercel/dist/vc.js` entry and runs it with Node using separate arguments and no shell. A native `vercel.exe` on `PATH` is also supported. Unix systems continue to run `vercel` directly.
 

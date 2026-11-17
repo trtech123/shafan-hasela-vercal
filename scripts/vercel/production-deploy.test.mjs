@@ -16,7 +16,7 @@ function fixture(overrides = {}) {
   const writes = [];
   const files = {
     'app/vercel.json': JSON.stringify({ git: { deploymentEnabled: false }, rewrites: [{ source: '/x', destination: '/y' }] }),
-    'app/.vercel/project.json': JSON.stringify({ orgId: TEAM, projectId: PROJECT }),
+    '.vercel/project.json': JSON.stringify({ orgId: TEAM, projectId: PROJECT }),
     ...overrides.files,
   };
   const outputs = {
@@ -24,11 +24,12 @@ function fixture(overrides = {}) {
     'git rev-parse HEAD': `${SHA}\n`,
     'git status --porcelain --untracked-files=all': '',
     'git ls-remote origin refs/heads/main': `${SHA}\trefs/heads/main\n`,
-    [`vercel deploy --prod --cwd app --meta sourceBranch=main --meta sourceCommitSha=${SHA}`]: `https://shafan-hasela-abc.vercel.app\n`,
-    'vercel inspect https://shafan-hasela-abc.vercel.app --wait --cwd app': 'Ready',
-    [`vercel api /v13/deployments/shafan-hasela-abc.vercel.app?teamId=${TEAM} --cwd app`]: JSON.stringify({ id: 'dpl_123', projectId: PROJECT, readyState: 'READY', target: 'production', url: 'shafan-hasela-abc.vercel.app', alias: [ALIAS], meta: { sourceBranch: 'main', sourceCommitSha: SHA } }),
-    [`vercel api /v4/aliases/${ALIAS}?projectId=${PROJECT}&teamId=${TEAM} --cwd app`]: JSON.stringify({ alias: ALIAS, projectId: PROJECT, deploymentId: 'dpl_123' }),
-    [`vercel api /v13/deployments/dpl_123?teamId=${TEAM} --cwd app`]: JSON.stringify({ id: 'dpl_123', projectId: PROJECT, readyState: 'READY', target: 'production', url: 'shafan-hasela-abc.vercel.app', meta: { sourceBranch: 'main', sourceCommitSha: SHA } }),
+    [`vercel api /v9/projects/${PROJECT}?teamId=${TEAM} --cwd .`]: JSON.stringify({ id: PROJECT, rootDirectory: 'app', framework: 'vite' }),
+    [`vercel deploy --prod --cwd . --meta sourceBranch=main --meta sourceCommitSha=${SHA}`]: `https://shafan-hasela-abc.vercel.app\n`,
+    'vercel inspect https://shafan-hasela-abc.vercel.app --wait --cwd .': 'Ready',
+    [`vercel api /v13/deployments/shafan-hasela-abc.vercel.app?teamId=${TEAM} --cwd .`]: JSON.stringify({ id: 'dpl_123', projectId: PROJECT, readyState: 'READY', target: 'production', url: 'shafan-hasela-abc.vercel.app', alias: [ALIAS], meta: { sourceBranch: 'main', sourceCommitSha: SHA } }),
+    [`vercel api /v4/aliases/${ALIAS}?projectId=${PROJECT}&teamId=${TEAM} --cwd .`]: JSON.stringify({ alias: ALIAS, projectId: PROJECT, deploymentId: 'dpl_123' }),
+    [`vercel api /v13/deployments/dpl_123?teamId=${TEAM} --cwd .`]: JSON.stringify({ id: 'dpl_123', projectId: PROJECT, readyState: 'READY', target: 'production', url: 'shafan-hasela-abc.vercel.app', meta: { sourceBranch: 'main', sourceCommitSha: SHA } }),
     ...overrides.outputs,
   };
   return {
@@ -51,6 +52,13 @@ test('preflight accepts only a clean, remotely published commit and the linked a
   assert.deepEqual(preflight(io), { branch: 'main', commitSha: SHA, projectId: PROJECT, orgId: TEAM, alias: ALIAS });
 });
 
+test('preflight refuses a different Vercel root directory before deployment', () => {
+  const key = `vercel api /v9/projects/${PROJECT}?teamId=${TEAM} --cwd .`;
+  const { io, calls } = fixture({ outputs: { [key]: JSON.stringify({ id: PROJECT, rootDirectory: null, framework: 'vite' }) } });
+  assert.throws(() => preflight(io), /Root Directory.*app/);
+  assert.equal(calls.some((call) => call.startsWith('vercel deploy')), false);
+});
+
 test('preflight refuses a dirty checkout before any Vercel call', () => {
   const { io, calls } = fixture({ outputs: { 'git status --porcelain --untracked-files=all': ' M app/src/App.jsx\n' } });
   assert.throws(() => preflight(io), /clean checkout/);
@@ -70,14 +78,14 @@ test('deploy records exact source and verified READY production alias', () => {
   assert.equal(record.deploymentId, 'dpl_123');
   assert.equal(record.deploymentUrl, 'https://shafan-hasela-abc.vercel.app');
   assert.equal(record.productionAlias, `https://${ALIAS}`);
-  assert.ok(calls.some((call) => call.includes('vercel deploy --prod --cwd app --meta sourceBranch=main')));
+  assert.ok(calls.some((call) => call.includes('vercel deploy --prod --cwd . --meta sourceBranch=main')));
   assert.equal(writes.length, 1);
   assert.equal(writes[0].path, '.vercel/production-deployments/dpl_123.json');
   assert.deepEqual(JSON.parse(writes[0].value), record);
 });
 
 test('deploy refuses to record an unaliased deployment', () => {
-  const key = `vercel api /v4/aliases/${ALIAS}?projectId=${PROJECT}&teamId=${TEAM} --cwd app`;
+  const key = `vercel api /v4/aliases/${ALIAS}?projectId=${PROJECT}&teamId=${TEAM} --cwd .`;
   const { io, writes } = fixture({ outputs: { [key]: JSON.stringify({ alias: ALIAS, projectId: PROJECT, deploymentId: 'dpl_other' }) } });
   assert.throws(() => deploy(io), /production alias/);
   assert.equal(writes.length, 0);
@@ -98,7 +106,7 @@ test('status resolves the current alias and compares its source commit with GitH
 });
 
 test('status marks older deployments without source metadata as unknown', () => {
-  const key = `vercel api /v13/deployments/dpl_123?teamId=${TEAM} --cwd app`;
+  const key = `vercel api /v13/deployments/dpl_123?teamId=${TEAM} --cwd .`;
   const { io } = fixture({ outputs: { [key]: JSON.stringify({ id: 'dpl_123', projectId: PROJECT, readyState: 'READY', url: 'shafan-hasela-abc.vercel.app', meta: {} }) } });
   const current = status(io);
   assert.equal(current.branch, null);

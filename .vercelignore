@@ -1,0 +1,12 @@
+.git
+.vercel
+.worktrees
+.tmp
+node_modules
+**/node_modules
+**/.env*
+app/dist
+app/**/*.test.*
+app/**/*.spec.*
+backups
+.smoke-token
