@@ -1,6 +1,9 @@
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const workstation = /^[A-Z][A-Z0-9_]{0,39}$/;
 const json = (body, status) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
+const directDispatchReady = deps => deps.enabled === true && deps.dispatchEnabled === true &&
+  deps.payperEnabled === true && deps.cloudWorkerEnabled === true &&
+  Number.isSafeInteger(deps.workerMaxMs) && deps.workerMaxMs >= 330_000;
 
 export function createPhysicalHttpHandler(deps) {
   const withHosted = saved => deps.hostedEnabled === true && deps.hostedInitEnabled === true
@@ -21,10 +24,26 @@ export function createPhysicalHttpHandler(deps) {
         return json({ error: 'invalid_input' }, 400);
       if (deps.testActorId && ['prepare', 'prepareOrder', 'openHosted', 'enqueueDirect'].includes(body.action) &&
         actor.id !== deps.testActorId) return json({ error: 'physical_test_cashier_only' }, 403);
+      if (body.action === 'capability' && Object.keys(body).join(',') === 'action') {
+        const authorized = !deps.testActorId || actor.id === deps.testActorId;
+        const direct = deps.directUiEnabled === true;
+        const visible = deps.enabled === true && authorized &&
+          (direct || deps.hostedEnabled === true);
+        const devices = visible ? await deps.repository.listDevices() : [];
+        const registerReady = devices.some(device => device.registerNumber === '004' &&
+          device.model === 'CT20' && typeof device.workstationCode === 'string' && device.workstationCode);
+        const ready = visible && registerReady && (direct
+          ? directDispatchReady(deps)
+          : deps.hostedInitEnabled === true);
+        return json({ visible, ready, route: direct ? 'direct' : 'hosted',
+          registerReady: Boolean(registerReady) }, 200);
+      }
       if (body.action === 'devices' && Object.keys(body).join(',') === 'action')
         return json(await deps.repository.listDevices(), 200);
       if (body.action === 'prepare') {
         if (!deps.enabled) return json({ error: 'physical_disabled' }, 503);
+        if (deps.directUiEnabled === true && !directDispatchReady(deps))
+          return json({ error: 'physical_direct_disabled' }, 503);
         if (Object.keys(body).sort().join(',') !== 'action,billing,cart,requestKey,workstationCode' ||
           !uuid.test(body.requestKey) || !workstation.test(body.workstationCode) ||
           !body.cart || !body.billing)
@@ -38,6 +57,8 @@ export function createPhysicalHttpHandler(deps) {
       }
       if (body.action === 'prepareOrder') {
         if (!deps.enabled) return json({ error: 'physical_disabled' }, 503);
+        if (deps.directUiEnabled === true && !directDispatchReady(deps))
+          return json({ error: 'physical_direct_disabled' }, 503);
         if (Object.keys(body).sort().join(',') !== 'action,amountMinor,orderId,requestKey,workstationCode' ||
           !uuid.test(body.requestKey) || !uuid.test(body.orderId) ||
           !workstation.test(body.workstationCode) || !Number.isSafeInteger(body.amountMinor) ||

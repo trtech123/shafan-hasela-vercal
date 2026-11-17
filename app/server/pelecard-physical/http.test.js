@@ -127,6 +127,38 @@ test('staff can list enabled workstation assignments without credentials', async
   const response = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'devices' }));
   assert.deepEqual(await response.json(), [{ registerNumber: '004', workstationCode: 'FRONT_DESK', label: 'CT20 front', model: 'CT20' }]);
 });
+
+test('direct cashier capability is visible only to the test actor and stays disabled before dispatch approval', async () => {
+  const s = setup();
+  const handler = createPhysicalHttpHandler(s.deps);
+  s.deps.testActorId = '55555555-5555-4555-8555-555555555555';
+  s.deps.directUiEnabled = true;
+  assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
+    { visible: false, ready: false, route: 'direct', registerReady: false });
+  s.deps.testActorId = actor.id;
+  assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
+    { visible: true, ready: false, route: 'direct', registerReady: true });
+  s.deps.dispatchEnabled = true;
+  s.deps.payperEnabled = true;
+  s.deps.cloudWorkerEnabled = true;
+  s.deps.workerMaxMs = 360000;
+  assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
+    { visible: true, ready: true, route: 'direct', registerReady: true });
+  s.deps.repository.listDevices = async () => [];
+  assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
+    { visible: true, ready: false, route: 'direct', registerReady: false });
+  assert.deepEqual(s.calls, []);
+});
+
+test('direct preview cannot reserve an order while financial dispatch is off', async () => {
+  const s = setup();
+  s.deps.directUiEnabled = true;
+  s.deps.testActorId = actor.id;
+  const response = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder',
+    requestKey, workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 1500 }));
+  assert.equal(response.status, 503);
+  assert.deepEqual(s.calls, []);
+});
 test('disabled or unauthorized requests cannot reserve', async () => {
   const s = setup(); s.deps.enabled = false;
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepare', requestKey,

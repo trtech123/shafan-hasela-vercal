@@ -11,7 +11,7 @@ import OrderCollection from "@/components/cashregister/OrderCollection";
 import { calculateCheckoutTotals } from "@/payments/pelecardPayments";
 import { posCheckoutRequestKey, posPendingKeyForActor, startPosCheckout, posPaymentErrorMessage } from '@/payments/posPayments';
 import { validOrderId } from '@/payments/orderPayments';
-import { startDirectPhysical, startHostedPhysical } from '@/payments/physical/client';
+import { getPhysicalAvailability, startDirectPhysical, startHostedPhysical } from '@/payments/physical/client';
 import { buildStandaloneCheckout } from "@/payments/standaloneCart";
 import { useAuth } from "@/lib/AuthContext";
 import { BRAND } from "@/lib/orderDocText";
@@ -55,10 +55,23 @@ export default function CashRegister() {
   const [paymentError, setPaymentError] = useState('');
   const physicalCheckoutId = useRef(null);
   const [physicalBusy, setPhysicalBusy] = useState(false);
+  const [physicalAvailability, setPhysicalAvailability] = useState(null);
   const manualSaleSubmitted = useRef(false);
   const checkRequestKey = useRef(null);
   const [manualSaleSaving, setManualSaleSaving] = useState(false);
   const [noncardEnabled, setNoncardEnabled] = useState({ cash: false, check: false });
+  const physicalFlag = import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true';
+  const physicalRoute = import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED === 'true' ? 'direct' : 'hosted';
+  const physicalAllowed = physicalAvailability?.visible === true && physicalAvailability.route === physicalRoute;
+  const physicalReady = physicalAllowed && physicalAvailability.ready === true;
+
+  useEffect(() => {
+    if (collectionOrderId || screen !== 'payment' || !canPayOrder || !physicalFlag) return;
+    let active = true;
+    getPhysicalAvailability(supabase).then(value => { if (active) setPhysicalAvailability(value); })
+      .catch(() => { if (active) setPhysicalAvailability(null); });
+    return () => { active = false; };
+  }, [collectionOrderId, screen, canPayOrder, physicalFlag]);
 
   useEffect(() => {
     if (collectionOrderId || screen !== 'payment' || !canPayOrder || !supabase.functions?.invoke) return;
@@ -294,7 +307,7 @@ export default function CashRegister() {
   };
 
   const handlePhysicalStart = async billing => {
-    if (import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' ||
+    if (!physicalReady || import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' ||
       !canPayOrder || linkedOrder?.id || !canHostedCart) return;
     physicalCheckoutId.current ||= crypto.randomUUID();
     const cart = {
@@ -366,8 +379,8 @@ export default function CashRegister() {
         paymentError={paymentError}
         onPhysicalTerminal={handlePhysicalStart}
         physicalTerminalBusy={physicalBusy}
-        physicalTerminalVisible
-        physicalTerminalEnabled={Boolean(import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true' &&
+        physicalTerminalVisible={!physicalFlag || physicalAllowed}
+        physicalTerminalEnabled={Boolean(physicalFlag && physicalReady &&
           canPayOrder && canHostedCart && !linkedOrder?.id && !physicalBusy)}
         pelecardEnabled={canPayOrder && (Boolean(linkedOrder?.id)||canHostedCart)}
         pelecardHint={linkedOrder?.id?'מעבר לתשלום ההזמנה השמורה; הסכום לפי ההזמנה':

@@ -22,17 +22,19 @@ export function createPhysicalRuntime(env, overrides = {}) {
     ? createHostedEmvProvider({ terminal: config.terminalNumber,
       user: config.user, password: config.password }, overrides.fetcher)
     : null;
+  const cloudWorkerEnabled = env.PELECARD_PHYSICAL_CLOUD_WORKER_ENABLED === 'true';
+  const directUiEnabled = env.PELECARD_PHYSICAL_DIRECT_UI_ENABLED === 'true';
+  const enqueueDirect = createDirectQueuePublisher(overrides.queueSend ?? send);
   const workflow = createPhysicalWorkflow({ ...repository, provider,
     hostedProvider, hostedEnabled: config.hostedEnabled,
     hostedInitEnabled: config.hostedInitEnabled, hostedUrls: config.hostedUrls,
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
     payperEnabled: config.payperEnabled,
-    cloudWorkerEnabled: env.PELECARD_PHYSICAL_CLOUD_WORKER_ENABLED === 'true',
-    enqueueDirect: createDirectQueuePublisher(overrides.queueSend ?? send),
-    payperEnabled: config.payperEnabled,
+    cloudWorkerEnabled, enqueueDirect,
     merchantTerminal: config.terminalNumber });
   return {
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
+    payperEnabled: config.payperEnabled, cloudWorkerEnabled, directUiEnabled, enqueueDirect,
     hostedEnabled: config.hostedEnabled, hostedInitEnabled: config.hostedInitEnabled,
     testActorId: env.PELECARD_PHYSICAL_TEST_ACTOR_ID || null,
     workerMaxMs: config.workerMaxMs, database, repository, workflow,

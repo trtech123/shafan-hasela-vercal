@@ -29,6 +29,14 @@ export async function requestPhysicalPayment(client, body, fetcher = fetch) {
       !['N86', 'CT20'].includes(row.model))) throw new Error('physical_status_unavailable');
     return result;
   }
+  if (body.action === 'capability') {
+    if (typeof result?.visible !== 'boolean' || typeof result?.ready !== 'boolean' ||
+      typeof result?.registerReady !== 'boolean' ||
+      !['direct', 'hosted'].includes(result.route) ||
+      (result.ready && (!result.visible || !result.registerReady)))
+      throw new Error('physical_status_unavailable');
+    return result;
+  }
   if (!uuid.test(result?.paymentId) || !states.has(result.state) ||
     !register.test(result.registerNumber) || !Number.isSafeInteger(result.amountMinor) ||
     result.amountMinor < 1 || (result.saleId !== null && !uuid.test(result.saleId)) ||
@@ -36,6 +44,9 @@ export async function requestPhysicalPayment(client, body, fetcher = fetch) {
     throw new Error('physical_status_unavailable');
   return result;
 }
+
+export const getPhysicalAvailability = (client, fetcher = fetch) =>
+  requestPhysicalPayment(client, { action: 'capability' }, fetcher);
 
 // One cashier action performs the existing reservation and one-shot hosted
 // initialization. The provider's own PINPAD button remains mandatory.

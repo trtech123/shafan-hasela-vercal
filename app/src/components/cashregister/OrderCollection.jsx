@@ -8,7 +8,7 @@ import { publishOrderChange } from '@/lib/orderEvents';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import OrderCustomerLink from '@/components/customers/OrderCustomerLink';
-import { startDirectPhysical, startHostedPhysical } from '@/payments/physical/client';
+import { getPhysicalAvailability, startDirectPhysical, startHostedPhysical } from '@/payments/physical/client';
 
 const validId = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
 const shekels = minor => `${(Number(minor) / 100).toFixed(2)} ₪`;
@@ -46,6 +46,7 @@ export default function OrderCollection({ orderId }) {
   const [billingOpen, setBillingOpen] = useState(false);
   const [physicalBusy, setPhysicalBusy] = useState(false);
   const [physicalReview, setPhysicalReview] = useState(false);
+  const [physicalAvailability, setPhysicalAvailability] = useState(null);
   const physicalKey = useRef(null);
   const requestKey = useRef(null);
   const locked = useRef(false);
@@ -88,6 +89,16 @@ export default function OrderCollection({ orderId }) {
     && check.received_date && check.due_date && check.due_date >= check.received_date);
   const billingReady = billingReviewIssues(billing).length === 0;
   const accountingReady = !view?.billingIssues?.length && !view?.accountingReviewRequired;
+  const physicalRoute = import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED === 'true' ? 'direct' : 'hosted';
+  const physicalAllowed = physicalAvailability?.visible === true && physicalAvailability.route === physicalRoute;
+  const physicalReady = physicalAllowed && physicalAvailability.ready === true;
+  useEffect(() => {
+    if (!allowed || import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true') return;
+    let active = true;
+    getPhysicalAvailability(supabase).then(value => { if (active) setPhysicalAvailability(value); })
+      .catch(() => { if (active) setPhysicalAvailability(null); });
+    return () => { active = false; };
+  }, [allowed]);
   const resultDocument = view?.documents?.find(doc => doc.paymentId === result?.paymentId);
   const accountingResult = resultDocument ?? result?.accounting;
   const openBilling = async () => {
@@ -96,7 +107,7 @@ export default function OrderCollection({ orderId }) {
     setBillingOrder(data); setBillingOpen(true);
   };
   const payPhysical = async () => {
-    if (import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' ||
+    if (!physicalReady || import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' ||
       physicalBusy || !view || view.balanceMinor <= 0 || view.unresolvedPayment || !accountingReady) return;
     physicalKey.current ||= crypto.randomUUID();
     const key = physicalKey.current;
@@ -171,8 +182,12 @@ export default function OrderCollection({ orderId }) {
         (view.unresolvedPayment || physicalReview
           ? <Link className="inline-block rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 font-medium text-indigo-900"
               to={`/payment/physical?orderId=${encodeURIComponent(orderId)}`}>בדיקת תשלום קיים במסופון פיזי</Link>
-          : <Button type="button" disabled={physicalBusy || !accountingReady} onClick={payPhysical}>
-              {physicalBusy ? 'שולח למסופון…' : 'שלם במסופון פיזי'}</Button>)}
+          : physicalReady
+            ? <Button type="button" disabled={physicalBusy || !accountingReady} onClick={payPhysical}>
+                {physicalBusy ? 'שולח למסופון…' : 'שלם במסופון פיזי'}</Button>
+            : physicalAllowed
+              ? <p role="status">תשלום במסופון ממתין להפעלה מבוקרת.</p>
+              : <p role="status">תשלום במסופון זמין לקופאי המורשה בלבד.</p>)}
       {import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' && view.balanceMinor > 0 &&
         <p role="status" className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">תשלום במסופון פיזי מושבת עד לאימות מסלול פלאקארד והפעלתו.</p>}
       {view.balanceMinor > 0 && view.paidMinor === 0 &&

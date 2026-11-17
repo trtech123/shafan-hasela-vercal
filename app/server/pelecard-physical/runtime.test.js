@@ -30,3 +30,18 @@ test('hosted route requires its own gates and canonical public URLs', () => {
     PELECARD_PHYSICAL_HOSTED_CALLBACK_BASE: 'https://evil.example/callback' },
   { authClient, database: { query: async () => ({ rows: [] }) } }));
 });
+
+test('direct HTTP runtime exposes the guarded queue publisher and capability gates', () => {
+  const env = { PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_PHYSICAL_USER: 'physical',
+    PELECARD_PHYSICAL_PASSWORD: 'secret', PELECARD_PHYSICAL_TERMINAL: '2814926015',
+    PELECARD_PHYSICAL_DISPATCH_ENABLED: 'true', PELECARD_PHYSICAL_DIRECT_PAYPER_ENABLED: 'true',
+    PELECARD_PHYSICAL_CLOUD_WORKER_ENABLED: 'true', PELECARD_PHYSICAL_WORKER_MAX_MS: '360000',
+    PELECARD_PHYSICAL_DIRECT_UI_ENABLED: 'true' };
+  const runtime = createPhysicalRuntime(env, { authClient: {},
+    database: { query: async () => ({ rows: [] }) }, queueSend: async () => ({ id: 'synthetic' }) });
+  assert.equal(runtime.dispatchEnabled, true);
+  assert.equal(runtime.payperEnabled, true);
+  assert.equal(runtime.cloudWorkerEnabled, true);
+  assert.equal(runtime.directUiEnabled, true);
+  assert.equal(typeof runtime.enqueueDirect, 'function');
+});

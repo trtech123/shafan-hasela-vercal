@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import {afterEach,describe,expect,test,vi} from 'vitest';
+import {afterEach,beforeEach,describe,expect,test,vi} from 'vitest';
 
-const state=vi.hoisted(()=>({role:'admin',navigate:vi.fn(),start:vi.fn(),physical:vi.fn(),direct:vi.fn()}));
+const state=vi.hoisted(()=>({role:'admin',navigate:vi.fn(),start:vi.fn(),physical:vi.fn(),direct:vi.fn(),availability:vi.fn()}));
 const productId='11111111-1111-4111-8111-111111111111';
 const serviceId='22222222-2222-4222-8222-222222222222';
 const orderId='33333333-3333-4333-8333-333333333333';
@@ -21,11 +21,32 @@ vi.mock('@/components/cashregister/ReceiptScreen',()=>({default:()=>null}));
 vi.mock('sonner',()=>({toast:{error:vi.fn()}}));
 vi.mock('@/payments/posPayments',async importOriginal=>({...(await importOriginal()),startPosCheckout:(...args)=>state.start(...args)}));
 vi.mock('@/payments/physical/client',()=>({startHostedPhysical:(...args)=>state.physical(...args),
-  startDirectPhysical:(...args)=>state.direct(...args)}));
+  startDirectPhysical:(...args)=>state.direct(...args),getPhysicalAvailability:(...args)=>state.availability(...args)}));
 import CashRegister from './CashRegister';
 
-afterEach(()=>{cleanup();state.navigate.mockReset();state.start.mockReset();state.physical.mockReset();state.direct.mockReset();state.role='admin';vi.unstubAllEnvs();sessionStorage.clear();localStorage.clear()});
+beforeEach(()=>state.availability.mockImplementation(async()=>({visible:true,ready:true,
+  route:import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED==='true'?'direct':'hosted'})));
+afterEach(()=>{cleanup();state.navigate.mockReset();state.start.mockReset();state.physical.mockReset();state.direct.mockReset();state.availability.mockReset();state.role='admin';vi.unstubAllEnvs();sessionStorage.clear();localStorage.clear()});
 describe('Cash Register hosted routes',()=>{
+  test('restricted physical option stays hidden from a different cashier',async()=>{
+    vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
+    vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
+    state.availability.mockResolvedValue({visible:false,ready:false,route:'direct'});
+    render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
+    fireEvent.click(screen.getByText('checkout'));
+    await waitFor(()=>expect(state.availability).toHaveBeenCalled());
+    expect(screen.queryByText('Physical')).not.toBeInTheDocument();
+  });
+  test('test cashier sees direct physical option disabled while dispatch is off',async()=>{
+    vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
+    vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
+    state.availability.mockResolvedValue({visible:true,ready:false,route:'direct'});
+    render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
+    fireEvent.click(screen.getByText('checkout'));
+    expect(await screen.findByText('Physical')).toBeDisabled();
+    fireEvent.click(screen.getByText('Physical'));
+    expect(state.direct).not.toHaveBeenCalled();
+  });
   test('unaccepted physical route is shown disabled while standalone digital remains available',async()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','false');
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
@@ -39,7 +60,9 @@ describe('Cash Register hosted routes',()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
     state.physical.mockResolvedValue({state:'pending',route:'hosted',redirectUrl:'https://gateway21.pelecard.biz/PaymentGW?transactionId=22222222-2222-4222-8222-222222222222'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Physical'));
+    fireEvent.click(screen.getByText('checkout'));
+    await waitFor(()=>expect(screen.getByText('Physical')).toBeEnabled());
+    fireEvent.click(screen.getByText('Physical'));
     await waitFor(()=>expect(state.physical).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({
       requestKey:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
     expect(state.navigate).not.toHaveBeenCalledWith('/payment/physical',expect.anything());
@@ -49,7 +72,9 @@ describe('Cash Register hosted routes',()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
     state.direct.mockResolvedValue({state:'reserved',route:'direct',registerNumber:'004',amountMinor:100,saleId:null});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Physical'));
+    fireEvent.click(screen.getByText('checkout'));
+    await waitFor(()=>expect(screen.getByText('Physical')).toBeEnabled());
+    fireEvent.click(screen.getByText('Physical'));
     await waitFor(()=>expect(state.direct).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({
       requestKey:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
     expect(state.physical).not.toHaveBeenCalled();

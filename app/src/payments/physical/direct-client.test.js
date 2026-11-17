@@ -1,5 +1,17 @@
 import { expect, test, vi } from 'vitest';
-import { startDirectPhysical } from './client.js';
+import { getPhysicalAvailability, startDirectPhysical } from './client.js';
+
+test('cashier reads restricted direct availability without preparing an intent', async () => {
+  const client = { auth: { getSession: async () => ({ data: { session: { access_token: 'synthetic' } } }) } };
+  const actions = [];
+  const fetcher = vi.fn(async (_url, options) => {
+    actions.push(JSON.parse(options.body).action);
+    return Response.json({ visible: true, ready: false, route: 'direct', registerReady: true });
+  });
+  expect(await getPhysicalAvailability(client, fetcher)).toEqual({
+    visible: true, ready: false, route: 'direct', registerReady: true });
+  expect(actions).toEqual(['capability']);
+});
 
 test('one cashier action reserves existing order for direct worker without hosted redirect', async () => {
   const orderId = '11111111-1111-4111-8111-111111111111';
