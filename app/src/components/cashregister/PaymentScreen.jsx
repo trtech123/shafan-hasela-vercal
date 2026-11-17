@@ -44,19 +44,6 @@ function Field({ label, children }) {
 const inputCls =
   "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500";
 
-function GuestBillingChoice({ selected, onChange }) {
-  return <div className="space-y-2 text-sm">
-    <label className="flex items-center gap-2 text-slate-200">
-      <input type="checkbox" checked={selected} onChange={e => onChange(e.target.checked)} />
-      אין ללקוח פרטים מלאים כרגע
-    </label>
-    {selected && <p role="status" className="rounded-lg border border-amber-500/50 bg-amber-950/40 p-3 text-amber-200">
-      אפשר לשמור הזמנה בלי פרטי לקוח מלאים. בקופה, הפקת חשבונית מס/קבלה ללא פרטי חיוב מלאים טרם אומתה מול Payper.
-      אי אפשר להתחיל תשלום זה עד להשלמת הפרטים הנדרשים למסמך.
-    </p>}
-  </div>;
-}
-
 // Build a fresh split line. id only for React keys (Math.random fine in app code).
 const makeLine = (method, amount) => ({
   id: Math.random().toString(36).slice(2),
@@ -94,7 +81,6 @@ export default function PaymentScreen({
   const [digitalBillingOpen, setDigitalBillingOpen] = useState(false);
   const [check, setCheck] = useState({ ...emptyCheck, amount: String(total) });
   const [checkBilling, setCheckBilling] = useState({ kind: 'person', name: '', identity: '', email: '' });
-  const [guestBilling, setGuestBilling] = useState(false);
   const [cashReceived, setCashReceived] = useState(String(total));
   const selectedUnavailable = (selectedMethod === CASH_METHOD && !noncardEnabled.cash) ||
     (selectedMethod === CHECK_METHOD && !noncardEnabled.check) ||
@@ -293,14 +279,13 @@ export default function PaymentScreen({
   const cashDialog = <Dialog open={detailFor === CASH_METHOD} onOpenChange={open => { if (!open) setDetailFor(null); }}>
     <DialogContent dir="rtl" aria-describedby="cash-receipt-help" className="max-h-[90vh] overflow-y-auto bg-slate-900 text-white">
         <DialogTitle>אישור קבלת מזומן</DialogTitle>
-        <p id="cash-receipt-help">סכום: {total.toFixed(2)} ₪ · לאחר הקבלה תתבקש חשבונית מס/קבלה מ־Payper.</p>
+        <p id="cash-receipt-help">סכום: {total.toFixed(2)} ₪ · אין צורך בכרטיס לקוח; פרטי החיוב נדרשים לחשבונית מס/קבלה מ־Payper.</p>
         <Field label="מזומן שהתקבל (₪)"><input className={inputCls} type="number" min={total} step="0.01" value={cashReceived} onChange={e => setCashReceived(e.target.value)} /></Field>
         {Number(cashReceived) >= total && <p>עודף: {((Math.round(Number(cashReceived) * 100) - Math.round(total * 100)) / 100).toFixed(2)} ₪</p>}
         <Field label="סוג לקוח"><select className={inputCls} value={checkBilling.kind} onChange={e => setCheckBilling({ ...checkBilling, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></Field>
         <Field label="שם לחיוב"><input className={inputCls} autoComplete="off" value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
         <Field label="מספר זהות / חברה"><input className={inputCls} autoComplete="off" inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
         <Field label="דוא״ל למסמך"><input className={inputCls} autoComplete="off" type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
-        <GuestBillingChoice selected={guestBilling} onChange={setGuestBilling} />
         <Button onClick={submitCash} disabled={manualSaleSaving || billingReviewIssues(checkBilling).length > 0 ||
           !Number.isFinite(Number(cashReceived)) || Math.round(Number(cashReceived) * 100) < Math.round(total * 100)}>אשר קבלת מזומן</Button>
     </DialogContent>
@@ -308,12 +293,11 @@ export default function PaymentScreen({
   const physicalBillingDialog = <Dialog open={physicalBillingOpen} onOpenChange={setPhysicalBillingOpen}>
     <DialogContent dir="rtl" aria-describedby="physical-billing-help" className="max-h-[90vh] overflow-y-auto bg-slate-900 text-white">
       <DialogTitle>פרטי חיוב למסופון</DialogTitle>
-      <p id="physical-billing-help">פלאקארד ו־Payper דורשים פרטי חיוב מאומתים למסמך הרשמי. השלימו רק את החסר.</p>
+      <p id="physical-billing-help">אין צורך לפתוח כרטיס לקוח בקופה. למסמך הרשמי נדרשים פרטי חיוב מאומתים; השלימו רק את החסר לפני הפעלת המסופון.</p>
       <Field label="סוג לקוח"><select className={inputCls} value={checkBilling.kind} onChange={e => setCheckBilling({ ...checkBilling, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></Field>
       <Field label="שם לחיוב"><input className={inputCls} autoComplete="off" value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
       <Field label="מספר זהות / חברה"><input className={inputCls} autoComplete="off" inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
       <Field label="דוא״ל למסמך"><input className={inputCls} autoComplete="off" type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
-      <GuestBillingChoice selected={guestBilling} onChange={setGuestBilling} />
       <Button disabled={physicalTerminalBusy || billingReviewIssues(checkBilling).length > 0} onClick={() => {
         setPhysicalBillingOpen(false); onPhysicalTerminal(checkBilling);
       }}>המשך למסופון</Button>
@@ -322,12 +306,11 @@ export default function PaymentScreen({
   const digitalBillingDialog = <Dialog open={digitalBillingOpen} onOpenChange={setDigitalBillingOpen}>
     <DialogContent dir="rtl" aria-describedby="digital-billing-help" className="max-h-[90vh] overflow-y-auto bg-slate-900 text-white">
       <DialogTitle>פרטי חיוב לתשלום דיגיטלי</DialogTitle>
-      <p id="digital-billing-help">למסמך הרשמי נדרשים פרטי חיוב מאומתים. השלימו את הפרטים לפני המעבר לפלאקארד.</p>
+      <p id="digital-billing-help">אין צורך לבחור או לפתוח כרטיס לקוח בקופה. פרטי החיוב כאן נדרשים למסמך הרשמי ונשמרים עם ניסיון התשלום לפני המעבר לפלאקארד.</p>
       <Field label="סוג לקוח"><select className={inputCls} value={checkBilling.kind} onChange={e => setCheckBilling({ ...checkBilling, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></Field>
       <Field label="שם לחיוב"><input className={inputCls} autoComplete="off" value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
       <Field label="מספר זהות / חברה"><input className={inputCls} autoComplete="off" inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
       <Field label="דוא״ל למסמך"><input className={inputCls} autoComplete="off" type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
-      <GuestBillingChoice selected={guestBilling} onChange={setGuestBilling} />
       <Button disabled={pelecardBusy || billingReviewIssues(checkBilling).length > 0} onClick={() => {
         setDigitalBillingOpen(false); onPelecard(checkBilling);
       }}>המשך לפלאקארד</Button>
@@ -387,13 +370,12 @@ export default function PaymentScreen({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <p className="col-span-2 text-sm">לאחר קבלת ההמחאה תתבקש חשבונית מס/קבלה מ־Payper.</p>
+            <p className="col-span-2 text-sm">אין צורך בכרטיס לקוח; פרטי החיוב וההמחאה נדרשים לחשבונית מס/קבלה מ־Payper.</p>
             <Field label="שם לחיוב"><input className={inputCls} value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
             <Field label="מספר זהות / חברה"><input className={inputCls} inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
             <Field label="דוא״ל למסמך"><input className={inputCls} type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
           </div>
 
-          <GuestBillingChoice selected={guestBilling} onChange={setGuestBilling} />
           <Button
             onClick={submitCheck}
             disabled={!valid || manualSaleSaving}

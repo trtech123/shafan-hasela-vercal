@@ -74,13 +74,16 @@ export default function Cart({
       </div>
 
       <div className="p-4 border-t border-slate-700 space-y-3">
-        {/* Link to existing order/customer */}
+        {/* Optional link to an existing order. */}
         {items.length > 0 && (
-          <LinkOrderSearch
-            linkedOrder={linkedOrder}
-            onSelect={onLinkOrder}
-            onClear={() => onLinkOrder(null)}
-          />
+          <div className="space-y-2">
+            <LinkOrderSearch
+              linkedOrder={linkedOrder}
+              onSelect={onLinkOrder}
+              onClear={() => onLinkOrder(null)}
+            />
+            {!linkedOrder && <p className="text-xs text-slate-400">אפשר להמשיך לתשלום ללא בחירת לקוח או פתיחת כרטיס לקוח.</p>}
+          </div>
         )}
 
         {/* Discount controls */}

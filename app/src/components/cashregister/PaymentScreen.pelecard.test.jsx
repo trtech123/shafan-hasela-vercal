@@ -81,14 +81,17 @@ describe("PaymentScreen payment-method separation", () => {
     expect(props.onConfirm).not.toHaveBeenCalled();
   });
 
-  test('explains guest billing blocker before initiating a digital payment', () => {
+  test('accepts invoice billing without a registered customer', () => {
     const props = renderPayment({ pelecardEnabled: true });
     fireEvent.click(screen.getByRole('button', { name: /פלאקארד/s }));
     fireEvent.click(screen.getByTestId('cashier-pay'));
-    fireEvent.click(screen.getByLabelText('אין ללקוח פרטים מלאים כרגע'));
-    expect(screen.getByRole('status')).toHaveTextContent('אי אפשר להתחיל תשלום זה');
-    expect(screen.getByRole('button', { name: 'המשך לפלאקארד' })).toBeDisabled();
-    expect(props.onPelecard).not.toHaveBeenCalled();
+    expect(screen.getByText(/אין צורך לבחור או לפתוח כרטיס לקוח בקופה/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('שם לחיוב'), { target: { value: 'Walk-in Customer' } });
+    fireEvent.change(screen.getByLabelText('מספר זהות / חברה'), { target: { value: '123456782' } });
+    fireEvent.change(screen.getByLabelText('דוא״ל למסמך'), { target: { value: 'walkin@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך לפלאקארד' }));
+    expect(props.onPelecard).toHaveBeenCalledWith({ kind: 'person', name: 'Walk-in Customer',
+      identity: '123456782', email: 'walkin@example.com' });
   });
 
   test("does not offer hosted payment for an ineligible cart", () => {

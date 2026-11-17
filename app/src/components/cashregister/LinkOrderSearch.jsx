@@ -76,7 +76,7 @@ export default function LinkOrderSearch({ linkedOrder, onSelect, onClear }) {
         onClick={() => setOpen(true)}
         className="w-full flex items-center justify-center gap-2 text-xs text-slate-300 border border-dashed border-slate-600 rounded-xl py-2 hover:bg-slate-700"
       >
-        <Link2 className="w-4 h-4" /> קשר להזמנה / לקוח קיים
+        <Link2 className="w-4 h-4" /> קשר להזמנה קיימת (לא חובה)
       </button>
     );
   }
