@@ -25,6 +25,7 @@ function validApproval(result, intent, merchantTerminal) {
 
 export function createPhysicalWorkflow(deps) {
   const merchantTerminal = deps.merchantTerminal;
+  const logDiagnostic = deps.logDiagnostic ?? ((event, detail) => console.warn(event, detail));
   async function reconcileDirect(intent, result) {
     if (intent.documentState === 'succeeded') return 'succeeded';
     const first = intent.firstResponse;
@@ -161,7 +162,10 @@ export function createPhysicalWorkflow(deps) {
           payperSource });
         await deps.persistFirstResponse(intent.id, result.firstResponse);
         await deps.markDispatched(intent.id, result);
-      } catch {
+      } catch (error) {
+        logDiagnostic('physical_dispatch_unresolved', { paymentId: intent.id,
+          reason: /^physical_[a-z0-9_]+$/.test(error?.message || '')
+            ? error.message : 'physical_unclassified' });
         // Even a broken connection can follow a completed charge. A second send
         // must never happen without a provider-confirmed negative outcome.
         await deps.markUncertain(intent.id);
@@ -187,7 +191,10 @@ export function createPhysicalWorkflow(deps) {
       if (!['dispatching', 'pending', 'uncertain'].includes(intent.state)) return intent;
       let result;
       try { result = await deps.provider.inspect(intent); }
-      catch {
+      catch (error) {
+        logDiagnostic('physical_provider_inspection_unresolved', { paymentId: intent.id,
+          reason: /^physical_[a-z0-9_]+$/.test(error?.message || '')
+            ? error.message : 'physical_unclassified' });
         await deps.markUncertain(intent.id);
         return { id: intent.id, state: 'uncertain' };
       }

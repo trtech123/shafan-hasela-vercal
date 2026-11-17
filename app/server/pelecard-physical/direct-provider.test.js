@@ -25,3 +25,17 @@ test('J4 includes Payper only when the separate direct invoice gate is enabled',
   assert.equal(bodies[1].PayperParameters.typeDocument, 'Invoice-Receipt');
   assert.equal(bodies[1].PayperParameters.DataPayper.invoice_lines[0].price_per_unit, '1500');
 });
+
+test('read-only J4 lookup reports a safe nonfinal status without sending a debit', async () => {
+  const urls = [];
+  const fetcher = async url => {
+    urls.push(url);
+    return new Response(JSON.stringify({ StatusCode: '510', UserData: [] }));
+  };
+  const provider = createPhysicalPelecardProvider({ terminalNumber: '2814926015',
+    user: 'synthetic', password: 'synthetic', fetcher });
+  await assert.rejects(provider.inspect({ id: 'intent-1', register: '004', amountMinor: 1500 }),
+    /physical_result_unverified_510_0/);
+  assert.equal(urls.length, 1);
+  assert.match(urls[0], /CheckGoodParamXEMV$/);
+});

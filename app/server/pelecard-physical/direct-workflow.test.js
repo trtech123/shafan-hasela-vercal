@@ -69,6 +69,21 @@ test('lost provider response stays uncertain and recovery never sends again', as
   assert.equal(sends, 1);
 });
 
+test('unresolved recovery reports only a sanitized provider code and never resends J4', async () => {
+  const warnings = [];
+  let sends = 0;
+  const workflow = createPhysicalWorkflow({ merchantTerminal: '2814926015',
+    status: async () => ({ ...intent, state: 'uncertain' }),
+    provider: { send: async () => { sends++; },
+      inspect: async () => { throw Error('physical_result_unverified_510_0'); } },
+    markUncertain: async () => {},
+    logDiagnostic: (event, detail) => warnings.push({ event, detail }) });
+  assert.equal((await workflow.verify(intent.id)).state, 'uncertain');
+  assert.equal(sends, 0);
+  assert.deepEqual(warnings, [{ event: 'physical_provider_inspection_unresolved',
+    detail: { paymentId: intent.id, reason: 'physical_result_unverified_510_0' } }]);
+});
+
 test('verified payment associates the saved first-response invoice with its sale', async () => {
   const events = [];
   const workflow = createPhysicalWorkflow({ merchantTerminal: '2814926015',

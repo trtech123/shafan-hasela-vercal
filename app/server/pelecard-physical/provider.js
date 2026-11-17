@@ -98,7 +98,7 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
       // Until Pelecard supplies concrete EMV examples, accept only one row with
       // every correlation field and an explicit approved Shva result.
       if (found.StatusCode !== '000' || found.records.length !== 1)
-        throw new Error('physical_result_unverified');
+        throw new Error(`physical_result_unverified_${found.StatusCode ?? 'unknown'}_${Math.min(found.records.length, 99)}`);
       const row = found.records[0];
       const approvalId = String(row.DebitApproveNumber ?? '');
       const providerTransactionId = String(row.PelecardTransactionId ?? '');
