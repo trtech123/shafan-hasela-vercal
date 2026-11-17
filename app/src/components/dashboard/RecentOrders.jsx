@@ -40,7 +40,7 @@ export default function RecentOrders({ orders, activities }) {
                 <tr key={order.id} className="border-t border-border hover:bg-muted/50 transition-colors">
                   <td className="px-6 py-4">
                     <div>
-                      <p className="font-medium">{order.client_name}</p>
+                      <p className="font-medium">{order.client_name || order.organization || 'פרטי לקוח חסרים'}</p>
                       <p className="text-xs text-muted-foreground">{order.organization || ""}</p>
                     </div>
                   </td>

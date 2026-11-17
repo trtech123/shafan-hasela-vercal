@@ -56,7 +56,7 @@ export default function LinkOrderSearch({ linkedOrder, onSelect, onClear }) {
       <div className="bg-indigo-500/15 border border-indigo-500/40 rounded-xl p-2.5 flex items-start gap-2">
         <Link2 className="w-4 h-4 text-indigo-300 mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0 text-xs">
-          <p className="font-semibold text-indigo-100">{linkedOrder.client_name}</p>
+          <p className="font-semibold text-indigo-100">{linkedOrder.client_name || linkedOrder.organization || 'פרטי לקוח חסרים'}</p>
           <p className="text-indigo-300/80">
             {linkedOrder.order_number}
             {linkedOrder.client_phone ? ` · ${linkedOrder.client_phone}` : ""}
@@ -111,7 +111,7 @@ export default function LinkOrderSearch({ linkedOrder, onSelect, onClear }) {
               onClick={() => pick(o)}
               className="w-full text-right p-2 hover:bg-slate-700 text-xs"
             >
-              <p className="font-medium text-white">{o.client_name}</p>
+              <p className="font-medium text-white">{o.client_name || o.organization || 'פרטי לקוח חסרים'}</p>
               <p className="text-slate-400">
                 {o.order_number}
                 {o.client_phone ? ` · ${o.client_phone}` : ""}

@@ -44,6 +44,19 @@ function Field({ label, children }) {
 const inputCls =
   "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500";
 
+function GuestBillingChoice({ selected, onChange }) {
+  return <div className="space-y-2 text-sm">
+    <label className="flex items-center gap-2 text-slate-200">
+      <input type="checkbox" checked={selected} onChange={e => onChange(e.target.checked)} />
+      אין ללקוח פרטים מלאים כרגע
+    </label>
+    {selected && <p role="status" className="rounded-lg border border-amber-500/50 bg-amber-950/40 p-3 text-amber-200">
+      אפשר לשמור הזמנה בלי פרטי לקוח מלאים. בקופה, הפקת חשבונית מס/קבלה ללא פרטי חיוב מלאים טרם אומתה מול Payper.
+      אי אפשר להתחיל תשלום זה עד להשלמת הפרטים הנדרשים למסמך.
+    </p>}
+  </div>;
+}
+
 // Build a fresh split line. id only for React keys (Math.random fine in app code).
 const makeLine = (method, amount) => ({
   id: Math.random().toString(36).slice(2),
@@ -81,6 +94,7 @@ export default function PaymentScreen({
   const [digitalBillingOpen, setDigitalBillingOpen] = useState(false);
   const [check, setCheck] = useState({ ...emptyCheck, amount: String(total) });
   const [checkBilling, setCheckBilling] = useState({ kind: 'person', name: '', identity: '', email: '' });
+  const [guestBilling, setGuestBilling] = useState(false);
   const [cashReceived, setCashReceived] = useState(String(total));
   const selectedUnavailable = (selectedMethod === CASH_METHOD && !noncardEnabled.cash) ||
     (selectedMethod === CHECK_METHOD && !noncardEnabled.check) ||
@@ -286,6 +300,7 @@ export default function PaymentScreen({
         <Field label="שם לחיוב"><input className={inputCls} autoComplete="off" value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
         <Field label="מספר זהות / חברה"><input className={inputCls} autoComplete="off" inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
         <Field label="דוא״ל למסמך"><input className={inputCls} autoComplete="off" type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
+        <GuestBillingChoice selected={guestBilling} onChange={setGuestBilling} />
         <Button onClick={submitCash} disabled={manualSaleSaving || billingReviewIssues(checkBilling).length > 0 ||
           !Number.isFinite(Number(cashReceived)) || Math.round(Number(cashReceived) * 100) < Math.round(total * 100)}>אשר קבלת מזומן</Button>
     </DialogContent>
@@ -298,6 +313,7 @@ export default function PaymentScreen({
       <Field label="שם לחיוב"><input className={inputCls} autoComplete="off" value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
       <Field label="מספר זהות / חברה"><input className={inputCls} autoComplete="off" inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
       <Field label="דוא״ל למסמך"><input className={inputCls} autoComplete="off" type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
+      <GuestBillingChoice selected={guestBilling} onChange={setGuestBilling} />
       <Button disabled={physicalTerminalBusy || billingReviewIssues(checkBilling).length > 0} onClick={() => {
         setPhysicalBillingOpen(false); onPhysicalTerminal(checkBilling);
       }}>המשך למסופון</Button>
@@ -311,6 +327,7 @@ export default function PaymentScreen({
       <Field label="שם לחיוב"><input className={inputCls} autoComplete="off" value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
       <Field label="מספר זהות / חברה"><input className={inputCls} autoComplete="off" inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
       <Field label="דוא״ל למסמך"><input className={inputCls} autoComplete="off" type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
+      <GuestBillingChoice selected={guestBilling} onChange={setGuestBilling} />
       <Button disabled={pelecardBusy || billingReviewIssues(checkBilling).length > 0} onClick={() => {
         setDigitalBillingOpen(false); onPelecard(checkBilling);
       }}>המשך לפלאקארד</Button>
@@ -376,6 +393,7 @@ export default function PaymentScreen({
             <Field label="דוא״ל למסמך"><input className={inputCls} type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
           </div>
 
+          <GuestBillingChoice selected={guestBilling} onChange={setGuestBilling} />
           <Button
             onClick={submitCheck}
             disabled={!valid || manualSaleSaving}

@@ -574,7 +574,7 @@ export default function Schedule() {
                   <div key={order.id} className={cn("p-4 rounded-xl border space-y-2", siteStyle ? siteStyle.card : "bg-muted/50 border-border")}>
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-semibold text-sm">{order.client_name}</p>
+                        <p className="font-semibold text-sm">{order.client_name || order.organization || 'פרטי לקוח חסרים'}</p>
                         <p className="text-xs text-muted-foreground">{order.organization || ""}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1">

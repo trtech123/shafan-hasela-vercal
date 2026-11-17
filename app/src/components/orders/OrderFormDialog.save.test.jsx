@@ -160,3 +160,28 @@ test('new order sends explicitly selected site and end time in the insert payloa
   await waitFor(() => expect(state.writes).toHaveLength(1));
   expect(state.writes[0].data).toMatchObject({ site: 'עכו', start_time: '09:00', end_time: '10:00' });
 });
+
+test('new order saves without customer details and preserves partial details', async () => {
+  const view = renderDialog(null);
+  fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.submit(document.querySelector('form'));
+  await waitFor(() => expect(state.writes).toHaveLength(1));
+  expect(state.writes[0].data).toMatchObject({ client_name: null, client_phone: null, client_email: null });
+  view.unmount();
+  state.writes = [];
+  renderDialog(null);
+  fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.change(screen.getByLabelText('שם הלקוח (אפשר להשלים בהמשך)'), { target: { value: ' נורית ' } });
+  fireEvent.submit(document.querySelector('form'));
+  await waitFor(() => expect(state.writes).toHaveLength(1));
+  expect(state.writes[0].data).toMatchObject({ client_name: 'נורית', client_phone: null, client_email: null });
+});
+
+test('customer details can be added when editing a guest order', async () => {
+  renderDialog({ ...order, client_name: null, client_phone: null });
+  fireEvent.change(screen.getByLabelText('שם הלקוח (אפשר להשלים בהמשך)'), { target: { value: 'לקוח חדש' } });
+  fireEvent.change(screen.getByLabelText('טלפון (אפשר להשלים בהמשך)'), { target: { value: '0501234567' } });
+  fireEvent.submit(document.querySelector('form'));
+  await waitFor(() => expect(state.writes).toHaveLength(1));
+  expect(state.writes[0]).toMatchObject({ kind: 'update', data: { client_name: 'לקוח חדש', client_phone: '0501234567' } });
+});

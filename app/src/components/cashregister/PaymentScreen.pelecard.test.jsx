@@ -81,6 +81,16 @@ describe("PaymentScreen payment-method separation", () => {
     expect(props.onConfirm).not.toHaveBeenCalled();
   });
 
+  test('explains guest billing blocker before initiating a digital payment', () => {
+    const props = renderPayment({ pelecardEnabled: true });
+    fireEvent.click(screen.getByRole('button', { name: /פלאקארד/s }));
+    fireEvent.click(screen.getByTestId('cashier-pay'));
+    fireEvent.click(screen.getByLabelText('אין ללקוח פרטים מלאים כרגע'));
+    expect(screen.getByRole('status')).toHaveTextContent('אי אפשר להתחיל תשלום זה');
+    expect(screen.getByRole('button', { name: 'המשך לפלאקארד' })).toBeDisabled();
+    expect(props.onPelecard).not.toHaveBeenCalled();
+  });
+
   test("does not offer hosted payment for an ineligible cart", () => {
     const props = renderPayment({ pelecardEnabled: false });
     const button = screen.getByRole("button", { name: /פלאקארד/s });

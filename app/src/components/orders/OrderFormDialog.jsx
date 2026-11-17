@@ -177,6 +177,9 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
     try {
       const data = {
         ...form,
+        client_name: form.client_name.trim() || null,
+        client_phone: form.client_phone.trim() || null,
+        client_email: form.client_email.trim() || null,
         // UUID FK fields: empty string / NO_INSTRUCTOR sentinel → null
         // (Postgres rejects "" and "__none__" as UUIDs).
         activity_id: form.activity_id || null,
@@ -205,11 +208,6 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
         price_per_person: Number(form.price_per_person) || 0,
         total_price: Number(form.total_price) || 0,
       };
-
-      if (isTaskMode) {
-        data.client_name = data.client_name || "משימה פנימית";
-        data.client_phone = data.client_phone || "—";
-      }
 
       if (!isTaskMode && data.activity_date) {
         const [blocksResult, ordersResult] = await Promise.all([
@@ -314,13 +312,14 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
 
           {!isTaskMode && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <p className="sm:col-span-2 text-sm text-muted-foreground">מומלץ למלא פרטי לקוח לצורך תיאום, שליחת אישור ותשלום. אפשר לשמור עכשיו ולהשלים בהמשך.</p>
               <div>
-                <Label>שם הלקוח *</Label>
-                <Input value={form.client_name} onChange={e => handleChange("client_name", e.target.value)} required />
+                <Label htmlFor="order-client-name">שם הלקוח (אפשר להשלים בהמשך)</Label>
+                <Input id="order-client-name" value={form.client_name} onChange={e => handleChange("client_name", e.target.value)} />
               </div>
               <div>
-                <Label>טלפון *</Label>
-                <Input value={form.client_phone} onChange={e => handleChange("client_phone", e.target.value)} required />
+                <Label htmlFor="order-client-phone">טלפון (אפשר להשלים בהמשך)</Label>
+                <Input id="order-client-phone" value={form.client_phone} onChange={e => handleChange("client_phone", e.target.value)} />
               </div>
               <div>
                 <Label>אימייל</Label>

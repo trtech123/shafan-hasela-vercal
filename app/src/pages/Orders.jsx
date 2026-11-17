@@ -378,7 +378,7 @@ export default function Orders() {
 
               <div>
                 <p className="font-semibold text-sm flex items-center gap-1.5">
-                  <span className="truncate">{order.client_name}</span>
+                  <span className="truncate">{order.client_name || order.organization || 'פרטי לקוח חסרים'}</span>
                   {order.instructor_notified && (
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" title="המדריך עודכן" />
                   )}
@@ -470,7 +470,7 @@ export default function Orders() {
                     <td className="px-4 py-3">
                       <div>
                         <p className="font-medium flex items-center gap-1.5">
-                          {order.client_name}
+                          {order.client_name || order.organization || 'פרטי לקוח חסרים'}
                           {order.instructor_notified && (
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" title="המדריך עודכן" />
                           )}
