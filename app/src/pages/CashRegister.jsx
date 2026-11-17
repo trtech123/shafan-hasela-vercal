@@ -249,7 +249,7 @@ export default function CashRegister() {
     setScreen("receipt");
   };
 
-  const handlePelecardStart = async () => {
+  const handlePelecardStart = async billing => {
     if (!canPayOrder || digitalInFlight.current) return;
     if (linkedOrder?.id) { navigate(`/cashregister?orderId=${encodeURIComponent(linkedOrder.id)}`); return; }
     if (!canHostedCart) return;
@@ -270,15 +270,15 @@ export default function CashRegister() {
     const requestKey = posCheckoutId.current.requestKey;
     sessionStorage.setItem(pendingKey, JSON.stringify({ requestKey, cart: cartIdentity, actorId }));
     try {
-      const result = await startPosCheckout(supabase, { requestKey, cart,
-        billing: { kind: 'person', name: '', identity: '', email: '' } });
+      const result = await startPosCheckout(supabase, { requestKey, cart, billing });
       // A usable hosted URL redirects inside startPosCheckout. Otherwise the
       // existing route is only a read-only result or recovery screen.
       if (!result.canResume || !result.redirectUrl) navigate('/payment/pos', { state: { checkoutId: requestKey, cart } });
     } catch (reason) {
       const safe = ['capability_disabled', 'catalog_item_unavailable', 'cart_invalid',
         'cart_line_invalid', 'cart_amount_invalid', 'discount_invalid', 'pos_payment_forbidden',
-        'request_key_conflict', 'pos_payment_in_progress'].includes(reason?.code);
+        'request_key_conflict', 'pos_payment_in_progress', 'billing_identity_required',
+        'billing_email_required'].includes(reason?.code);
       if (safe) {
         const message = posPaymentErrorMessage(reason.code);
         setPaymentError(message);

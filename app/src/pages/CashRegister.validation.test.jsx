@@ -23,6 +23,15 @@ import CashRegister from './CashRegister';
 afterEach(() => { cleanup(); state.invoke.mockReset(); state.navigate.mockReset(); sessionStorage.clear();
   state.role = 'admin'; state.userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; });
 
+function completeDigitalBilling() {
+  const dialog = screen.getByRole('dialog', { name: 'פרטי חיוב לתשלום דיגיטלי' });
+  fireEvent.change(screen.getByLabelText('שם לחיוב'), { target: { value: 'Test Customer' } });
+  fireEvent.change(screen.getByLabelText('מספר זהות / חברה'), { target: { value: '123456782' } });
+  fireEvent.change(screen.getByLabelText('דוא״ל למסמך'), { target: { value: 'test@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'המשך לפלאקארד' }));
+  expect(dialog).not.toBeInTheDocument();
+}
+
 test('standalone cashier shows a 422 rejection for the reported activity after the real cart and Pay controls', async () => {
   state.invoke.mockImplementation(async (name) => name === 'payper-noncard-collection'
     ? { data: { collectionEnabled: { cash: true, check: false } }, error: null }
@@ -33,10 +42,12 @@ test('standalone cashier shows a 422 rejection for the reported activity after t
   fireEvent.click(screen.getByRole('button', { name: /המשך לתשלום/ }));
   fireEvent.click(screen.getByRole('button', { name: /פלאקארד — תשלום מאומת/ }));
   fireEvent.click(screen.getByTestId('cashier-pay'));
+  completeDigitalBilling();
 
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('המוצר או השירות אינו פעיל בקטלוג'));
   expect(state.invoke).toHaveBeenCalledWith('pelecard-pos-payment', expect.objectContaining({
-    body: expect.objectContaining({ action: 'prepare', lines: [{ kind: 'service', id: '22222222-2222-4222-8222-222222222222', qty: 1 }], discount: null }),
+    body: expect.objectContaining({ action: 'prepare', lines: [{ kind: 'service', id: '22222222-2222-4222-8222-222222222222', qty: 1 }], discount: null,
+      billing: { kind: 'person', name: 'Test Customer', identity: '123456782', email: 'test@example.com' } }),
   }));
   expect(state.invoke.mock.calls.filter(([name]) => name === 'pelecard-pos-payment')).toHaveLength(1);
   expect(state.navigate).not.toHaveBeenCalled();
@@ -59,6 +70,7 @@ test('selected discount type with no amount pays the full ₪180 activity price 
   fireEvent.click(screen.getByRole('button', { name: /המשך לתשלום/ }));
   fireEvent.click(screen.getByRole('button', { name: /פלאקארד — תשלום מאומת/ }));
   fireEvent.click(screen.getByTestId('cashier-pay'));
+  completeDigitalBilling();
 
   await waitFor(() => expect(state.invoke).toHaveBeenCalledWith('pelecard-pos-payment', expect.objectContaining({
     body: expect.objectContaining({ action: 'prepare', discount: null,
@@ -85,6 +97,7 @@ test('cashier account does not reuse a previous admin checkout reference for the
   fireEvent.click(screen.getByRole('button', { name: /המשך לתשלום/ }));
   fireEvent.click(screen.getByRole('button', { name: /פלאקארד — תשלום מאומת/ }));
   fireEvent.click(screen.getByTestId('cashier-pay'));
+  completeDigitalBilling();
 
   await waitFor(() => expect(state.invoke).toHaveBeenCalledWith('pelecard-pos-payment', expect.objectContaining({
     body: expect.objectContaining({ action: 'prepare', requestKey: expect.not.stringMatching(oldKey) }),
@@ -102,6 +115,7 @@ test('a conflicting checkout reference shows a Hebrew error in the cashier witho
   fireEvent.click(screen.getByRole('button', { name: /המשך לתשלום/ }));
   fireEvent.click(screen.getByRole('button', { name: /פלאקארד — תשלום מאומת/ }));
   fireEvent.click(screen.getByTestId('cashier-pay'));
+  completeDigitalBilling();
 
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('מזהה הסל כבר שייך לניסיון אחר'));
   expect(state.navigate).not.toHaveBeenCalled();

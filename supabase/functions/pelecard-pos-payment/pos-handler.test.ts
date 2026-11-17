@@ -28,8 +28,20 @@ function setup(role='cashier'){
   return {post,deps,reserve,call,observe,finalize,onPaymentFinalized,log,setPending:()=>{state='pending_provider'},setPaid:()=>{state='succeeded';saleId='55555555-5555-4555-8555-555555555555'}};
 }
 const prepared={action:'prepare',requestKey,lines:[{kind:'product',id:productId,qty:1}],discount:null,
-  billing:{kind:'person',name:'',identity:'',email:''}};
+  billing:{kind:'person',name:'Test Customer',identity:'123456782',email:'test@example.com'}};
 describe('POS Edge payment boundary',()=>{
+  test('rejects missing invoice billing before reserving a standalone charge',async()=>{
+    const s=setup();const response=await s.post({...prepared,billing:{kind:'person',name:'',identity:'',email:''}});
+    expect(response.status).toBe(422);
+    expect((await response.json()).error.code).toBe('billing_identity_required');
+    expect(s.reserve).not.toHaveBeenCalled();expect(s.call).not.toHaveBeenCalled();
+  });
+  test('rejects invalid document email before reserving a standalone charge',async()=>{
+    const s=setup();const response=await s.post({...prepared,billing:{...prepared.billing,email:'invalid'}});
+    expect(response.status).toBe(422);
+    expect((await response.json()).error.code).toBe('billing_email_required');
+    expect(s.reserve).not.toHaveBeenCalled();expect(s.call).not.toHaveBeenCalled();
+  });
   test.each(['admin','cashier'])('%s can prepare with only item IDs and quantities',async role=>{
     const s=setup(role);expect((await s.post(prepared)).status).toBe(201);
     expect(s.reserve).toHaveBeenCalledWith(actorId,requestKey,prepared.lines,null,prepared.billing);

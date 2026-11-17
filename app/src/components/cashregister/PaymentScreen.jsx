@@ -56,7 +56,7 @@ export default function PaymentScreen({
   total,
   cartItems,
   onConfirm,
-  onPelecard = () => {},
+  onPelecard = (_billing) => {},
   onPhysicalTerminal = (_billing) => {},
   physicalTerminalVisible = false,
   physicalTerminalEnabled = false,
@@ -76,6 +76,7 @@ export default function PaymentScreen({
   const [detailFor, setDetailFor] = useState(null);
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [physicalBillingOpen, setPhysicalBillingOpen] = useState(false);
+  const [digitalBillingOpen, setDigitalBillingOpen] = useState(false);
   const [check, setCheck] = useState({ ...emptyCheck, amount: String(total) });
   const [checkBilling, setCheckBilling] = useState({ kind: 'person', name: '', identity: '', email: '' });
   const [cashReceived, setCashReceived] = useState(String(total));
@@ -100,7 +101,10 @@ export default function PaymentScreen({
   };
 
   const paySelected = () => {
-    if (selectedMethod === 'digital') return onPelecard();
+    if (selectedMethod === 'digital') {
+      if (billingReviewIssues(checkBilling).length) return setDigitalBillingOpen(true);
+      return onPelecard(checkBilling);
+    }
     if (selectedMethod === 'physical') {
       if (billingReviewIssues(checkBilling).length) return setPhysicalBillingOpen(true);
       return onPhysicalTerminal(checkBilling);
@@ -293,6 +297,19 @@ export default function PaymentScreen({
       }}>המשך למסופון</Button>
     </DialogContent>
   </Dialog>;
+  const digitalBillingDialog = <Dialog open={digitalBillingOpen} onOpenChange={setDigitalBillingOpen}>
+    <DialogContent dir="rtl" aria-describedby="digital-billing-help" className="max-h-[90vh] overflow-y-auto bg-slate-900 text-white">
+      <DialogTitle>פרטי חיוב לתשלום דיגיטלי</DialogTitle>
+      <p id="digital-billing-help">למסמך הרשמי נדרשים פרטי חיוב מאומתים. השלימו את הפרטים לפני המעבר לפלאקארד.</p>
+      <Field label="סוג לקוח"><select className={inputCls} value={checkBilling.kind} onChange={e => setCheckBilling({ ...checkBilling, kind: e.target.value })}><option value="person">יחיד</option><option value="organization">ארגון</option></select></Field>
+      <Field label="שם לחיוב"><input className={inputCls} autoComplete="off" value={checkBilling.name} onChange={e => setCheckBilling({ ...checkBilling, name: e.target.value })} /></Field>
+      <Field label="מספר זהות / חברה"><input className={inputCls} autoComplete="off" inputMode="numeric" value={checkBilling.identity} onChange={e => setCheckBilling({ ...checkBilling, identity: e.target.value })} /></Field>
+      <Field label="דוא״ל למסמך"><input className={inputCls} autoComplete="off" type="email" value={checkBilling.email} onChange={e => setCheckBilling({ ...checkBilling, email: e.target.value })} /></Field>
+      <Button disabled={pelecardBusy || billingReviewIssues(checkBilling).length > 0} onClick={() => {
+        setDigitalBillingOpen(false); onPelecard(checkBilling);
+      }}>המשך לפלאקארד</Button>
+    </DialogContent>
+  </Dialog>;
 
   if (detailFor === CHECK_METHOD) {
     const set = (k) => (e) => setCheck((c) => ({ ...c, [k]: e.target.value }));
@@ -369,6 +386,7 @@ export default function PaymentScreen({
     <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6" dir="rtl">
       {cashDialog}
       {physicalBillingDialog}
+      {digitalBillingDialog}
       <div className="w-full max-w-lg space-y-8">
 
         <div className="text-center">

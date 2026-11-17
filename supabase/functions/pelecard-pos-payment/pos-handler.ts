@@ -9,6 +9,20 @@ const hostedPrefix='https://gateway20.pelecard.biz/PaymentGW?transactionId=';
 type Attempt={payment_id:string;amount_minor:number;currency:string;transaction_id:string;confirmation_key:string;hosted_state:string;hosted_expires_at:string|null};
 type View={paymentId:string;amountMinor:number;currency:string;status:string;saleId:string|null;receiptNumber:string|null;hostedState:string;hostedExpiresAt:string|null;redirectUrl:string|null;canVerify:boolean;dispatchStarted:boolean};
 type Billing={kind:string;name:string;identity:string;email:string};
+function validPersonIdentity(value:string):boolean {
+  if(!/^[0-9]{9}$/.test(value)||value==='000000000')return false;
+  return [...value].reduce((sum,digit,index)=>{const n=Number(digit)*(index%2===0?1:2);
+    return sum+Math.floor(n/10)+n%10;},0)%10===0;
+}
+function validateBilling(billing:Billing):void {
+  const name=billing.name.trim(),identity=billing.identity.trim(),email=billing.email.trim();
+  if(!['person','organization'].includes(billing.kind)||!name||name.length>200||
+    !/^[0-9]{9}$/.test(identity)||identity==='000000000'||
+    (billing.kind==='person'&&!validPersonIdentity(identity)))
+    throw new PaymentHttpError(422,'billing_identity_required');
+  if(email.length>320||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    throw new PaymentHttpError(422,'billing_email_required');
+}
 export interface PosDependencies {
   auth:PaymentAuthenticator;allowedOrigins:readonly string[];read(name:string):string|undefined;
   reserve(actorId:string,requestKey:string,lines:unknown,discount:unknown,billing:Billing):Promise<{paymentId:string;created:boolean;amountMinor:number}>;
@@ -84,6 +98,7 @@ export function createPosHandler(deps:PosDependencies){return async(request:Requ
         Object.values(body.billing).some(value=>typeof value!=='string'||value.length>320))
         throw new PaymentHttpError(400,'invalid_input');
       if(deps.read('PELECARD_POS_PAYMENTS_ENABLED')!=='true')throw new PaymentHttpError(503,'capability_disabled');
+      validateBilling(body.billing as Billing);
       stage='reservation';
       const reserved=await deps.reserve(actor.identity.id,String(body.requestKey),body.lines,body.discount,body.billing as Billing);
       if(!uuid.test(reserved.paymentId)||!Number.isSafeInteger(reserved.amountMinor)||reserved.amountMinor<1)

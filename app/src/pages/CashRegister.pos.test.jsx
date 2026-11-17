@@ -16,7 +16,7 @@ vi.mock('@/api/supabaseClient',()=>({supabase:{from:table=>({select:()=>({eq:asy
 vi.mock('@/components/cashregister/ActivityGrid',()=>({default:({activities,onAdd})=><div>{activities.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add service</button>)}</div>}));
 vi.mock('@/components/cashregister/ProductGrid',()=>({default:({products,onAdd})=><div>{products.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add product</button>)}</div>}));
 vi.mock('@/components/cashregister/Cart',()=>({default:({onCheckout,onLinkOrder})=><div><button onClick={onCheckout}>checkout</button><button onClick={()=>onLinkOrder({id:orderId,order_number:'ORD-1'})}>link order</button></div>}));
-vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalVisible,physicalTerminalEnabled})=><><button disabled={!pelecardEnabled} onClick={onPelecard}>Pelecard</button>{physicalTerminalVisible&&<button disabled={!physicalTerminalEnabled} onClick={onPhysicalTerminal}>Physical</button>}</>}));
+vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalVisible,physicalTerminalEnabled})=><><button disabled={!pelecardEnabled} onClick={()=>onPelecard({kind:'person',name:'Test Customer',identity:'123456782',email:'test@example.com'})}>Pelecard</button>{physicalTerminalVisible&&<button disabled={!physicalTerminalEnabled} onClick={onPhysicalTerminal}>Physical</button>}</>}));
 vi.mock('@/components/cashregister/ReceiptScreen',()=>({default:()=>null}));
 vi.mock('sonner',()=>({toast:{error:vi.fn()}}));
 vi.mock('@/payments/posPayments',async importOriginal=>({...(await importOriginal()),startPosCheckout:(...args)=>state.start(...args)}));
@@ -60,7 +60,7 @@ describe('Cash Register hosted routes',()=>{
     render(<CashRegister/>);await screen.findByText('add service');
     fireEvent.click(screen.getByText('מוצרים'));fireEvent.click(screen.getByText('add product'));
     fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
-    await waitFor(()=>expect(state.start).toHaveBeenCalledWith(expect.anything(),{requestKey:expect.stringMatching(uuid),cart:{lines:[{kind:'product',id:productId,qty:1}],discount:null},billing:{kind:'person',name:'',identity:'',email:''}}));
+    await waitFor(()=>expect(state.start).toHaveBeenCalledWith(expect.anything(),{requestKey:expect.stringMatching(uuid),cart:{lines:[{kind:'product',id:productId,qty:1}],discount:null},billing:{kind:'person',name:'Test Customer',identity:'123456782',email:'test@example.com'}}));
     expect(state.navigate).not.toHaveBeenCalledWith('/payment/pos',expect.anything());
   });
   test('standalone activity cart starts the same direct checkout',async()=>{

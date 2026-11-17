@@ -60,7 +60,14 @@ describe("PaymentScreen payment-method separation", () => {
     fireEvent.click(screen.getByRole("button", { name: /פלאקארד/s }));
     expect(props.onPelecard).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('cashier-pay'));
+    expect(props.onPelecard).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'פרטי חיוב לתשלום דיגיטלי' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('שם לחיוב'), { target: { value: 'Test Customer' } });
+    fireEvent.change(screen.getByLabelText('מספר זהות / חברה'), { target: { value: '123456782' } });
+    fireEvent.change(screen.getByLabelText('דוא״ל למסמך'), { target: { value: 'test@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך לפלאקארד' }));
     expect(props.onPelecard).toHaveBeenCalledTimes(1);
+    expect(props.onPelecard).toHaveBeenCalledWith({ kind: 'person', name: 'Test Customer', identity: '123456782', email: 'test@example.com' });
     expect(props.onConfirm).not.toHaveBeenCalled();
   });
 
