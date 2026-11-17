@@ -1,4 +1,7 @@
 {
+  "git": {
+    "deploymentEnabled": false
+  },
   "functions": {
     "api/pelecard-physical-worker.js": {
       "maxDuration": 360,
