@@ -1,4 +1,7 @@
 {
+  "git": {
+    "deploymentEnabled": false
+  },
   "functions": {
     "api/order-confirmation.js": {
       "maxDuration": 60,
