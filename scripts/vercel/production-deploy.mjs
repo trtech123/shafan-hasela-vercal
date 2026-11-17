@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, win32 } from 'node:path';
 
 const ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const PROJECT_ID = 'prj_6rvjmBAfEUpym5E4JwVPut1HiXQC';
@@ -12,6 +12,31 @@ const ALIAS = 'shafan-hasela-vercal.vercel.app';
 function requireValue(value, message) {
   if (!value) throw new Error(message);
   return value;
+}
+
+export function resolveCommand(command, args, {
+  platform = process.platform,
+  pathEnv = process.env.PATH ?? process.env.Path ?? '',
+  exists = existsSync,
+  nodeExecutable = process.execPath,
+} = {}) {
+  if (command !== 'vercel' || platform !== 'win32') return { file: command, args };
+
+  for (const directory of pathEnv.split(';').filter(Boolean)) {
+    const executable = win32.join(directory, 'vercel.exe');
+    if (exists(executable)) return { file: executable, args };
+
+    const shim = win32.join(directory, 'vercel.cmd');
+    if (!exists(shim)) continue;
+    const entries = [
+      win32.join(directory, '..', 'vercel', 'dist', 'vc.js'),
+      win32.join(directory, 'node_modules', 'vercel', 'dist', 'vc.js'),
+    ];
+    const entry = entries.find(exists);
+    if (!entry) throw new Error(`Found ${shim} but could not locate its Vercel JavaScript entry`);
+    return { file: nodeExecutable, args: [entry, ...args] };
+  }
+  throw new Error('Vercel CLI was not found in PATH');
 }
 
 export function preflight(io) {
@@ -118,7 +143,12 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   } else {
     const io = {
       read: (path) => readFileSync(join(ROOT, path), 'utf8'),
-      run: (command, args) => execFileSync(command, args, { cwd: ROOT, encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'] }),
+      run: (command, args) => {
+        const invocation = resolveCommand(command, args);
+        return execFileSync(invocation.file, invocation.args, {
+          cwd: ROOT, encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'], shell: false,
+        });
+      },
       write: (path, value) => {
         const fullPath = join(ROOT, path);
         mkdirSync(dirname(fullPath), { recursive: true });

@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { preflight, deploy, status } from './production-deploy.mjs';
+import * as release from './production-deploy.mjs';
+
+const { preflight, deploy, status } = release;
 
 const SHA = 'a'.repeat(40);
 const TEAM = 'team_wBjKr13fvum5krxkUPPpeEuQ';
@@ -109,4 +111,37 @@ test('command line requires an explicit deploy flag', () => {
   const result = spawnSync(process.execPath, [script], { encoding: 'utf8' });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /--deploy/);
+});
+
+test('Windows npm vercel.cmd resolves to its JavaScript entry without a shell', () => {
+  const bin = 'C:\\tools\\node_modules\\.bin';
+  const entry = 'C:\\tools\\node_modules\\vercel\\dist\\vc.js';
+  const existing = new Set([bin + '\\vercel.cmd', entry]);
+  const args = ['api', '/v4/aliases/a?x=1&y=2', '--meta', 'sourceBranch=feature/test'];
+  assert.deepEqual(release.resolveCommand('vercel', args, {
+    platform: 'win32', pathEnv: bin, exists: (path) => existing.has(path), nodeExecutable: 'C:\\node\\node.exe',
+  }), { file: 'C:\\node\\node.exe', args: [entry, ...args] });
+});
+
+test('Windows global npm shim and native executable are resolved in PATH order', () => {
+  const global = 'C:\\npm';
+  const entry = 'C:\\npm\\node_modules\\vercel\\dist\\vc.js';
+  const local = 'C:\\local';
+  const existing = new Set([global + '\\vercel.cmd', entry, local + '\\vercel.exe']);
+  const options = { platform: 'win32', pathEnv: global + ';' + local,
+    exists: (path) => existing.has(path), nodeExecutable: 'C:\\node\\node.exe' };
+  assert.deepEqual(release.resolveCommand('vercel', ['--version'], options),
+    { file: 'C:\\node\\node.exe', args: [entry, '--version'] });
+  assert.deepEqual(release.resolveCommand('vercel', ['--version'], { ...options, pathEnv: local }),
+    { file: local + '\\vercel.exe', args: ['--version'] });
+});
+
+test('unresolvable Windows cmd shim fails closed and Unix keeps argument arrays', () => {
+  const bin = 'C:\\tools';
+  assert.throws(() => release.resolveCommand('vercel', ['deploy'], {
+    platform: 'win32', pathEnv: bin, exists: (path) => path === bin + '\\vercel.cmd',
+  }), /JavaScript entry/);
+  const args = ['api', 'value&echo hacked'];
+  assert.deepEqual(release.resolveCommand('vercel', args, { platform: 'linux' }),
+    { file: 'vercel', args });
 });

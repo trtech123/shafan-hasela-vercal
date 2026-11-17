@@ -4,6 +4,8 @@ The Vercel project uses `app/` as its Root Directory. Keep the GitHub integratio
 
 Prerequisites: Node.js, Vercel CLI 50.5.1 or newer (for `vercel api`), CLI authentication to the project team, and `app/.vercel/project.json` linked to the existing `shafan-hasela-vercal` project. If the local link is absent, run `vercel link --cwd app` and select the **existing** project. The script verifies its project and team IDs before deploying. The link and deployment records are ignored by Git.
 
+On Windows, place the npm-installed `vercel.cmd` on `PATH`. The script locates its `vercel/dist/vc.js` entry and runs it with Node using separate arguments and no shell. A native `vercel.exe` on `PATH` is also supported. Unix systems continue to run `vercel` directly.
+
 From the repository root, after checkout of a clean branch whose HEAD is pushed to `origin`:
 
 ```sh
