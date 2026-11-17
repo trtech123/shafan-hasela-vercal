@@ -30,11 +30,15 @@ export function createPhysicalRuntime(env, overrides = {}) {
     hostedInitEnabled: config.hostedInitEnabled, hostedUrls: config.hostedUrls,
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
     payperEnabled: config.payperEnabled,
+    acceptanceOrderId: config.acceptanceOrderId,
+    acceptanceAmountMinor: config.acceptanceAmountMinor,
     cloudWorkerEnabled, enqueueDirect,
     merchantTerminal: config.terminalNumber });
   return {
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
     payperEnabled: config.payperEnabled, cloudWorkerEnabled, directUiEnabled, enqueueDirect,
+    acceptanceOrderId: config.acceptanceOrderId,
+    acceptanceAmountMinor: config.acceptanceAmountMinor,
     hostedEnabled: config.hostedEnabled, hostedInitEnabled: config.hostedInitEnabled,
     workerMaxMs: config.workerMaxMs, database, repository, workflow,
     async authenticate(token) {

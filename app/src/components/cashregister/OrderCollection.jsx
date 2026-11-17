@@ -95,10 +95,10 @@ export default function OrderCollection({ orderId }) {
   useEffect(() => {
     if (!allowed || import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true') return;
     let active = true;
-    getPhysicalAvailability(supabase).then(value => { if (active) setPhysicalAvailability(value); })
+    getPhysicalAvailability(supabase, undefined, orderId).then(value => { if (active) setPhysicalAvailability(value); })
       .catch(() => { if (active) setPhysicalAvailability(null); });
     return () => { active = false; };
-  }, [allowed]);
+  }, [allowed, orderId]);
   const resultDocument = view?.documents?.find(doc => doc.paymentId === result?.paymentId);
   const accountingResult = resultDocument ?? result?.accounting;
   const openBilling = async () => {

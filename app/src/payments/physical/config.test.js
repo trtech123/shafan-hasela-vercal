@@ -21,4 +21,19 @@ describe('physical configuration', () => {
       enabled: true, dispatchEnabled: true, terminalNumber: '2814926015', workerMaxMs: 330000,
     });
   });
+  test('controlled acceptance requires an exact order and amount pair', () => {
+    const base = { PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_PHYSICAL_USER: 'user',
+      PELECARD_PHYSICAL_PASSWORD: 'pass', PELECARD_PHYSICAL_TERMINAL: '2814926015' };
+    const orderId = '44444444-4444-4444-8444-444444444444';
+    expect(() => readPhysicalConfig({ ...base, PELECARD_PHYSICAL_ACCEPTANCE_ORDER_ID: orderId }))
+      .toThrow('physical_acceptance_scope_invalid');
+    expect(() => readPhysicalConfig({ ...base, PELECARD_PHYSICAL_ACCEPTANCE_ORDER_ID: orderId,
+      PELECARD_PHYSICAL_ACCEPTANCE_AMOUNT_MINOR: '0' })).toThrow('physical_acceptance_scope_invalid');
+    expect(() => readPhysicalConfig({ ...base, PELECARD_PHYSICAL_TERMINAL: '0000000000',
+      PELECARD_PHYSICAL_ACCEPTANCE_ORDER_ID: orderId,
+      PELECARD_PHYSICAL_ACCEPTANCE_AMOUNT_MINOR: '1500' })).toThrow('physical_acceptance_scope_invalid');
+    expect(readPhysicalConfig({ ...base, PELECARD_PHYSICAL_ACCEPTANCE_ORDER_ID: orderId,
+      PELECARD_PHYSICAL_ACCEPTANCE_AMOUNT_MINOR: '1500' })).toMatchObject({
+      acceptanceOrderId: orderId, acceptanceAmountMinor: 1500 });
+  });
 });

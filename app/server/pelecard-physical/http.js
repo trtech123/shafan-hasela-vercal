@@ -6,6 +6,8 @@ const directDispatchReady = deps => deps.enabled === true && deps.dispatchEnable
   Number.isSafeInteger(deps.workerMaxMs) && deps.workerMaxMs >= 330_000;
 
 export function createPhysicalHttpHandler(deps) {
+  const withinAcceptance = (orderId, amountMinor) => !deps.acceptanceOrderId ||
+    (orderId === deps.acceptanceOrderId && amountMinor === deps.acceptanceAmountMinor);
   const withHosted = saved => deps.hostedEnabled === true && deps.hostedInitEnabled === true
     ? { ...saved, hostedAvailable: true } : saved;
   return async request => {
@@ -22,13 +24,16 @@ export function createPhysicalHttpHandler(deps) {
       try { body = JSON.parse(raw); } catch { return json({ error: 'invalid_input' }, 400); }
       if (!body || Array.isArray(body) || typeof body !== 'object')
         return json({ error: 'invalid_input' }, 400);
-      if (body.action === 'capability' && Object.keys(body).join(',') === 'action') {
+      if (body.action === 'capability' &&
+        (Object.keys(body).join(',') === 'action' ||
+          (Object.keys(body).sort().join(',') === 'action,orderId' && uuid.test(body.orderId)))) {
         const direct = deps.directUiEnabled === true;
         const visible = deps.enabled === true && (direct || deps.hostedEnabled === true);
         const devices = visible ? await deps.repository.listDevices() : [];
         const registerReady = devices.some(device => device.registerNumber === '004' &&
           device.model === 'CT20' && typeof device.workstationCode === 'string' && device.workstationCode);
-        const ready = visible && registerReady && (direct
+        const ready = visible && registerReady &&
+          (!deps.acceptanceOrderId || body.orderId === deps.acceptanceOrderId) && (direct
           ? directDispatchReady(deps)
           : deps.hostedInitEnabled === true);
         return json({ visible, ready, route: direct ? 'direct' : 'hosted',
@@ -38,6 +43,7 @@ export function createPhysicalHttpHandler(deps) {
         return json(await deps.repository.listDevices(), 200);
       if (body.action === 'prepare') {
         if (!deps.enabled) return json({ error: 'physical_disabled' }, 503);
+        if (deps.acceptanceOrderId) return json({ error: 'physical_acceptance_order_only' }, 503);
         if (deps.directUiEnabled === true && !directDispatchReady(deps))
           return json({ error: 'physical_direct_disabled' }, 503);
         if (Object.keys(body).sort().join(',') !== 'action,billing,cart,requestKey,workstationCode' ||
@@ -53,6 +59,8 @@ export function createPhysicalHttpHandler(deps) {
       }
       if (body.action === 'prepareOrder') {
         if (!deps.enabled) return json({ error: 'physical_disabled' }, 503);
+        if (!withinAcceptance(body.orderId, body.amountMinor))
+          return json({ error: 'physical_acceptance_order_only' }, 503);
         if (deps.directUiEnabled === true && !directDispatchReady(deps))
           return json({ error: 'physical_direct_disabled' }, 503);
         if (Object.keys(body).sort().join(',') !== 'action,amountMinor,orderId,requestKey,workstationCode' ||
@@ -72,6 +80,9 @@ export function createPhysicalHttpHandler(deps) {
         return json({ error: 'invalid_input' }, 400);
       let saved = await deps.repository.viewByRequest(actor.id, body.requestKey);
       if (!saved) return json({ error: 'payment_not_found' }, 404);
+      if (deps.acceptanceOrderId && ['enqueueDirect', 'openHosted'].includes(body.action) &&
+        !withinAcceptance(saved.orderId, saved.amountMinor))
+        return json({ error: 'physical_acceptance_order_only' }, 503);
       if (body.action === 'enqueueDirect') {
         if (deps.enabled !== true || deps.dispatchEnabled !== true || deps.payperEnabled !== true ||
           deps.cloudWorkerEnabled !== true || typeof deps.enqueueDirect !== 'function')

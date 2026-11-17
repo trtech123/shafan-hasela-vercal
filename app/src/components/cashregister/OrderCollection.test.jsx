@@ -33,6 +33,7 @@ test.each(['admin', 'קופאי'])('%s sees physical choice but cannot pay while
   state.availability.mockResolvedValue({ visible: true, ready: false, route: 'direct' });
   render(<OrderCollection orderId={orderId} />);
   expect(await screen.findByText(/ממתין להפעלה מבוקרת/)).toBeInTheDocument();
+  expect(state.availability).toHaveBeenCalledWith(expect.anything(), undefined, orderId);
   expect(screen.getByRole('button', { name: /שלם במסופון פיזי/ })).toBeDisabled();
   expect(state.direct).not.toHaveBeenCalled();
 });

@@ -82,6 +82,13 @@ export function createPhysicalRepository(database) {
         'SELECT public.get_physical_worker_intent($1::uuid) AS result', [intentId]));
       return result;
     },
+    async orderForIntent(intentId) {
+      if (!uuid.test(intentId)) throw new Error('physical_intent_invalid');
+      const { rows } = await database.query(
+        'SELECT order_id FROM public.payment_transactions WHERE id=$1::uuid', [intentId]);
+      if (rows?.length !== 1) throw new Error('physical_intent_missing');
+      return rows[0].order_id;
+    },
     async claimHostedInit(intentId) {
       if (!uuid.test(intentId)) throw new Error('physical_intent_invalid');
       return single(await database.query(

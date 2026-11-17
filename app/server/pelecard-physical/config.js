@@ -1,4 +1,5 @@
 import { PHYSICAL_MERCHANT_PREFIX } from './workflow.js';
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function readPhysicalConfig(env) {
   if (env.PELECARD_PHYSICAL_ENABLED !== 'true')
@@ -14,6 +15,14 @@ export function readPhysicalConfig(env) {
   // second gate so device readiness cannot authorize a charge by itself.
   const dispatchEnabled = env.PELECARD_PHYSICAL_DISPATCH_ENABLED === 'true';
   const payperEnabled = env.PELECARD_PHYSICAL_DIRECT_PAYPER_ENABLED === 'true';
+  const acceptanceOrderId = env.PELECARD_PHYSICAL_ACCEPTANCE_ORDER_ID ?? null;
+  const acceptanceAmountRaw = env.PELECARD_PHYSICAL_ACCEPTANCE_AMOUNT_MINOR ?? null;
+  const acceptanceAmountMinor = Number(acceptanceAmountRaw);
+  if ((acceptanceOrderId !== null || acceptanceAmountRaw !== null) &&
+    (terminal !== '2814926015' || !uuid.test(acceptanceOrderId ?? '') ||
+      typeof acceptanceAmountRaw !== 'string' || !/^[1-9][0-9]*$/.test(acceptanceAmountRaw) ||
+      !Number.isSafeInteger(acceptanceAmountMinor) || acceptanceAmountMinor > 2_147_483_647))
+    throw new Error('physical_acceptance_scope_invalid');
   const hostedEnabled = env.PELECARD_PHYSICAL_HOSTED_ENABLED === 'true';
   const hostedInitEnabled = hostedEnabled &&
     env.PELECARD_PHYSICAL_HOSTED_INIT_ENABLED === 'true';
@@ -36,7 +45,8 @@ export function readPhysicalConfig(env) {
   if (dispatchEnabled && (!Number.isSafeInteger(workerMaxMs) || workerMaxMs < 330_000))
     throw new Error('physical_worker_duration_required');
   return { enabled: true, dispatchEnabled, payperEnabled, hostedEnabled, hostedInitEnabled,
-    hostedUrls, terminalNumber: terminal, user, password, workerMaxMs };
+    hostedUrls, terminalNumber: terminal, user, password, workerMaxMs,
+    acceptanceOrderId, acceptanceAmountMinor: acceptanceOrderId ? acceptanceAmountMinor : null };
 }
 
 export const physicalMerchantPrefix = PHYSICAL_MERCHANT_PREFIX;

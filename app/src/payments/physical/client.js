@@ -45,8 +45,9 @@ export async function requestPhysicalPayment(client, body, fetcher = fetch) {
   return result;
 }
 
-export const getPhysicalAvailability = (client, fetcher = fetch) =>
-  requestPhysicalPayment(client, { action: 'capability' }, fetcher);
+export const getPhysicalAvailability = (client, fetcher = fetch, orderId = null) =>
+  requestPhysicalPayment(client, orderId ? { action: 'capability', orderId } :
+    { action: 'capability' }, fetcher);
 
 // One cashier action performs the existing reservation and one-shot hosted
 // initialization. The provider's own PINPAD button remains mandatory.

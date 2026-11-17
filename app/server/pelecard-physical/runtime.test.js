@@ -37,6 +37,8 @@ test('direct HTTP runtime exposes the guarded queue publisher and capability gat
     PELECARD_PHYSICAL_DISPATCH_ENABLED: 'true', PELECARD_PHYSICAL_DIRECT_PAYPER_ENABLED: 'true',
     PELECARD_PHYSICAL_CLOUD_WORKER_ENABLED: 'true', PELECARD_PHYSICAL_WORKER_MAX_MS: '360000',
     PELECARD_PHYSICAL_DIRECT_UI_ENABLED: 'true',
+    PELECARD_PHYSICAL_ACCEPTANCE_ORDER_ID: '44444444-4444-4444-8444-444444444444',
+    PELECARD_PHYSICAL_ACCEPTANCE_AMOUNT_MINOR: '1500',
     PELECARD_PHYSICAL_TEST_ACTOR_ID: '55555555-5555-4555-8555-555555555555' };
   const runtime = createPhysicalRuntime(env, { authClient: {},
     database: { query: async () => ({ rows: [] }) }, queueSend: async () => ({ id: 'synthetic' }) });
@@ -44,6 +46,8 @@ test('direct HTTP runtime exposes the guarded queue publisher and capability gat
   assert.equal(runtime.payperEnabled, true);
   assert.equal(runtime.cloudWorkerEnabled, true);
   assert.equal(runtime.directUiEnabled, true);
+  assert.equal(runtime.acceptanceOrderId, '44444444-4444-4444-8444-444444444444');
+  assert.equal(runtime.acceptanceAmountMinor, 1500);
   assert.equal('testActorId' in runtime, false);
   assert.equal(typeof runtime.enqueueDirect, 'function');
 });

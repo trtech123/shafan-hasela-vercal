@@ -100,6 +100,9 @@ export function createPhysicalWorkflow(deps) {
     },
     async startOrder({ actorId, actorRole, workstationId, requestKey, orderId, amountMinor }) {
       if (deps.enabled !== true) throw new Error('physical_disabled');
+      if (deps.acceptanceOrderId && (orderId !== deps.acceptanceOrderId ||
+        amountMinor !== deps.acceptanceAmountMinor))
+        throw new Error('physical_acceptance_scope_invalid');
       if (typeof merchantTerminal !== 'string' || !/^\d{10}$/.test(merchantTerminal))
         throw new Error('physical_terminal_required');
       if (!workstationId || !requestKey || !orderId || !validAmount(amountMinor))
@@ -114,6 +117,7 @@ export function createPhysicalWorkflow(deps) {
     },
     async start({ actorId, actorRole, workstationId, requestKey, cart, billing }) {
       if (deps.enabled !== true) throw new Error('physical_disabled');
+      if (deps.acceptanceOrderId) throw new Error('physical_acceptance_scope_invalid');
       if (typeof merchantTerminal !== 'string' || !/^\d{10}$/.test(merchantTerminal))
         throw new Error('physical_terminal_required');
       if (!workstationId || !requestKey || !cart) throw new Error('physical_request_invalid');
@@ -143,6 +147,10 @@ export function createPhysicalWorkflow(deps) {
       if (intent.route === 'hosted') throw new Error('physical_direct_route_required');
       if (!PHYSICAL_REGISTERS.includes(intent.register) || !validAmount(intent.amountMinor))
         throw new Error('physical_intent_invalid');
+      if (deps.acceptanceOrderId && (intent.register !== '004' ||
+        intent.amountMinor !== deps.acceptanceAmountMinor ||
+        await deps.orderForIntent(intent.id) !== deps.acceptanceOrderId))
+        throw new Error('physical_acceptance_scope_invalid');
       const payperSource = deps.payperEnabled === true
         ? await deps.directSource(intent.id) : undefined;
       if (!(await deps.claimDispatch(intent.id))) return { id: intent.id, state: 'pending' };

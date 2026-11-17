@@ -46,6 +46,13 @@ describe('physical database adapter', () => {
     expect(sql).toContain('reserve_physical_order_payment');
     expect(args).toEqual([actor, requestKey, 'FRONT', orderId, 1200]);
   });
+  test('worker scope looks up the immutable intent payment order before J4', async () => {
+    const orderId = '10000000-0000-4000-8000-000000000004';
+    const database = { query: vi.fn(async () => ({ rows: [{ order_id: orderId }] })) };
+    expect(await createPhysicalRepository(database).orderForIntent(paymentId)).toBe(orderId);
+    expect(database.query).toHaveBeenCalledWith(
+      'SELECT order_id FROM public.payment_transactions WHERE id=$1::uuid', [paymentId]);
+  });
   test('rejects invalid person identity before reserving an invoice-linked payment', async () => {
     const database = { query: vi.fn() };
     await expect(createPhysicalRepository(database).reserve({ actorId: actor, workstationId: 'FRONT', requestKey,

@@ -24,6 +24,38 @@ test('dispatch persists the first response before marking pending', async () => 
   assert.deepEqual(await workflow.dispatch(intent.id), { id: intent.id, state: 'pending' });
   assert.deepEqual(events, ['send', 'persist', 'pending']);
 });
+test('worker refuses a non-accepted order before claiming or sending J4', async () => {
+  let claimed = false;
+  const workflow = createPhysicalWorkflow({ enabled: true, dispatchEnabled: true,
+    acceptanceOrderId: '44444444-4444-4444-8444-444444444444',
+    acceptanceAmountMinor: 1500, merchantTerminal: '2814926015', status: async () => intent,
+    orderForIntent: async () => '55555555-5555-4555-8555-555555555555',
+    claimDispatch: async () => { claimed = true; return true; },
+    provider: { send: async () => { throw Error('must not send'); } },
+    markUncertain: async () => {} });
+  await assert.rejects(workflow.dispatch(intent.id), /physical_acceptance_scope_invalid/);
+  assert.equal(claimed, false);
+});
+test('controlled acceptance cannot reserve a standalone cart or a different order', async () => {
+  let reservations = 0;
+  const workflow = createPhysicalWorkflow({ enabled: true,
+    acceptanceOrderId: '44444444-4444-4444-8444-444444444444',
+    acceptanceAmountMinor: 1500, merchantTerminal: '2814926015',
+    registerForWorkstation: async () => '004',
+    reserveOrder: async () => { reservations++; return intent; },
+    reserve: async () => { reservations++; return intent; } });
+  const base = { actorId: 'actor-1', actorRole: 'cashier',
+    workstationId: 'GENERAL', requestKey: 'request-1' };
+  await assert.rejects(workflow.startOrder({ ...base,
+    orderId: '55555555-5555-4555-8555-555555555555', amountMinor: 1500 }),
+  /physical_acceptance_scope_invalid/);
+  await assert.rejects(workflow.startOrder({ ...base,
+    orderId: '44444444-4444-4444-8444-444444444444', amountMinor: 1400 }),
+  /physical_acceptance_scope_invalid/);
+  await assert.rejects(workflow.start({ ...base, cart: {}, billing: {} }),
+    /physical_acceptance_scope_invalid/);
+  assert.equal(reservations, 0);
+});
 
 test('lost provider response stays uncertain and recovery never sends again', async () => {
   let sends = 0;

@@ -161,6 +161,41 @@ test('direct preview cannot reserve an order while financial dispatch is off', a
   assert.equal(response.status, 503);
   assert.deepEqual(s.calls, []);
 });
+test('controlled acceptance exposes readiness only for its order and blocks all other reservations', async () => {
+  const s = setup();
+  const acceptedOrder = '44444444-4444-4444-8444-444444444444';
+  s.deps.directUiEnabled = true;
+  s.deps.dispatchEnabled = true;
+  s.deps.payperEnabled = true;
+  s.deps.cloudWorkerEnabled = true;
+  s.deps.workerMaxMs = 360000;
+  s.deps.acceptanceOrderId = acceptedOrder;
+  s.deps.acceptanceAmountMinor = 1500;
+  const handler = createPhysicalHttpHandler(s.deps);
+  assert.equal((await (await handler(s.request({ action: 'capability' }))).json()).ready, false);
+  assert.equal((await (await handler(s.request({ action: 'capability', orderId: paymentId }))).json()).ready, false);
+  assert.equal((await (await handler(s.request({ action: 'capability', orderId: acceptedOrder }))).json()).ready, true);
+  assert.equal((await handler(s.request({ action: 'prepare', requestKey,
+    workstationCode: 'FRONT_DESK', cart: {}, billing: {} }))).status, 503);
+  assert.equal((await handler(s.request({ action: 'prepareOrder', requestKey,
+    workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 1500 }))).status, 503);
+  assert.equal((await handler(s.request({ action: 'prepareOrder', requestKey,
+    workstationCode: 'FRONT_DESK', orderId: acceptedOrder, amountMinor: 1400 }))).status, 503);
+  assert.deepEqual(s.calls, []);
+  assert.equal((await handler(s.request({ action: 'prepareOrder', requestKey,
+    workstationCode: 'FRONT_DESK', orderId: acceptedOrder, amountMinor: 1500 }))).status, 201);
+  assert.equal(s.calls.length, 1);
+});
+test('controlled acceptance cannot enqueue a different saved intent', async () => {
+  const s = setup();
+  s.deps.acceptanceOrderId = '44444444-4444-4444-8444-444444444444';
+  s.deps.acceptanceAmountMinor = 1500;
+  s.deps.dispatchEnabled = true;
+  s.deps.payperEnabled = true;
+  s.deps.cloudWorkerEnabled = true;
+  s.deps.enqueueDirect = async () => { throw Error('must not enqueue'); };
+  assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'enqueueDirect', requestKey }))).status, 503);
+});
 test('disabled or unauthorized requests cannot reserve', async () => {
   const s = setup(); s.deps.enabled = false;
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepare', requestKey,
