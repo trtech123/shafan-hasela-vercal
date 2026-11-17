@@ -25,25 +25,25 @@ beforeEach(() => state.availability.mockImplementation(async () => ({ visible: t
   route: import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED === 'true' ? 'direct' : 'hosted' })));
 afterEach(() => { cleanup(); state.invoke.mockReset(); state.order.mockReset(); state.physical.mockReset(); state.direct.mockReset(); state.availability.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); localStorage.clear(); });
 
-test('restricted direct cashier cannot start an order payment while dispatch remains off', async () => {
+test.each(['admin', 'קופאי'])('%s sees physical choice but cannot pay while global dispatch is off', async role => {
   vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
   vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED', 'true');
+  state.role = role;
   state.invoke.mockResolvedValue({ data: view(), error: null });
   state.availability.mockResolvedValue({ visible: true, ready: false, route: 'direct' });
   render(<OrderCollection orderId={orderId} />);
   expect(await screen.findByText(/ממתין להפעלה מבוקרת/)).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /שלם במסופון פיזי/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /שלם במסופון פיזי/ })).toBeDisabled();
   expect(state.direct).not.toHaveBeenCalled();
 });
 
-test('physical order option is hidden from other staff despite the browser flag', async () => {
+test('operations staff cannot see an order payment action despite register navigation access', async () => {
   vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
   vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED', 'true');
+  state.role = 'אחמ"ש';
   state.invoke.mockResolvedValue({ data: view(), error: null });
-  state.availability.mockResolvedValue({ visible: false, ready: false, route: 'direct' });
   render(<OrderCollection orderId={orderId} />);
-  await screen.findByText(/ORD-123/);
-  await waitFor(() => expect(state.availability).toHaveBeenCalled());
+  expect(await screen.findByText(/גבייה זמינה למנהל ולקופאי בלבד/)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /שלם במסופון פיזי/ })).not.toBeInTheDocument();
 });
 

@@ -182,11 +182,10 @@ export default function OrderCollection({ orderId }) {
         (view.unresolvedPayment || physicalReview
           ? <Link className="inline-block rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 font-medium text-indigo-900"
               to={`/payment/physical?orderId=${encodeURIComponent(orderId)}`}>בדיקת תשלום קיים במסופון פיזי</Link>
-          : physicalReady
-            ? <Button type="button" disabled={physicalBusy || !accountingReady} onClick={payPhysical}>
+          : physicalAllowed
+            ? <><Button type="button" disabled={!physicalReady || physicalBusy || !accountingReady} onClick={payPhysical}>
                 {physicalBusy ? 'שולח למסופון…' : 'שלם במסופון פיזי'}</Button>
-            : physicalAllowed
-              ? <p role="status">תשלום במסופון ממתין להפעלה מבוקרת.</p>
+                {!physicalReady && <p role="status">תשלום במסופון ממתין להפעלה מבוקרת.</p>}</>
               : <p role="status">תשלום במסופון זמין לקופאי המורשה בלבד.</p>)}
       {import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' && view.balanceMinor > 0 &&
         <p role="status" className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">תשלום במסופון פיזי מושבת עד לאימות מסלול פלאקארד והפעלתו.</p>}

@@ -26,6 +26,19 @@ test('flag exposes separate physical action but cannot dispatch without provider
   expect(onDigital).not.toHaveBeenCalled();
 });
 
+test('authorized cashier can select physical method while global dispatch remains off', () => {
+  const onPhysical = vi.fn();
+  render(<PaymentScreen total={15} cartItems={[{ id: 'p1' }]} onConfirm={vi.fn()} onBack={vi.fn()}
+    onPhysicalTerminal={onPhysical} physicalTerminalVisible physicalTerminalSelectable />);
+  const physical = screen.getByRole('button', { name: /תשלום במסופון פיזי/ });
+  expect(physical).toBeEnabled();
+  fireEvent.click(physical);
+  expect(physical).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByTestId('cashier-pay')).toBeDisabled();
+  expect(screen.getByText(/ממתין להפעלה מבוקרת/)).toBeInTheDocument();
+  expect(onPhysical).not.toHaveBeenCalled();
+});
+
 test('uncertain physical state offers status lookup without another charge', () => {
   const onPhysical = vi.fn();
   const onCheck = vi.fn();

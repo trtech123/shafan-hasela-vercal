@@ -36,18 +36,18 @@ test('authenticated prepare reserves a server-priced physical intent without dis
   assert.equal(s.calls[0][0], 'start');
   assert.equal(s.calls[0][1].actorId, actor.id);
 });
-test('controlled activation admits only the selected cashier to reserve or open hosted EMV', async () => {
+test('physical actions admit existing cashier roles and reject operations staff', async () => {
   const s = setup();
-  s.deps.testActorId = '55555555-5555-4555-8555-555555555555';
   s.deps.hostedEnabled = true;
   s.deps.hostedInitEnabled = true;
+  s.deps.authenticate = async () => ({ id: actor.id, role: 'operations' });
   const prepare = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder',
     requestKey, workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 1500 }));
   const hosted = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'openHosted', requestKey }));
   assert.equal(prepare.status, 403);
   assert.equal(hosted.status, 403);
   assert.deepEqual(s.calls, []);
-  s.deps.testActorId = actor.id;
+  s.deps.authenticate = async () => actor;
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder',
     requestKey, workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 1500 }))).status, 201);
 });
@@ -69,9 +69,9 @@ test('status and verify cannot dispatch a financial request', async () => {
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'verify', requestKey }))).status, 200);
   assert.deepEqual(s.calls, [['verify', paymentId]]);
 });
-test('direct enqueue awaits durable acknowledgement and is restricted to the selected cashier', async () => {
+test('direct enqueue awaits durable acknowledgement and rejects non-cashier roles', async () => {
   const s = setup();
-  s.deps.testActorId = actor.id;
+  s.deps.testActorId = '55555555-5555-4555-8555-555555555555';
   s.deps.dispatchEnabled = true;
   s.deps.cloudWorkerEnabled = true;
   s.deps.payperEnabled = true;
@@ -80,7 +80,7 @@ test('direct enqueue awaits durable acknowledgement and is restricted to the sel
   assert.equal(response.status, 200);
   assert.equal((await response.json()).state, 'reserved');
   assert.deepEqual(s.calls, [['enqueue', paymentId]]);
-  s.deps.testActorId = '55555555-5555-4555-8555-555555555555';
+  s.deps.authenticate = async () => ({ id: actor.id, role: 'operations' });
   assert.equal((await createPhysicalHttpHandler(s.deps)(s.request({ action: 'enqueueDirect', requestKey }))).status, 403);
   assert.deepEqual(s.calls, [['enqueue', paymentId]]);
 });
@@ -128,16 +128,19 @@ test('staff can list enabled workstation assignments without credentials', async
   assert.deepEqual(await response.json(), [{ registerNumber: '004', workstationCode: 'FRONT_DESK', label: 'CT20 front', model: 'CT20' }]);
 });
 
-test('direct cashier capability is visible only to the test actor and stays disabled before dispatch approval', async () => {
+test('direct capability is visible to every cashier role and stays disabled before dispatch approval', async () => {
   const s = setup();
   const handler = createPhysicalHttpHandler(s.deps);
-  s.deps.testActorId = '55555555-5555-4555-8555-555555555555';
   s.deps.directUiEnabled = true;
-  assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
-    { visible: false, ready: false, route: 'direct', registerReady: false });
-  s.deps.testActorId = actor.id;
+  s.deps.testActorId = '55555555-5555-4555-8555-555555555555';
   assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
     { visible: true, ready: false, route: 'direct', registerReady: true });
+  s.deps.authenticate = async () => ({ id: '55555555-5555-4555-8555-555555555555', role: 'admin' });
+  assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
+    { visible: true, ready: false, route: 'direct', registerReady: true });
+  s.deps.authenticate = async () => ({ id: actor.id, role: 'operations' });
+  assert.equal((await handler(s.request({ action: 'capability' }))).status, 403);
+  s.deps.authenticate = async () => actor;
   s.deps.dispatchEnabled = true;
   s.deps.payperEnabled = true;
   s.deps.cloudWorkerEnabled = true;
@@ -153,7 +156,6 @@ test('direct cashier capability is visible only to the test actor and stays disa
 test('direct preview cannot reserve an order while financial dispatch is off', async () => {
   const s = setup();
   s.deps.directUiEnabled = true;
-  s.deps.testActorId = actor.id;
   const response = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepareOrder',
     requestKey, workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 1500 }));
   assert.equal(response.status, 503);

@@ -36,7 +36,6 @@ export function createPhysicalRuntime(env, overrides = {}) {
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
     payperEnabled: config.payperEnabled, cloudWorkerEnabled, directUiEnabled, enqueueDirect,
     hostedEnabled: config.hostedEnabled, hostedInitEnabled: config.hostedInitEnabled,
-    testActorId: env.PELECARD_PHYSICAL_TEST_ACTOR_ID || null,
     workerMaxMs: config.workerMaxMs, database, repository, workflow,
     async authenticate(token) {
       const { data: { user } = {}, error } = await authClient.auth.getUser(token);

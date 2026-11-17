@@ -380,6 +380,8 @@ export default function CashRegister() {
         onPhysicalTerminal={handlePhysicalStart}
         physicalTerminalBusy={physicalBusy}
         physicalTerminalVisible={!physicalFlag || physicalAllowed}
+        physicalTerminalSelectable={Boolean(physicalFlag && physicalAllowed &&
+          canPayOrder && canHostedCart && !linkedOrder?.id && !physicalBusy)}
         physicalTerminalEnabled={Boolean(physicalFlag && physicalReady &&
           canPayOrder && canHostedCart && !linkedOrder?.id && !physicalBusy)}
         pelecardEnabled={canPayOrder && (Boolean(linkedOrder?.id)||canHostedCart)}

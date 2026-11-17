@@ -22,13 +22,9 @@ export function createPhysicalHttpHandler(deps) {
       try { body = JSON.parse(raw); } catch { return json({ error: 'invalid_input' }, 400); }
       if (!body || Array.isArray(body) || typeof body !== 'object')
         return json({ error: 'invalid_input' }, 400);
-      if (deps.testActorId && ['prepare', 'prepareOrder', 'openHosted', 'enqueueDirect'].includes(body.action) &&
-        actor.id !== deps.testActorId) return json({ error: 'physical_test_cashier_only' }, 403);
       if (body.action === 'capability' && Object.keys(body).join(',') === 'action') {
-        const authorized = !deps.testActorId || actor.id === deps.testActorId;
         const direct = deps.directUiEnabled === true;
-        const visible = deps.enabled === true && authorized &&
-          (direct || deps.hostedEnabled === true);
+        const visible = deps.enabled === true && (direct || deps.hostedEnabled === true);
         const devices = visible ? await deps.repository.listDevices() : [];
         const registerReady = devices.some(device => device.registerNumber === '004' &&
           device.model === 'CT20' && typeof device.workstationCode === 'string' && device.workstationCode);

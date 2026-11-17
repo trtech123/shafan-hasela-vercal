@@ -60,6 +60,7 @@ export default function PaymentScreen({
   onPhysicalTerminal = (_billing) => {},
   physicalTerminalVisible = false,
   physicalTerminalEnabled = false,
+  physicalTerminalSelectable = physicalTerminalEnabled,
   physicalTerminalBusy = false,
   physicalTerminalState = null,
   physicalDeviceName = '',
@@ -82,7 +83,8 @@ export default function PaymentScreen({
   const [cashReceived, setCashReceived] = useState(String(total));
   const selectedUnavailable = (selectedMethod === CASH_METHOD && !noncardEnabled.cash) ||
     (selectedMethod === CHECK_METHOD && !noncardEnabled.check) ||
-    (selectedMethod === SPLIT_METHOD && !noncardEnabled.cash);
+    (selectedMethod === SPLIT_METHOD && !noncardEnabled.cash) ||
+    (selectedMethod === 'physical' && !physicalTerminalEnabled);
   // Split builder: starts with the full total on a single cash line.
   const [lines, setLines] = useState([makeLine("מזומן", total)]);
 
@@ -106,6 +108,7 @@ export default function PaymentScreen({
       return onPelecard(checkBilling);
     }
     if (selectedMethod === 'physical') {
+      if (!physicalTerminalEnabled) return;
       if (billingReviewIssues(checkBilling).length) return setPhysicalBillingOpen(true);
       return onPhysicalTerminal(checkBilling);
     }
@@ -423,11 +426,12 @@ export default function PaymentScreen({
           {physicalTerminalVisible && (
             <button type="button" onClick={() => setSelectedMethod('physical')}
               aria-pressed={selectedMethod === 'physical'}
-              disabled={!physicalTerminalEnabled || pelecardBusy || manualSaleSaving}
+              disabled={!physicalTerminalSelectable || pelecardBusy || manualSaleSaving}
               className={`w-full bg-gradient-to-l from-indigo-600 to-indigo-700 rounded-2xl p-5 flex items-center gap-4 text-right disabled:opacity-60 disabled:cursor-not-allowed ${selectedMethod === 'physical' ? 'ring-4 ring-white' : ''}`}>
               <CreditCard className="w-8 h-8 text-white" />
               <span><strong className="block text-lg">תשלום במסופון פיזי</strong>
-                <small className="text-white/70">{physicalTerminalEnabled ? 'הסכום נשלח אוטומטית למסופון המשויך לקופה' : 'תשלום במסופון מושבת עד לאימות מסלול פלאקארד והפעלתו'}</small></span>
+                <small className="text-white/70">{physicalTerminalEnabled ? 'הסכום נשלח אוטומטית למסופון המשויך לקופה' :
+                  physicalTerminalSelectable ? 'תשלום במסופון ממתין להפעלה מבוקרת' : 'תשלום במסופון מושבת עד לאימות מסלול פלאקארד והפעלתו'}</small></span>
             </button>
           )}
           {PAYMENT_METHODS.map(method => {

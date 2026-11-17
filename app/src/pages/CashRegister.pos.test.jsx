@@ -16,7 +16,7 @@ vi.mock('@/api/supabaseClient',()=>({supabase:{from:table=>({select:()=>({eq:asy
 vi.mock('@/components/cashregister/ActivityGrid',()=>({default:({activities,onAdd})=><div>{activities.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add service</button>)}</div>}));
 vi.mock('@/components/cashregister/ProductGrid',()=>({default:({products,onAdd})=><div>{products.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add product</button>)}</div>}));
 vi.mock('@/components/cashregister/Cart',()=>({default:({onCheckout,onLinkOrder})=><div><button onClick={onCheckout}>checkout</button><button onClick={()=>onLinkOrder({id:orderId,order_number:'ORD-1'})}>link order</button></div>}));
-vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalVisible,physicalTerminalEnabled})=><><button disabled={!pelecardEnabled} onClick={()=>onPelecard({kind:'person',name:'Test Customer',identity:'123456782',email:'test@example.com'})}>Pelecard</button>{physicalTerminalVisible&&<button disabled={!physicalTerminalEnabled} onClick={onPhysicalTerminal}>Physical</button>}</>}));
+vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalVisible,physicalTerminalEnabled,physicalTerminalSelectable})=><><button disabled={!pelecardEnabled} onClick={()=>onPelecard({kind:'person',name:'Test Customer',identity:'123456782',email:'test@example.com'})}>Pelecard</button>{physicalTerminalVisible&&<button disabled={!physicalTerminalSelectable} onClick={physicalTerminalEnabled?onPhysicalTerminal:()=>{}}>Physical</button>}</>}));
 vi.mock('@/components/cashregister/ReceiptScreen',()=>({default:()=>null}));
 vi.mock('sonner',()=>({toast:{error:vi.fn()}}));
 vi.mock('@/payments/posPayments',async importOriginal=>({...(await importOriginal()),startPosCheckout:(...args)=>state.start(...args)}));
@@ -28,24 +28,35 @@ beforeEach(()=>state.availability.mockImplementation(async()=>({visible:true,rea
   route:import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED==='true'?'direct':'hosted'})));
 afterEach(()=>{cleanup();state.navigate.mockReset();state.start.mockReset();state.physical.mockReset();state.direct.mockReset();state.availability.mockReset();state.role='admin';vi.unstubAllEnvs();sessionStorage.clear();localStorage.clear()});
 describe('Cash Register hosted routes',()=>{
-  test('restricted physical option stays hidden from a different cashier',async()=>{
+  test('all existing cashiers can select physical method while dispatch is off',async()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
     vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
-    state.availability.mockResolvedValue({visible:false,ready:false,route:'direct'});
+    state.role='קופאי';
+    state.availability.mockResolvedValue({visible:true,ready:false,route:'direct'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));
     await waitFor(()=>expect(state.availability).toHaveBeenCalled());
-    expect(screen.queryByText('Physical')).not.toBeInTheDocument();
+    expect(screen.getByText('Physical')).toBeEnabled();
+    fireEvent.click(screen.getByText('Physical'));
+    expect(state.direct).not.toHaveBeenCalled();
   });
-  test('test cashier sees direct physical option disabled while dispatch is off',async()=>{
+  test('admin can select physical method while dispatch is off',async()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
     vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
     state.availability.mockResolvedValue({visible:true,ready:false,route:'direct'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
     fireEvent.click(screen.getByText('checkout'));
-    expect(await screen.findByText('Physical')).toBeDisabled();
+    expect(await screen.findByText('Physical')).toBeEnabled();
     fireEvent.click(screen.getByText('Physical'));
     expect(state.direct).not.toHaveBeenCalled();
+  });
+  test('operations staff do not gain physical payment permission',async()=>{
+    vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
+    vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
+    state.role='אחמ"ש';
+    render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
+    fireEvent.click(screen.getByText('checkout'));
+    expect(screen.queryByText('Physical')).not.toBeInTheDocument();
   });
   test('unaccepted physical route is shown disabled while standalone digital remains available',async()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','false');

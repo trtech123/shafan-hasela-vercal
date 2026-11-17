@@ -36,12 +36,14 @@ test('direct HTTP runtime exposes the guarded queue publisher and capability gat
     PELECARD_PHYSICAL_PASSWORD: 'secret', PELECARD_PHYSICAL_TERMINAL: '2814926015',
     PELECARD_PHYSICAL_DISPATCH_ENABLED: 'true', PELECARD_PHYSICAL_DIRECT_PAYPER_ENABLED: 'true',
     PELECARD_PHYSICAL_CLOUD_WORKER_ENABLED: 'true', PELECARD_PHYSICAL_WORKER_MAX_MS: '360000',
-    PELECARD_PHYSICAL_DIRECT_UI_ENABLED: 'true' };
+    PELECARD_PHYSICAL_DIRECT_UI_ENABLED: 'true',
+    PELECARD_PHYSICAL_TEST_ACTOR_ID: '55555555-5555-4555-8555-555555555555' };
   const runtime = createPhysicalRuntime(env, { authClient: {},
     database: { query: async () => ({ rows: [] }) }, queueSend: async () => ({ id: 'synthetic' }) });
   assert.equal(runtime.dispatchEnabled, true);
   assert.equal(runtime.payperEnabled, true);
   assert.equal(runtime.cloudWorkerEnabled, true);
   assert.equal(runtime.directUiEnabled, true);
+  assert.equal('testActorId' in runtime, false);
   assert.equal(typeof runtime.enqueueDirect, 'function');
 });
