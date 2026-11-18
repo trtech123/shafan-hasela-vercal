@@ -27,6 +27,26 @@ response reported Payper `Success` and a document URL. This is *provider
 response evidence*, not independent provider portal verification or a recorded
 sale. Email delivery is not evidenced.
 
+Read-only recheck at `2026-11-18T19:25:34Z` found the same one initiated payment,
+uncertain intent, ILS 1.00 order balance, no sale, no Payper ledger row, and no
+accounting event/document for this payment. CT20 004 was enabled and assigned
+to workstation `GENERAL`; this intent remained the sole unresolved intent
+returned for register 004. The database's
+`physical_one_unresolved_per_register` unique index enforces at most one such
+intent for each register. Global database searches found no other recorded
+payment with provider transaction `3199515577`, no sale for this payment ID,
+and no Payper ledger document `200006` or system ID `3650292`.
+
+An independent read-only GET of the Payper-hosted document URL returned HTTP
+200 and a page containing Invoice-Receipt, number `200006`, and ILS 1.00. The
+page did **not** expose the Pelecard transaction ID/UID, issuance history, or
+email delivery status. It therefore verifies that the linked Payper page is
+viewable and displays the expected document, but does not prove acquirer
+settlement, unique issuance, delivery, or exact payment association. The
+Pelecard merchant credentials available in Production are masked by Vercel's
+sensitive-variable controls and there is no connected read-only Pelecard
+portal. Independent Pelecard verification remains mandatory.
+
 ## Mandatory read-only checks immediately before correction
 
 1. Capture a timestamped snapshot of the order, payment, intent, sale,
@@ -53,9 +73,21 @@ sale. Email delivery is not evidenced.
 
 Use the existing idempotent, service-role-only RPCs against **the same payment
 ID**. Re-read the frozen records under the correction session and stop on any
-change. The `observe_physical_result` payload must contain only the verified
-identifiers above, `status: approved`, the exact order intent ID, terminal
-`2814926015`, register `004`, and `amountMinor: 100`.
+change. The exact approval payload, after independent Pelecard verification,
+is:
+
+```json
+{"status":"approved","intentId":"833db2d6-18b1-4d66-bbcd-4360b95a315c","merchantTerminal":"2814926015","register":"004","amountMinor":100,"transactionId":"3199515577","approvalId":"0031683","uid":"26111814405328149265672"}
+```
+
+Prefer one authorized database transaction containing the guarded before
+snapshot, the three RPC calls below, and guarded after-assertions, followed by
+`COMMIT` only if every assertion passes. A failed assertion must `ROLLBACK`,
+leaving the original unresolved state. If this cannot be executed in one
+transaction, perform the RPCs one at a time, snapshot and audit after each,
+and never blindly repeat a call after a timeout. The worker may process an
+`approved` state after step 1; its completion uses the same payment ID and
+unique database sale identity, so inspect that state before continuing.
 
 1. Call `observe_physical_result(payment_id, verified_result_json)` once. It
    records the independently verified approval on the existing intent.

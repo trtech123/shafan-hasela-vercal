@@ -139,7 +139,8 @@ describe("Accounting operations", () => {
     expect(screen.getByText("pelecard-8742")).toBeInTheDocument();
     expect(screen.getByText(/R-921/)).toBeInTheDocument();
     expect(screen.getAllByText("נדרשת התאמה ידנית").length).toBeGreaterThan(0);
-    expect(screen.getByRole("alert")).toHaveTextContent("התשלום נשאר תקין");
+    expect(screen.getAllByRole("alert").some(alert =>
+      alert.textContent.includes("התשלום נשאר תקין"))).toBe(true);
     expect(screen.getByText("2 ניסיונות")).toBeInTheDocument();
     expect(screen.getByText("rivhit_document_idempotency_mismatch")).toBeInTheDocument();
   });

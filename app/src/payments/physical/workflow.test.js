@@ -3,7 +3,8 @@ import { createPhysicalWorkflow } from '../../../server/pelecard-physical/workfl
 
 const cart = { lines: [{ kind: 'product', id: 'p1', qty: 2 }] };
 function dependencies(overrides = {}) {
-  const intent = { id: 'intent-1', amountMinor: 2400, register: '003', state: 'reserved' };
+  const intent = { id: 'intent-1', amountMinor: 2400, register: '003', state: 'reserved',
+    uidRecoveryEnabled: true };
   return {
     enabled: true,
     dispatchEnabled: true,
@@ -13,11 +14,13 @@ function dependencies(overrides = {}) {
     reserveOrder: vi.fn(async ({ orderId }) => ({ ...intent, orderId, amountMinor: 1200 })),
     claimDispatch: vi.fn(async () => true),
     markDispatched: vi.fn(async () => {}),
+    persistFirstResponse: vi.fn(async () => {}),
     markUncertain: vi.fn(async () => {}),
     markDeclined: vi.fn(async () => {}),
     status: vi.fn(async () => ({ ...intent, state: 'pending' })),
     merchantTerminal: '2814926015',
-    provider: { send: vi.fn(async () => ({ requestId: 'provider-1' })), inspect: vi.fn(async () => ({ status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926015', amountMinor: 2400, register: '003', transactionId: 'trx-1', approvalId: 'ok' })) },
+    provider: { send: vi.fn(async () => ({ requestId: 'provider-1', firstResponse: {
+      payment: {}, document: {} } })), inspect: vi.fn(async () => ({ status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926015', amountMinor: 2400, register: '003', transactionId: 'trx-1', approvalId: 'ok' })) },
     finalize: vi.fn(async () => ({ saleId: 'sale-1', documentState: 'eligible' })),
     finishApproved: vi.fn(async () => ({ saleId: 'sale-1', documentState: 'eligible' })),
     ...overrides,
@@ -43,9 +46,10 @@ describe('physical terminal workflow', () => {
     expect(deps.provider.send).not.toHaveBeenCalled();
     expect(result.state).toBe('reserved');
     await createPhysicalWorkflow(deps).dispatch(result.id);
-    expect(deps.provider.send).toHaveBeenCalledWith({
+    expect(deps.provider.send).toHaveBeenCalledWith(expect.objectContaining({
       amountMinor: 2400, register: '003', merchantTerminal: '2814926015', intentId: 'intent-1',
-    });
+      uidRecoveryEnabled: true,
+    }));
     expect(deps.finalize).not.toHaveBeenCalled();
   });
   test('reserves an existing order amount without cart repricing or provider dispatch', async () => {
