@@ -54,7 +54,10 @@ beforeEach(() => {
   state.rpc.mockReset();
   state.success.mockReset();
   state.error.mockReset();
-  state.rpc.mockImplementation(async (name, { p_order_id }) => {
+  state.rpc.mockImplementation(async (name, { p_order_id, p_order_ids }) => {
+    if (name === 'get_order_financial_badges') return { data: p_order_ids.map(id => ({
+      orderId: id, state: 'unpaid', totalMinor: 9800, paidMinor: 0, balanceMinor: 9800,
+    })), error: null };
     const row = state.rows.find(item => item.id === p_order_id);
     if (name === 'archive_order') row.archived_at = '2026-11-04T00:00:00Z';
     if (name === 'restore_order') row.archived_at = null;
@@ -76,6 +79,27 @@ test('billing deep link opens the existing order and returns to eligibility afte
   expect(await screen.findByRole('link', { name: /חזרה לגבייה בקופה/ }, { timeout: 10000 }))
     .toHaveAttribute('href', `/cashregister?orderId=${id}`);
 }, 15000);
+
+test.each([
+  ['paid', 'התשלום בוצע', false],
+  ['review', 'תשלום בבדיקה', false],
+  ['partial', 'שולם חלקית', true],
+  ['unpaid', 'לא שולם', true],
+])('mobile and desktop actions use verified %s status, ignoring the old order label', async (stateName, label, collect) => {
+  const id = 'a0000000-0000-4000-8000-000000000002';
+  state.rows = [{ ...order, id, status: 'מאושר', total_price: 1,
+    payment_status: 'לא שולם' }];
+  state.rpc.mockImplementation(async (name) => name === 'get_order_financial_badges'
+    ? { data: [{ orderId: id, state: stateName, totalMinor: 100,
+      paidMinor: stateName === 'paid' ? 100 : 0,
+      balanceMinor: stateName === 'paid' ? 0 : 100 }], error: null }
+    : { data: null, error: null });
+  render(<Orders />);
+  await waitFor(() => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
+  const links = screen.queryAllByRole('link', { name: 'גבייה בקופה' });
+  if (collect) expect(links).toHaveLength(2);
+  else expect(links).toHaveLength(0);
+});
 
 const confirmArchive = (dialog) => {
   const button = within(dialog).getByRole('button', { name: 'העבר לארכיון' });

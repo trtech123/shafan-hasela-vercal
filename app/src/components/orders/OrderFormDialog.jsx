@@ -13,6 +13,7 @@ import moment from "moment";
 import { findConflictingBlocks, findConflictingOrders } from "@/lib/blocking";
 import { publishOrderChange } from "@/lib/orderEvents";
 import { changedOrderFields } from "@/lib/orderUpdate";
+import OrderCollectionAction from './OrderCollectionAction';
 
 const timeSlots = [
   "07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30",
@@ -42,7 +43,7 @@ const emptyForm = {
   billing_accounting_email: "",
 };
 
-export default function OrderFormDialog({ open, onClose, order, activities, onSaved }) {
+export default function OrderFormDialog({ open, onClose, order, financial, activities, onSaved }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [instructors, setInstructors] = useState([]);
@@ -258,6 +259,8 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
             </p>
           )}
         </DialogHeader>
+        {order?.id && !isTaskMode && <OrderCollectionAction financial={financial}
+          allowed orderId={order.id} />}
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <Tabs defaultValue="order" dir="rtl">
             <TabsList className="w-full">

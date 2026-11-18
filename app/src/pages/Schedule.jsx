@@ -1,13 +1,16 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, CreditCard, Pencil, Trash2, Lock } from "lucide-react";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, Pencil, Trash2, Lock } from "lucide-react";
 import moment from "moment";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { fetchHebcalYear, groupByDate, holidayStyle, subcatLabel } from "@/lib/holidays";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
+import OrderCollectionAction from '../components/orders/OrderCollectionAction';
+import { orderFinancialPresentation } from '@/payments/orderFinancialBadges';
+import { useOrderFinancialBadges } from '@/payments/useOrderFinancialBadges';
 import BlockSlotDialog from "../components/schedule/BlockSlotDialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -43,6 +46,7 @@ export default function Schedule() {
   const isAdminOrOps = user?.role === "admin" || user?.role === 'אחמ"ש';
 
   const [orders, setOrders] = useState([]);
+  const financialByOrder = useOrderFinancialBadges(orders);
   const [activities, setActivities] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [maintenanceTasks, setMaintenanceTasks] = useState([]);
@@ -399,6 +403,7 @@ export default function Schedule() {
               return (
                 <button
                   key={i}
+                  aria-label={day.date.format('YYYY-MM-DD')}
                   onClick={() => setSelectedDate(key)}
                   className={cn(
                     "relative aspect-square p-1 rounded-xl text-sm transition-all duration-200 flex flex-col items-center justify-start",
@@ -567,9 +572,7 @@ export default function Schedule() {
               {selectedOrders.map(order => {
                 const siteStyle = SITE_COLORS[order.site];
                 const activityName = getActivityName(order.activity_id);
-                const handleCollect = () => {
-                  navigate(`/cashregister?orderId=${encodeURIComponent(order.id)}`);
-                };
+                const financial = financialByOrder[order.id];
                 return (
                   <div key={order.id} className={cn("p-4 rounded-xl border space-y-2", siteStyle ? siteStyle.card : "bg-muted/50 border-border")}>
                     <div className="flex items-start justify-between">
@@ -590,19 +593,16 @@ export default function Schedule() {
                       <span>🏔️ {activityName}</span>
                       {order.start_time && <span>🕐 {order.start_time}{order.end_time ? `–${order.end_time}` : ""}</span>}
                       <span>👥 {order.num_participants} משתתפים</span>
-                      <span>תשלום: {order.payment_status || 'לא שולם'}</span>
+                      <span>תשלום: {orderFinancialPresentation(financial).label}</span>
                     </div>
                     {order.internal_notes && (
                       <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 text-amber-800">
                         🔒 הערה פנימית: {order.internal_notes}
                       </div>
                     )}
-                    <button
-                      onClick={handleCollect}
-                      className="w-full flex items-center justify-center gap-1.5 mt-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors"
-                    >
-                      <CreditCard className="w-3.5 h-3.5" /> גבייה בקופה
-                    </button>
+                    <OrderCollectionAction financial={financial} orderId={order.id}
+                      allowed={user?.role === 'admin' || user?.role === 'קופאי'}
+                      className="w-full flex items-center justify-center mt-1 py-1.5" />
                   </div>
                 );
               })}

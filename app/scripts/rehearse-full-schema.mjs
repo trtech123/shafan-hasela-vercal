@@ -446,6 +446,92 @@ try {
       }
     }
   }
+  current = 'read-only order financial badges on full schema';
+  const badgeOrder = '00000000-0000-4000-8000-000000000091';
+  await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,
+    activity_id,activity_date,num_participants,price_per_person,payment_status)
+    VALUES($1,'Badge fixture','0500000000','badge@example.invalid',$2,current_date,1,1000,'לא שולם')`,
+  [badgeOrder, activity]);
+  const badge = async () => {
+    await db.query("SELECT set_config('app.test_role','authenticated',false)");
+    await db.query("SELECT set_config('app.test_uid',$1,false)", [cashier]);
+    try { return (await db.query('SELECT public.get_order_financial_badges(ARRAY[$1::uuid]) AS value',
+      [badgeOrder])).rows[0].value[0]; }
+    finally { await db.query("SELECT set_config('app.test_role','service_role',false)"); }
+  };
+  assert.equal((await badge()).state, 'unpaid');
+  const badgePayment = '00000000-0000-4000-8000-000000000092';
+  await db.query(`INSERT INTO public.payment_transactions(id,provider,operation,order_id,amount,
+    currency,status,idempotency_key,checkout_snapshot,created_by)
+    VALUES($1,'manual_cash','payment',$2,400,'ILS','succeeded','badge-partial',
+      '{"schema_version":1,"items":[]}'::jsonb,$3)`, [badgePayment, badgeOrder, cashier]);
+  const badgeSale = (await db.query(`INSERT INTO public.sales(items,total,method,order_id,
+    payment_transaction_id,created_by) VALUES('[]'::jsonb,400,'מזומן',$1,$2,$3)
+    RETURNING id`, [badgeOrder, badgePayment, cashier])).rows[0].id;
+  await db.query('UPDATE public.payment_transactions SET sale_id=$1 WHERE id=$2',
+    [badgeSale, badgePayment]);
+  await db.query("UPDATE public.orders SET payment_status='שולם חלקית' WHERE id=$1", [badgeOrder]);
+  assert.deepEqual(await badge(), { orderId: badgeOrder, state: 'partial',
+    totalMinor: 100000, paidMinor: 40000, balanceMinor: 60000 });
+  const uncertainBadgePayment = '00000000-0000-4000-8000-000000000093';
+  await db.query(`INSERT INTO public.payment_transactions(id,provider,operation,order_id,amount,
+    currency,status,idempotency_key,checkout_snapshot,created_by)
+    VALUES($1,'pelecard','payment',$2,600,'ILS','initiated','badge-uncertain',
+      '{"schema_version":1,"items":[]}'::jsonb,$3)`, [uncertainBadgePayment, badgeOrder, cashier]);
+  assert.equal((await badge()).state, 'review', 'an initiated charge must block collection');
+  await db.query("UPDATE public.payment_transactions SET status='failed' WHERE id=$1",
+    [uncertainBadgePayment]);
+  assert.equal((await badge()).state, 'partial');
+  const balancePayment = '00000000-0000-4000-8000-000000000094';
+  await db.query(`INSERT INTO public.payment_transactions(id,provider,operation,order_id,amount,
+    currency,status,idempotency_key,checkout_snapshot,created_by)
+    VALUES($1,'manual_cash','payment',$2,600,'ILS','succeeded','badge-balance',
+      '{"schema_version":1,"items":[]}'::jsonb,$3)`, [balancePayment, badgeOrder, cashier]);
+  const balanceSale = (await db.query(`INSERT INTO public.sales(items,total,method,order_id,
+    payment_transaction_id,created_by) VALUES('[]'::jsonb,600,'מזומן',$1,$2,$3)
+    RETURNING id`, [badgeOrder, balancePayment, cashier])).rows[0].id;
+  await db.query('UPDATE public.payment_transactions SET sale_id=$1 WHERE id=$2',
+    [balanceSale, balancePayment]);
+  await db.query("UPDATE public.orders SET payment_status='פלאקארד' WHERE id=$1", [badgeOrder]);
+  assert.equal((await badge()).state, 'paid');
+  await db.query(`INSERT INTO public.payment_transactions(provider,operation,order_id,
+    parent_transaction_id,amount,currency,status,idempotency_key,checkout_snapshot,created_by)
+    VALUES('manual_cash','refund',$1,$2,600,'ILS','refunded','badge-refund',
+      '{"schema_version":1,"items":[]}'::jsonb,$3)`, [badgeOrder, balancePayment, cashier]);
+  assert.equal((await badge()).state, 'review', 'stale paid labels must not hide a refund');
+  await db.query("UPDATE public.orders SET payment_status='שולם חלקית' WHERE id=$1", [badgeOrder]);
+  assert.deepEqual(await badge(), { orderId: badgeOrder, state: 'partial',
+    totalMinor: 100000, paidMinor: 40000, balanceMinor: 60000 });
+  await db.query(`INSERT INTO public.payment_transactions(provider,operation,order_id,
+    parent_transaction_id,amount,currency,status,idempotency_key,checkout_snapshot,created_by)
+    VALUES('manual_cash','void',$1,$2,400,'ILS','voided','badge-void',
+      '{"schema_version":1,"items":[]}'::jsonb,$3)`, [badgeOrder, badgePayment, cashier]);
+  assert.equal((await badge()).state, 'review', 'a stale partial label must not hide a completed void');
+  await db.query("UPDATE public.orders SET payment_status='לא שולם' WHERE id=$1", [badgeOrder]);
+  assert.deepEqual(await badge(), { orderId: badgeOrder, state: 'unpaid',
+    totalMinor: 100000, paidMinor: 0, balanceMinor: 100000 });
+  await db.query("SELECT set_config('app.test_role','authenticated',false)");
+  await db.query("SELECT set_config('app.test_uid',$1,false)", [cashier]);
+  let oversizedBadgeQueryBlocked = false;
+  try { await db.query('SELECT public.get_order_financial_badges(array_fill($1::uuid,ARRAY[101]))',
+    [badgeOrder]); }
+  catch (error) { oversizedBadgeQueryBlocked = /order_financial_badges_invalid/.test(error.message); }
+  assert.equal(oversizedBadgeQueryBlocked, true);
+  await db.query("SELECT set_config('app.test_role','anon',false)");
+  let anonymousBadgeQueryBlocked = false;
+  try { await db.query('SELECT public.get_order_financial_badges(ARRAY[$1::uuid])', [badgeOrder]); }
+  catch (error) { anonymousBadgeQueryBlocked = /order_financial_badges_forbidden/.test(error.message); }
+  assert.equal(anonymousBadgeQueryBlocked, true);
+  const unrelatedInstructor = '00000000-0000-4000-8000-000000000095';
+  await db.query("SELECT set_config('app.test_role','service_role',false)");
+  await db.query('INSERT INTO auth.users(id,email) VALUES($1,$2)',
+    [unrelatedInstructor, 'unrelated-instructor@example.invalid']);
+  await db.query("SELECT set_config('app.test_role','authenticated',false)");
+  await db.query("SELECT set_config('app.test_uid',$1,false)", [unrelatedInstructor]);
+  assert.deepEqual((await db.query('SELECT public.get_order_financial_badges(ARRAY[$1::uuid]) AS value',
+    [badgeOrder])).rows[0].value, [],
+  'an instructor cannot inspect the amount or payment state of another order');
+  await db.query("SELECT set_config('app.test_role','service_role',false)");
   const installed = (await db.query(`SELECT count(*)::int AS tables FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relkind='r'`)).rows[0].tables;
   const functions = (await db.query(`SELECT count(*)::int AS functions FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace

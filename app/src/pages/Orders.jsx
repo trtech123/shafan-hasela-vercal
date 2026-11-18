@@ -9,6 +9,7 @@ import InstructorDailyDialog from "../components/orders/InstructorDailyDialog";
 import OrderConfirmationPDF from "../components/orders/OrderConfirmationPDF";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
 import PaymentBadge from "../components/orders/PaymentBadge";
+import OrderCollectionAction from '../components/orders/OrderCollectionAction';
 import OrderFormDialog from "../components/orders/OrderFormDialog";
 import OrderCustomerLink from "@/components/customers/OrderCustomerLink";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -23,6 +24,8 @@ import { toast } from "sonner";
 import { orderArchiveError } from "@/components/orders/orderArchiveError";
 import { deleteOrder, orderDeleteError } from "@/lib/deleteOrder";
 import { publishOrderChange } from "@/lib/orderEvents";
+import { useOrderFinancialBadges } from '@/payments/useOrderFinancialBadges';
+import { orderFinancialPresentation } from '@/payments/orderFinancialBadges';
 
 const SITES = ["עכו", "טבריה", "נוף הגליל", "שטח", "פודטראק", "קפה אקסטרים"];
 
@@ -34,6 +37,7 @@ export default function Orders() {
   const isAdmin = user?.role === "admin";
 
   const [orders, setOrders] = useState([]);
+  const financialByOrder = useOrderFinancialBadges(orders);
   const [activities, setActivities] = useState([]);
   const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -397,10 +401,12 @@ export default function Orders() {
               </div>
 
               <div className="flex items-center justify-between pt-1">
-                <PaymentBadge status={order.payment_status} />
+                <PaymentBadge financial={financialByOrder[order.id]} />
                 <div className="flex gap-0.5">
                   {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
-                  {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <a href={`/cashregister?orderId=${encodeURIComponent(order.id)}`} className="p-2 text-xs text-primary hover:bg-primary/10 rounded-lg">גבייה בקופה</a>}
+                  {!archiveView && <OrderCollectionAction financial={financialByOrder[order.id]}
+                    allowed={user?.role === 'admin' || user?.role === 'קופאי'} orderId={order.id}
+                    className="p-2 text-xs" />}
                   {!archiveView && <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-2 hover:bg-muted rounded-lg transition-colors">
                     <Pencil className="w-4 h-4 text-muted-foreground" />
                   </button>}
@@ -485,12 +491,14 @@ export default function Orders() {
                     <td className="px-4 py-3">{order.activity_date ? moment(order.activity_date).format("DD/MM/YY") : "—"}</td>
                     <td className="px-4 py-3 hidden sm:table-cell">{order.num_participants || "—"}</td>
                     <td className="px-4 py-3"><OrderStatusBadge status={order.status} /></td>
-                    <td className="px-4 py-3 hidden lg:table-cell"><PaymentBadge status={order.payment_status} /></td>
+                    <td className="px-4 py-3 hidden lg:table-cell"><PaymentBadge financial={financialByOrder[order.id]} /></td>
                     <td className="px-4 py-3 hidden lg:table-cell font-medium">₪{(order.total_price || 0).toLocaleString()}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
                         {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <button type="button" onClick={() => setBillingOrder(order)} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">פרטי חיוב</button>}
-                        {!archiveView && (user?.role === 'admin' || user?.role === 'קופאי') && <a href={`/cashregister?orderId=${encodeURIComponent(order.id)}`} className="p-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg">גבייה בקופה</a>}
+                        {!archiveView && <OrderCollectionAction financial={financialByOrder[order.id]}
+                          allowed={user?.role === 'admin' || user?.role === 'קופאי'} orderId={order.id}
+                          className="p-1.5 text-xs" />}
                         {!archiveView && <button aria-label="עריכת הזמנה" onClick={() => { setEditingOrder(order); setDialogOpen(true); }} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                           <Pencil className="w-4 h-4 text-muted-foreground" />
                         </button>}
@@ -526,13 +534,17 @@ export default function Orders() {
         </div>
       </div>
 
-      <OrderFormDialog open={dialogOpen} onClose={() => setDialogOpen(false)} order={editingOrder} activities={activities} onSaved={loadData} />
+      <OrderFormDialog open={dialogOpen} onClose={() => setDialogOpen(false)} order={editingOrder}
+        financial={financialByOrder[editingOrder?.id]} activities={activities} onSaved={loadData} />
 
       <Dialog open={!!billingOrder} onOpenChange={() => setBillingOrder(null)}>
         <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto">
           <DialogTitle>פרטי חיוב להזמנה</DialogTitle>
           {billingOrder && <OrderCustomerLink order={billingOrder} requirePaymentReady={returnPaymentOrderId === billingOrder.id} onLinked={(saved) => { setBillingOrder(returnPaymentOrderId ? saved : null); loadData(); }} />}
-          {billingOrder && returnPaymentOrderId === billingOrder.id && billingOrder.customer_snapshot_id && <a className="text-primary underline" href={`/cashregister?orderId=${encodeURIComponent(billingOrder.id)}`}>חזרה לגבייה בקופה</a>}
+          {billingOrder && returnPaymentOrderId === billingOrder.id && billingOrder.customer_snapshot_id &&
+            (orderFinancialPresentation(financialByOrder[billingOrder.id]).canCollect
+              ? <a className="text-primary underline" href={`/cashregister?orderId=${encodeURIComponent(billingOrder.id)}`}>חזרה לגבייה בקופה</a>
+              : <span role="status">{orderFinancialPresentation(financialByOrder[billingOrder.id]).label}</span>)}
         </DialogContent>
       </Dialog>
 
