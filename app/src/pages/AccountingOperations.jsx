@@ -22,6 +22,7 @@ import PayperManualReview from "@/components/accounting/PayperManualReview";
 import PayperDispatchStatus from "@/components/accounting/PayperDispatchStatus";
 import PelecardPendingReview from "@/components/accounting/PelecardPendingReview";
 import PayperIssuedDocuments from "@/components/accounting/PayperIssuedDocuments";
+import PayperUnlinkedEvidence from "@/components/accounting/PayperUnlinkedEvidence";
 import PayperNoncardObligations from "@/components/accounting/PayperNoncardObligations";
 
 const OPERATION_COLUMNS = [
@@ -249,6 +250,7 @@ export default function AccountingOperations() {
       {user?.role === 'admin' && <><PayperDispatchStatus /><PayperManualReview /><PayperNoncardObligations /></>}
       {user?.role === 'admin' && <PelecardPendingReview />}
       {user?.role === 'admin' && <PayperIssuedDocuments />}
+      {user?.role === 'admin' && <PayperUnlinkedEvidence />}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="סיכום הנהלת חשבונות">
         <SummaryCard icon={CheckCircle2} label="תשלומים שהצליחו" value={counts.payments} tone="green" />

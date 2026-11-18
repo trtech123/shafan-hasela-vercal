@@ -387,6 +387,11 @@ try {
         await db.query('SELECT public.link_order_customer($1,$2,0)', [directOrder, customer]);
         const direct = (await db.query(`SELECT public.reserve_physical_order_payment(
           $1,gen_random_uuid(),'GENERAL',$2,1500) AS value`, [cashier, directOrder])).rows[0].value;
+        const recoveryFlag = (await db.query(`SELECT uid_recovery_enabled AS enabled
+          FROM public.physical_payment_intents WHERE payment_id=$1`,
+        [direct.paymentId])).rows[0].enabled;
+        assert.equal(recoveryFlag, true,
+          'new direct J4 intents must be eligible for UID recovery');
         assert.equal((await db.query('SELECT public.claim_physical_dispatch($1) AS value',
           [direct.paymentId])).rows[0].value, true);
         assert.equal((await db.query('SELECT public.claim_physical_dispatch($1) AS value',
@@ -422,6 +427,7 @@ try {
         const saved = (await db.query('SELECT public.get_physical_worker_intent($1) AS value',
           [direct.paymentId])).rows[0].value;
         assert.equal(saved.firstResponse.document.number, '200005');
+        assert.equal(saved.uidRecoveryEnabled, true);
         await db.query('SELECT public.observe_physical_result($1,$2::jsonb)', [direct.paymentId,
           JSON.stringify({ status: 'approved', intentId: direct.paymentId,
             merchantTerminal: '2814926015', register: '004', amountMinor: 1500,

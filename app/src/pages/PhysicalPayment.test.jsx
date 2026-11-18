@@ -72,7 +72,7 @@ describe('physical POS checkout', () => {
     vi.mocked(requestPhysicalPayment).mockImplementation(async (_client, body) =>
       body.action === 'devices' ? [] : paid);
     render(<MemoryRouter initialEntries={['/payment/physical']}><PhysicalPayment /></MemoryRouter>);
-    expect(await screen.findByText(/פרטי החשבונית דורשים התאמה/)).toBeTruthy();
+    expect(await screen.findByText(/המסמך החשבונאי ממתין לאימות או להתאמה/)).toBeTruthy();
     expect(localStorage.getItem('pelecard.physicalPending.v1')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /בדיקה חוזרת של החשבונית/ }));
     await waitFor(() => expect(requestPhysicalPayment).toHaveBeenCalledWith(expect.anything(),

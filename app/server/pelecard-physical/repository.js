@@ -1,6 +1,7 @@
 import { createPhysicalCartCalculator } from './cart.js';
 import { createPhysicalRegisterResolver } from './device-settings.js';
 import { validIsraeliIdentity } from '../../src/payments/payperBilling.js';
+import { projectUnlinkedDocumentEvidence } from './direct-evidence.js';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const register = /^(003|004|005|006)$/;
@@ -56,6 +57,41 @@ export function createPhysicalRepository(database) {
         WHERE d.enabled AND c.active ORDER BY d.register_number
       `);
       return rows;
+    },
+    async orderEvidence(orderId) {
+      if (!uuid.test(orderId)) throw new Error('physical_order_invalid');
+      const { rows } = await database.query(`
+        SELECT i.payment_id AS "paymentId", i.state, i.amount_minor AS "amountMinor",
+          i.first_response AS "firstResponse", i.uid_recovery_enabled AS "uidRecoveryEnabled"
+        FROM public.physical_payment_intents i
+        JOIN public.payment_transactions p ON p.id=i.payment_id
+        LEFT JOIN public.payper_document_ledger l ON l.payment_id=i.payment_id
+        WHERE p.order_id=$1::uuid AND i.route='direct'
+          AND i.first_response->'document'->>'state'='succeeded'
+          AND (l.payment_id IS NULL OR l.state<>'succeeded')
+        ORDER BY i.created_at DESC LIMIT 20
+      `, [orderId]);
+      return rows.map(projectUnlinkedDocumentEvidence).filter(Boolean);
+    },
+    async unlinkedEvidence() {
+      const { rows } = await database.query(`
+        SELECT i.payment_id AS "paymentId", i.state, i.amount_minor AS "amountMinor",
+          i.first_response AS "firstResponse", i.uid_recovery_enabled AS "uidRecoveryEnabled",
+          p.order_id AS "orderId",
+          o.order_number AS "orderNumber"
+        FROM public.physical_payment_intents i
+        JOIN public.payment_transactions p ON p.id=i.payment_id
+        LEFT JOIN public.orders o ON o.id=p.order_id
+        LEFT JOIN public.payper_document_ledger l ON l.payment_id=i.payment_id
+        WHERE i.route='direct' AND i.first_response->'document'->>'state'='succeeded'
+          AND (l.payment_id IS NULL OR l.state<>'succeeded')
+        ORDER BY i.created_at DESC LIMIT 100
+      `);
+      return rows.map(row => {
+        const evidence = projectUnlinkedDocumentEvidence(row);
+        return evidence ? { ...evidence, orderId: row.orderId,
+          orderNumber: row.orderNumber } : null;
+      }).filter(Boolean);
     },
     calculateCart: (cart, actorRole) => createPhysicalCartCalculator(database, actorRole)(cart),
     async reserve({ actorId, workstationId, requestKey, register: assigned, amountMinor, items, discount, billing }) {

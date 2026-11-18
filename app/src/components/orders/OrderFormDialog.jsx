@@ -258,6 +258,11 @@ export default function OrderFormDialog({ open, onClose, order, activities, onSa
             </p>
           )}
         </DialogHeader>
+        {order?.id && !isTaskMode && <a
+          href={`/cashregister?orderId=${encodeURIComponent(order.id)}`}
+          className="text-sm font-medium text-primary underline">
+          צפייה ביתרה, בתשלומים ובחשבוניות ההזמנה
+        </a>}
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <Tabs defaultValue="order" dir="rtl">
             <TabsList className="w-full">

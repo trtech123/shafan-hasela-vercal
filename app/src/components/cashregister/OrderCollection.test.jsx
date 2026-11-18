@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({ role: 'admin', invoke: vi.fn(), order: vi.fn(), physical: vi.fn(), direct: vi.fn(), availability: vi.fn() }));
+const state = vi.hoisted(() => ({ role: 'admin', invoke: vi.fn(), order: vi.fn(), physical: vi.fn(), direct: vi.fn(), availability: vi.fn(), evidence: vi.fn() }));
 vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: state.role } }) }));
 vi.mock('react-router-dom', () => ({ Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a> }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: state.invoke },
@@ -11,6 +11,7 @@ vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: state.
 vi.mock('@/components/customers/OrderCustomerLink', () => ({ default: () => <p>customer link control</p> }));
 vi.mock('@/payments/physical/client', () => ({ startHostedPhysical: (...args) => state.physical(...args),
   startDirectPhysical: (...args) => state.direct(...args),
+  getOrderPhysicalEvidence: (...args) => state.evidence(...args),
   getPhysicalAvailability: (...args) => state.availability(...args) }));
 import OrderCollection from './OrderCollection';
 
@@ -23,7 +24,24 @@ const view = (paidMinor = 0) => ({ orderId, orderNumber: 'ORD-123', clientName: 
   payments: paidMinor ? [{ id: 'p1', status: 'succeeded', amountMinor: paidMinor }] : [], documents: [] });
 beforeEach(() => state.availability.mockImplementation(async () => ({ visible: true, ready: true,
   route: import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED === 'true' ? 'direct' : 'hosted' })));
-afterEach(() => { cleanup(); state.invoke.mockReset(); state.order.mockReset(); state.physical.mockReset(); state.direct.mockReset(); state.availability.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); localStorage.clear(); });
+beforeEach(() => state.evidence.mockResolvedValue([]));
+afterEach(() => { cleanup(); state.invoke.mockReset(); state.order.mockReset(); state.physical.mockReset(); state.direct.mockReset(); state.availability.mockReset(); state.evidence.mockReset(); state.role = 'admin'; vi.unstubAllEnvs(); localStorage.clear(); });
+
+test('shows the issued Payper document as unlinked evidence while order remains unpaid', async () => {
+  vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
+  state.invoke.mockResolvedValue({ data: { ...view(), unresolvedPayment: true }, error: null });
+  state.evidence.mockResolvedValue([{ paymentId: '833db2d6-18b1-4d66-bbcd-4360b95a315c',
+    paymentState: 'uncertain', amountMinor: 100, providerTransactionId: '3199515577',
+    documentNumber: '200006', linked: false,
+    documentUrl: 'https://app.payper.co.il/public/invoice_show/3650292?ak=abcdefghijklmnop' }]);
+  render(<OrderCollection orderId={orderId} />);
+  expect(await screen.findByText(/200006/)).toBeInTheDocument();
+  expect(screen.getByText(/טרם קושר/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /צפייה במסמך/ })).toHaveAttribute('href',
+    'https://app.payper.co.il/public/invoice_show/3650292?ak=abcdefghijklmnop');
+  expect(screen.getByText('0.00 ₪')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /שלם במסופון פיזי/ })).toBeNull();
+});
 
 test.each(['admin', 'קופאי'])('%s sees physical choice but cannot pay while global dispatch is off', async role => {
   vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');

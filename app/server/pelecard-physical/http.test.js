@@ -130,6 +130,27 @@ test('staff can list enabled workstation assignments without credentials', async
   assert.deepEqual(await response.json(), [{ registerNumber: '004', workstationCode: 'FRONT_DESK', label: 'CT20 front', model: 'CT20' }]);
 });
 
+test('staff can read unlinked provider document evidence for one order without financial writes', async () => {
+  const s = setup();
+  const evidence = [{ paymentId, paymentState: 'uncertain', amountMinor: 100,
+    documentNumber: '200006', linked: false }];
+  s.deps.repository.orderEvidence = async id => { s.calls.push(['orderEvidence', id]); return evidence; };
+  const response = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'orderEvidence', orderId: paymentId }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), evidence);
+  assert.deepEqual(s.calls, [['orderEvidence', paymentId]]);
+});
+
+test('only an administrator can list all unlinked provider documents', async () => {
+  const s = setup();
+  s.deps.repository.unlinkedEvidence = async () => { s.calls.push(['unlinkedEvidence']); return []; };
+  const handler = createPhysicalHttpHandler(s.deps);
+  assert.equal((await handler(s.request({ action: 'unlinkedEvidence' }))).status, 403);
+  s.deps.authenticate = async () => ({ ...actor, role: 'admin' });
+  assert.equal((await handler(s.request({ action: 'unlinkedEvidence' }))).status, 200);
+  assert.deepEqual(s.calls, [['unlinkedEvidence']]);
+});
+
 test('direct capability is visible to every authenticated role and stays disabled before dispatch approval', async () => {
   const s = setup();
   const handler = createPhysicalHttpHandler(s.deps);
