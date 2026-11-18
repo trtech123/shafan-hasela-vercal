@@ -41,6 +41,13 @@ export function createPhysicalHttpHandler(deps) {
       }
       if (body.action === 'devices' && Object.keys(body).join(',') === 'action')
         return json(await deps.repository.listDevices(), 200);
+      if (body.action === 'orderEvidence' &&
+        Object.keys(body).sort().join(',') === 'action,orderId' && uuid.test(body.orderId))
+        return json(await deps.repository.orderEvidence(body.orderId), 200);
+      if (body.action === 'unlinkedEvidence' && Object.keys(body).join(',') === 'action')
+        return actor.role === 'admin'
+          ? json(await deps.repository.unlinkedEvidence(), 200)
+          : json({ error: 'forbidden' }, 403);
       if (body.action === 'prepare') {
         if (!deps.enabled) return json({ error: 'physical_disabled' }, 503);
         if (deps.acceptanceOrderId) return json({ error: 'physical_acceptance_order_only' }, 503);

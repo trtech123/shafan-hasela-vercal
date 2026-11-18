@@ -51,7 +51,7 @@ test('standalone cashier shows a 422 rejection for the reported activity after t
   }));
   expect(state.invoke.mock.calls.filter(([name]) => name === 'pelecard-pos-payment')).toHaveLength(1);
   expect(state.navigate).not.toHaveBeenCalled();
-  expect(screen.getByTestId('cashier-pay')).toHaveTextContent('שלם');
+  expect(screen.getByTestId('cashier-pay')).toHaveTextContent('אשר תשלום מאובטח 180 ₪');
 });
 
 test('selected discount type with no amount pays the full ₪180 activity price without sending a zero discount', async () => {

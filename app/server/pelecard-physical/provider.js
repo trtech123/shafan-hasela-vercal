@@ -2,6 +2,7 @@
 // variant with empty card fields and a five-minute response window.
 import { buildPhysicalPayperParameters } from './hosted-contract.js';
 import { projectDirectFirstResponse } from './direct-first-response.js';
+import { directParamX, expectedParamX } from './reference.js';
 const BASE = 'https://gateway21.pelecard.biz/services/';
 const DEBIT = `${BASE}DebitRegularType`;
 const LOOKUP = `${BASE}CheckGoodParamXEMV`;
@@ -50,10 +51,12 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
   }
 
   return {
-    async send({ merchantTerminal, register, amountMinor, intentId, payperSource }) {
+    async send({ merchantTerminal, register, amountMinor, intentId, payperSource,
+      uidRecoveryEnabled }) {
       if (merchantTerminal !== terminalNumber || !registerNumber.test(register) ||
         !Number.isSafeInteger(amountMinor) || amountMinor < 1 || amountMinor > 2_147_483_647 ||
-        typeof intentId !== 'string' || !reference.test(intentId))
+        typeof intentId !== 'string' || !reference.test(intentId) ||
+        uidRecoveryEnabled !== true)
         throw new Error('physical_dispatch_invalid');
       if (payperSource && (payperSource.id !== intentId ||
         payperSource.register !== register || payperSource.amountMinor !== amountMinor))
@@ -63,7 +66,7 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
       const body = await post(DEBIT, {
         shopNumber: register, creditCard: '', creditCardDateMmYy: '', token: '',
         total: String(amountMinor), currency: '1', cvv2: '', id: '',
-        authorizationNumber: '', paramX: intentId, QAResultStatus: '',
+        authorizationNumber: '', paramX: directParamX(intentId), QAResultStatus: '',
         eci: '', xid: '', cavv: '',
         ...(payperSource ? { PayperParameters: buildPhysicalPayperParameters(payperSource) } : {}),
       }, 300_000);
@@ -89,11 +92,41 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
       const body = await post(DETAILS, { debitTrxId: '', Uid: uid, UserKey: '', AuthNo: '', token: '' });
       return { ...safeProjection(body.ResultData ?? body.Output ?? body), StatusCode: statusCode(body.StatusCode) };
     },
+    async confirmFirstResponse(intent, firstResponse) {
+      const payment = firstResponse?.payment;
+      if (!intent || !reference.test(intent.id ?? '') ||
+        !registerNumber.test(intent.register ?? '') || !Number.isSafeInteger(intent.amountMinor) ||
+        payment?.statusCode !== '000' || payment.shvaResult !== '000' ||
+        payment.shvaResultEmv !== '000' || payment.currency !== '1' ||
+        payment.amountMinor !== intent.amountMinor ||
+        intent.uidRecoveryEnabled !== true ||
+        payment.paramX !== directParamX(intent.id) ||
+        !transactionId.test(payment.transactionId ?? '') ||
+        !transactionId.test(payment.uid ?? '') ||
+        !transactionId.test(payment.approvalId ?? ''))
+        throw new Error('physical_result_unverified');
+      const detail = await this.getTransactionDetailsByUid(payment.uid);
+      if (detail.StatusCode !== '000' ||
+        String(detail.UID ?? detail.Uid ?? detail.uid ?? '') !== payment.uid ||
+        String(detail.termNo ?? '') !== intent.register ||
+        String(detail.Amount ?? detail.amount ?? '') !== String(intent.amountMinor) ||
+        String(detail.retailer ?? '') !== terminalNumber ||
+        (detail.PelecardTransactionId != null &&
+          String(detail.PelecardTransactionId) !== payment.transactionId) ||
+        (detail.DebitApproveNumber != null &&
+          String(detail.DebitApproveNumber) !== payment.approvalId) ||
+        (detail.ShvaResult != null && String(detail.ShvaResult) !== '000'))
+        throw new Error('physical_result_unverified');
+      return { status: 'approved', intentId: intent.id, merchantTerminal: terminalNumber,
+        register: intent.register, amountMinor: intent.amountMinor,
+        transactionId: payment.transactionId, approvalId: payment.approvalId, uid: payment.uid };
+    },
     async inspect(intent) {
       if (!intent || typeof intent.id !== 'string' || !reference.test(intent.id) ||
         !registerNumber.test(intent.register) || !Number.isSafeInteger(intent.amountMinor))
         throw new Error('physical_intent_invalid');
-      const found = await this.lookupByParamX(intent.id);
+      const paramX = expectedParamX(intent);
+      const found = await this.lookupByParamX(paramX);
       // A successful transport/status lookup alone cannot establish approval.
       // Until Pelecard supplies concrete EMV examples, accept only one row with
       // every correlation field and an explicit approved Shva result.
@@ -105,7 +138,7 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
       const uid = String(row.UID ?? row.Uid ?? '');
       if (String(row.TerminalNumber ?? '') !== terminalNumber ||
         String(row.DebitTotal ?? '') !== String(intent.amountMinor) ||
-        row.AdditionalDetailsParamX !== intent.id ||
+        row.AdditionalDetailsParamX !== paramX ||
         String(row.ShvaResult ?? '') !== '000' ||
         !transactionId.test(providerTransactionId) || !transactionId.test(uid) ||
         !transactionId.test(approvalId))

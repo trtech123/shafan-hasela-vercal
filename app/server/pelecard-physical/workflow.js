@@ -146,6 +146,7 @@ export function createPhysicalWorkflow(deps) {
       const intent = await deps.status(intentId);
       if (!intent) throw new Error('physical_intent_missing');
       if (intent.route === 'hosted') throw new Error('physical_direct_route_required');
+      if (intent.uidRecoveryEnabled !== true) throw new Error('physical_direct_schema_required');
       if (!PHYSICAL_REGISTERS.includes(intent.register) || !validAmount(intent.amountMinor))
         throw new Error('physical_intent_invalid');
       if (deps.acceptanceOrderId && (intent.register !== '004' ||
@@ -156,12 +157,24 @@ export function createPhysicalWorkflow(deps) {
         ? await deps.directSource(intent.id) : undefined;
       if (!(await deps.claimDispatch(intent.id))) return { id: intent.id, state: 'pending' };
       let state = 'pending';
+      let completed = null;
       try {
         const result = await deps.provider.send({ merchantTerminal,
           register: intent.register, amountMinor: intent.amountMinor, intentId: intent.id,
-          payperSource });
+          payperSource, uidRecoveryEnabled: true });
         await deps.persistFirstResponse(intent.id, result.firstResponse);
         await deps.markDispatched(intent.id, result);
+        if (typeof deps.provider.confirmFirstResponse === 'function') {
+          // This path runs only for the new one-shot dispatch. Historical uncertain
+          // attempts still require separate reconciliation evidence and approval.
+          const confirmation = await deps.provider.confirmFirstResponse(intent, result.firstResponse);
+          if (!validApproval(confirmation, intent, merchantTerminal))
+            throw new Error('physical_result_unverified');
+          const finalized = await deps.finalize(intent.id, confirmation);
+          completed = { id: intent.id, state: 'succeeded', ...finalized,
+            documentState: await reconcileDirect({ ...intent,
+              firstResponse: result.firstResponse }, confirmation) };
+        }
       } catch (error) {
         logDiagnostic('physical_dispatch_unresolved', { paymentId: intent.id,
           reason: /^physical_[a-z0-9_]+$/.test(error?.message || '')
@@ -171,7 +184,7 @@ export function createPhysicalWorkflow(deps) {
         await deps.markUncertain(intent.id);
         state = 'uncertain';
       }
-      return { id: intent.id, state };
+      return completed ?? { id: intent.id, state };
     },
     async verify(intentId) {
       if (typeof merchantTerminal !== 'string' || !/^\d{10}$/.test(merchantTerminal))
@@ -192,11 +205,20 @@ export function createPhysicalWorkflow(deps) {
       let result;
       try { result = await deps.provider.inspect(intent); }
       catch (error) {
-        logDiagnostic('physical_provider_inspection_unresolved', { paymentId: intent.id,
-          reason: /^physical_[a-z0-9_]+$/.test(error?.message || '')
-            ? error.message : 'physical_unclassified' });
-        await deps.markUncertain(intent.id);
-        return { id: intent.id, state: 'uncertain' };
+        // The migration marks only first responses captured after rollout as
+        // eligible. Existing uncertain payments remain held for audited review.
+        if (intent.uidRecoveryEnabled === true && intent.firstResponse &&
+          typeof deps.provider.confirmFirstResponse === 'function') {
+          try { result = await deps.provider.confirmFirstResponse(intent, intent.firstResponse); }
+          catch { /* Keep the same unresolved intent; never replay J4. */ }
+        }
+        if (!result) {
+          logDiagnostic('physical_provider_inspection_unresolved', { paymentId: intent.id,
+            reason: /^physical_[a-z0-9_]+$/.test(error?.message || '')
+              ? error.message : 'physical_unclassified' });
+          await deps.markUncertain(intent.id);
+          return { id: intent.id, state: 'uncertain' };
+        }
       }
       if (result?.status === 'declined' && validCorrelation(result, intent, merchantTerminal)) {
         await deps.markDeclined(intent.id, result);

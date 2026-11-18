@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPhysicalWorkflow } from './workflow.js';
 
-const intent = { id: 'intent-1', state: 'reserved', route: 'direct', register: '004', amountMinor: 1500 };
+const intent = { id: 'intent-1', state: 'reserved', route: 'direct', register: '004',
+  amountMinor: 1500, uidRecoveryEnabled: true };
 const approved = { status: 'approved', intentId: 'intent-1', merchantTerminal: '2814926015',
   register: '004', amountMinor: 1500, transactionId: 'trx-1', approvalId: 'auth-1', uid: 'uid-1' };
 const firstResponse = { payment: { transactionId: 'trx-1', amountMinor: 1500 },
@@ -23,6 +24,39 @@ test('dispatch persists the first response before marking pending', async () => 
     markDispatched: async () => events.push('pending') });
   assert.deepEqual(await workflow.dispatch(intent.id), { id: intent.id, state: 'pending' });
   assert.deepEqual(events, ['send', 'persist', 'pending']);
+});
+
+test('new J4 dispatch confirms saved response by UID and links one sale and invoice', async () => {
+  const events = [];
+  const workflow = createPhysicalWorkflow({ enabled: true, dispatchEnabled: true,
+    payperEnabled: true, merchantTerminal: '2814926015', status: async () => intent,
+    claimDispatch: async () => true, directSource: async () => ({ ...intent }),
+    provider: { send: async () => { events.push('send'); return { firstResponse }; },
+      confirmFirstResponse: async (saved, response) => {
+        assert.equal(saved.id, intent.id); assert.deepEqual(response, firstResponse);
+        events.push('confirm'); return approved;
+      } },
+    persistFirstResponse: async () => events.push('persist'),
+    markDispatched: async () => events.push('pending'),
+    finalize: async () => { events.push('sale'); return { saleId: 'sale-1' }; },
+    recordDirectDocument: async () => events.push('invoice') });
+  const result = await workflow.dispatch(intent.id);
+  assert.equal(result.state, 'succeeded');
+  assert.equal(result.documentState, 'succeeded');
+  assert.deepEqual(events, ['send', 'persist', 'pending', 'confirm', 'sale', 'invoice']);
+});
+
+test('unverifiable new J4 response is retained as uncertain and never sent twice', async () => {
+  let sends = 0;
+  const workflow = createPhysicalWorkflow({ enabled: true, dispatchEnabled: true,
+    merchantTerminal: '2814926015', status: async () => intent,
+    claimDispatch: async () => true,
+    provider: { send: async () => { sends++; return { firstResponse }; },
+      confirmFirstResponse: async () => { throw Error('physical_result_unverified'); } },
+    persistFirstResponse: async () => {}, markDispatched: async () => {},
+    markUncertain: async () => {} });
+  assert.equal((await workflow.dispatch(intent.id)).state, 'uncertain');
+  assert.equal(sends, 1);
 });
 test('worker refuses a non-accepted order before claiming or sending J4', async () => {
   let claimed = false;
@@ -82,6 +116,45 @@ test('unresolved recovery reports only a sanitized provider code and never resen
   assert.equal(sends, 0);
   assert.deepEqual(warnings, [{ event: 'physical_provider_inspection_unresolved',
     detail: { paymentId: intent.id, reason: 'physical_result_unverified_510_0' } }]);
+});
+
+test('worker interruption recovers a new saved J4 response by UID without resending', async () => {
+  const events = [];
+  const workflow = createPhysicalWorkflow({ merchantTerminal: '2814926015',
+    status: async () => ({ ...intent, state: 'uncertain', uidRecoveryEnabled: true, firstResponse }),
+    provider: { inspect: async () => { throw Error('physical_result_unverified_000_0'); },
+      confirmFirstResponse: async () => { events.push('uid'); return approved; },
+      send: async () => { throw Error('must not send'); } },
+    finalize: async () => { events.push('sale'); return { saleId: 'sale-1' }; },
+    recordDirectDocument: async () => { events.push('invoice'); },
+    markUncertain: async () => { throw Error('must not mark uncertain'); } });
+  const result = await workflow.verify(intent.id);
+  assert.equal(result.state, 'succeeded');
+  assert.equal(result.documentState, 'succeeded');
+  assert.deepEqual(events, ['uid', 'sale', 'invoice']);
+});
+
+test('pre-migration unresolved attempt is never auto-finalized from its saved response', async () => {
+  let uidChecks = 0;
+  const workflow = createPhysicalWorkflow({ merchantTerminal: '2814926015',
+    status: async () => ({ ...intent, state: 'uncertain',
+      uidRecoveryEnabled: false, firstResponse }),
+    provider: { inspect: async () => { throw Error('physical_result_unverified_000_0'); },
+      confirmFirstResponse: async () => { uidChecks++; return approved; } },
+    markUncertain: async () => {} });
+  assert.equal((await workflow.verify(intent.id)).state, 'uncertain');
+  assert.equal(uidChecks, 0);
+});
+
+test('pre-migration reserved intent cannot dispatch with the new ParamX format', async () => {
+  let claims = 0;
+  const workflow = createPhysicalWorkflow({ enabled: true, dispatchEnabled: true,
+    merchantTerminal: '2814926015',
+    status: async () => ({ ...intent, uidRecoveryEnabled: false }),
+    claimDispatch: async () => { claims++; return true; },
+    provider: { send: async () => { throw Error('must not charge'); } } });
+  await assert.rejects(workflow.dispatch(intent.id), /physical_direct_schema_required/);
+  assert.equal(claims, 0);
 });
 
 test('verified payment associates the saved first-response invoice with its sale', async () => {

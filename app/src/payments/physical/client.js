@@ -37,6 +37,14 @@ export async function requestPhysicalPayment(client, body, fetcher = fetch) {
       throw new Error('physical_status_unavailable');
     return result;
   }
+  if (body.action === 'orderEvidence' || body.action === 'unlinkedEvidence') {
+    if (!Array.isArray(result) || result.length > (body.action === 'orderEvidence' ? 20 : 100) || result.some(row =>
+      !uuid.test(row?.paymentId) || row.linked !== false ||
+      !states.has(row.paymentState) || !Number.isSafeInteger(row.amountMinor) ||
+      row.amountMinor < 1 || !/^[1-9][0-9]*$/.test(row.documentNumber ?? '') ||
+      typeof row.documentUrl !== 'string')) throw new Error('physical_status_unavailable');
+    return result;
+  }
   if (!uuid.test(result?.paymentId) || !states.has(result.state) ||
     !register.test(result.registerNumber) || !Number.isSafeInteger(result.amountMinor) ||
     result.amountMinor < 1 || (result.saleId !== null && !uuid.test(result.saleId)) ||
@@ -48,6 +56,12 @@ export async function requestPhysicalPayment(client, body, fetcher = fetch) {
 export const getPhysicalAvailability = (client, fetcher = fetch, orderId = null) =>
   requestPhysicalPayment(client, orderId ? { action: 'capability', orderId } :
     { action: 'capability' }, fetcher);
+
+export const getOrderPhysicalEvidence = (client, orderId, fetcher = fetch) =>
+  requestPhysicalPayment(client, { action: 'orderEvidence', orderId }, fetcher);
+
+export const getUnlinkedPhysicalEvidence = (client, fetcher = fetch) =>
+  requestPhysicalPayment(client, { action: 'unlinkedEvidence' }, fetcher);
 
 // One cashier action performs the existing reservation and one-shot hosted
 // initialization. The provider's own PINPAD button remains mandatory.

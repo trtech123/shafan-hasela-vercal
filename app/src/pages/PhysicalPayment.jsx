@@ -72,7 +72,8 @@ export default function PhysicalPayment() {
   }, [allowed, entryPointer, requestKey]);
 
   useEffect(() => {
-    if (!view || !unresolved.has(view.state)) return;
+    if (!view || !(unresolved.has(view.state) ||
+      (view.state === 'succeeded' && view.documentState !== 'succeeded'))) return;
     const timer = setInterval(() => {
       requestPhysicalPayment(supabase, { action: view.route === 'hosted' && view.redirectUrl
         ? 'verify' : 'status', requestKey })
@@ -184,13 +185,14 @@ export default function PhysicalPayment() {
           המשך לדף פלאקארד — לחצו שם על כפתור PINPAD</a>}
       {view.state === 'succeeded' && view.documentState !== 'succeeded' &&
         <p role="alert" className="rounded-lg bg-amber-50 p-3 text-amber-900">
-          התשלום אושר, אך פרטי החשבונית דורשים התאמה. אין לבצע חיוב נוסף.</p>}
+          התשלום נרשם. המסמך החשבונאי ממתין לאימות או להתאמה; אין לבצע חיוב או הפקה נוספים.</p>}
       {view.state === 'succeeded' && view.documentState !== 'succeeded' &&
         <button type="button" onClick={verify} disabled={busy}
           className="rounded-lg border px-4 py-2">בדיקה חוזרת של החשבונית הקיימת</button>}
       {view.state === 'succeeded' && view.documentState === 'succeeded' && view.documentNumber &&
         <p>חשבונית מס־קבלה מספר {view.documentNumber}{view.documentUrl &&
-          <> · <a href={view.documentUrl} className="underline">צפייה בחשבונית</a></>}</p>}
+          <> · <a href={view.documentUrl} target="_blank" rel="noopener noreferrer"
+            referrerPolicy="no-referrer" className="underline">צפייה והדפסה ב־Payper</a></>}</p>}
       {['reserved', 'approved'].includes(view.state) && <button type="button" onClick={verify} disabled={busy}
         className="rounded-lg bg-indigo-700 px-4 py-2 text-white">בדיקת מצב העסקה</button>}
       {view.state === 'reserved' && <button type="button" onClick={cancel} disabled={busy}

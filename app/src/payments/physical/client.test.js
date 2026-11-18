@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { requestPhysicalPayment, startHostedPhysical } from './client.js';
+import { getOrderPhysicalEvidence, requestPhysicalPayment, startHostedPhysical } from './client.js';
 
 describe('physical POS client', () => {
   test('uses authenticated same-origin physical API and accepts a frozen intent view', async () => {
@@ -32,6 +32,21 @@ describe('physical POS client', () => {
       new Response(JSON.stringify({ ...base, redirectUrl: 'https://evil.example/PaymentGW' })))).rejects
       .toThrow('physical_status_unavailable');
   });
+});
+
+test('reads unlinked document evidence without invoking payment actions', async () => {
+  const auth = { getSession: async () => ({ data: { session: { access_token: 'token' } } }) };
+  const orderId = '11111111-1111-4111-8111-111111111111';
+  const calls = [];
+  const result = await getOrderPhysicalEvidence({ auth }, orderId, async (_path, options) => {
+    calls.push(JSON.parse(options.body));
+    return new Response(JSON.stringify([{ paymentId: orderId, paymentState: 'uncertain',
+      amountMinor: 100, providerTransactionId: '3199515577', documentNumber: '200006',
+      documentUrl: 'https://app.payper.co.il/public/invoice_show/3650292?ak=abcdefghijklmnop',
+      linked: false }]));
+  });
+  expect(result).toHaveLength(1);
+  expect(calls).toEqual([{ action: 'orderEvidence', orderId }]);
 });
 
 test('one cashier Pay action reserves register 004 and opens the hosted PINPAD page', async () => {

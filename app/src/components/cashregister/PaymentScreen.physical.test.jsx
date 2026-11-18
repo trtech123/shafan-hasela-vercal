@@ -69,3 +69,16 @@ test('physical action stays separate from hosted checkout when explicitly enable
   expect(onDigital).not.toHaveBeenCalled();
   expect(screen.getByText('הסכום נשלח אוטומטית למסופון המשויך לקופה')).toBeInTheDocument();
 });
+
+test('compact method group requires an explicit amount-labeled physical confirmation', () => {
+  const onPhysical = vi.fn();
+  render(<PaymentScreen total={24} cartItems={[{ id: 'p1', name: 'Item', qty: 1 }]}
+    onConfirm={vi.fn()} onBack={vi.fn()} onPhysicalTerminal={onPhysical}
+    physicalTerminalVisible physicalTerminalEnabled />);
+  const methods = screen.getByRole('group', { name: 'אמצעי תשלום' });
+  expect(methods).toHaveClass('grid-cols-2', 'sm:grid-cols-3');
+  expect(onPhysical).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /תשלום במסופון פיזי/ }));
+  expect(screen.getByTestId('cashier-pay')).toHaveTextContent('אשר ושלח 24 ₪ למסופון');
+  expect(onPhysical).not.toHaveBeenCalled();
+});

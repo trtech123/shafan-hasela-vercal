@@ -8,7 +8,7 @@ import { publishOrderChange } from '@/lib/orderEvents';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import OrderCustomerLink from '@/components/customers/OrderCustomerLink';
-import { getPhysicalAvailability, startDirectPhysical, startHostedPhysical } from '@/payments/physical/client';
+import { getOrderPhysicalEvidence, getPhysicalAvailability, startDirectPhysical, startHostedPhysical } from '@/payments/physical/client';
 
 const validId = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
 const shekels = minor => `${(Number(minor) / 100).toFixed(2)} ₪`;
@@ -20,7 +20,8 @@ const safeDocumentUrl = value => {
     const url = new URL(value);
     return url.protocol === 'https:' && ['app.payper.co.il', 'payper.co.il'].includes(url.hostname)
       && /^\/(?:app\/)?public\/invoice_show\/[0-9]+$/.test(url.pathname)
-      && !url.username && !url.password && !url.port && !url.hash ? url.href : null;
+      && !url.username && !url.password && !url.port && !url.hash &&
+      (!url.search || /^\?ak=[A-Za-z0-9_-]{16,128}$/.test(url.search)) ? url.href : null;
   } catch { return null; }
 };
 const collect = async body => {
@@ -48,6 +49,7 @@ export default function OrderCollection({ orderId }) {
   const [physicalBusy, setPhysicalBusy] = useState(false);
   const [physicalReview, setPhysicalReview] = useState(false);
   const [physicalAvailability, setPhysicalAvailability] = useState(null);
+  const [providerEvidence, setProviderEvidence] = useState([]);
   const physicalKey = useRef(null);
   const requestKey = useRef(null);
   const locked = useRef(false);
@@ -55,6 +57,8 @@ export default function OrderCollection({ orderId }) {
   const refresh = async (resetAmount = false) => {
     const latest = await collect({ action: 'status', orderId });
     setView(latest);
+    try { setProviderEvidence(await getOrderPhysicalEvidence(supabase, orderId)); }
+    catch { /* The ledger status remains authoritative if evidence is unavailable. */ }
     if (resetAmount) {
       setAmount((latest.balanceMinor / 100).toFixed(2));
       setMethod(current => latest.collectionEnabled?.[current] ? current
@@ -77,8 +81,26 @@ export default function OrderCollection({ orderId }) {
         email: latest.billing?.email || '' });
     }).catch(() => { if (active) setError('לא ניתן לטעון את יתרת ההזמנה.'); })
       .finally(() => { if (active) setLoading(false); });
+    getOrderPhysicalEvidence(supabase, orderId).then(rows => {
+      if (active) setProviderEvidence(rows);
+    }).catch(() => { if (active) setProviderEvidence([]); });
     return () => { active = false; };
   }, [allowed, orderId]);
+
+  useEffect(() => {
+    if (!physicalReview) return;
+    const timer = setInterval(() => {
+      collect({ action: 'status', orderId }).then(latest => {
+        setView(latest);
+        if (!latest.unresolvedPayment) {
+          setPhysicalReview(false);
+          publishOrderChange();
+        }
+      }).catch(() => {});
+      getOrderPhysicalEvidence(supabase, orderId).then(setProviderEvidence).catch(() => {});
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [physicalReview, orderId]);
 
   const amountMinor = Math.round(Number(amount) * 100);
   const validAmount = Number.isSafeInteger(amountMinor) && amountMinor > 0 &&
@@ -178,6 +200,15 @@ export default function OrderCollection({ orderId }) {
             doc.state === 'reconciliation_required' ? 'נדרשת התאמה למסמך קיים מול Payper; אין להפיק מסמך נוסף' : 'ממתין להפקה'}
           {safeDocumentUrl(doc.documentUrl) && <a className="mr-2 text-primary underline" href={safeDocumentUrl(doc.documentUrl)} target="_blank" rel="noopener noreferrer">פתיחה והדפסה</a>}
         </p>)}
+        {providerEvidence.filter(item => !view.documents?.some(doc =>
+          doc.paymentId === item.paymentId && doc.state === 'succeeded')).map(item =>
+          <div key={item.paymentId} role="status" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+            <p>תשובת Payper מציינת מסמך מספר {item.documentNumber}, אך התשלום והמסמך טרם קושרו להזמנה. אין לבצע חיוב או הפקה נוספים לפני התאמה.</p>
+            <p>עסקת Pelecard: {item.providerTransactionId} · סכום: {shekels(item.amountMinor)}</p>
+            {safeDocumentUrl(item.documentUrl) && <a href={safeDocumentUrl(item.documentUrl)}
+              target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+              className="text-primary underline">צפייה במסמך ב־Payper והדפסה</a>}
+          </div>)}
       </section>
       {import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED === 'true' && view.balanceMinor > 0 &&
         (view.unresolvedPayment || physicalReview
@@ -185,12 +216,12 @@ export default function OrderCollection({ orderId }) {
               to={`/payment/physical?orderId=${encodeURIComponent(orderId)}`}>בדיקת תשלום קיים במסופון פיזי</Link>
           : physicalAllowed
             ? <><Button type="button" disabled={!physicalReady || physicalBusy || !accountingReady} onClick={payPhysical}>
-                {physicalBusy ? 'שולח למסופון…' : 'שלם במסופון פיזי'}</Button>
+                {physicalBusy ? 'ממתין למסופון…' : `שלם במסופון פיזי · ${shekels(view.balanceMinor)}`}</Button>
                 {!physicalReady && <p role="status">תשלום במסופון ממתין להפעלה מבוקרת.</p>}</>
               : <p role="status">תשלום במסופון זמין לקופאי המורשה בלבד.</p>)}
       {import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' && view.balanceMinor > 0 &&
         <p role="status" className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">תשלום במסופון פיזי מושבת עד לאימות מסלול פלאקארד והפעלתו.</p>}
-      {nonphysicalAllowed && view.balanceMinor > 0 && view.paidMinor === 0 &&
+      {nonphysicalAllowed && view.balanceMinor > 0 && view.paidMinor === 0 && !view.unresolvedPayment &&
         <OrderDigitalCheckout orderId={orderId} balanceMinor={view.balanceMinor}
           onStatus={() => refresh(false).catch(() => setError('לא ניתן לרענן את יתרת ההזמנה.'))} />}
       {result && <section role="status" className="rounded-xl border bg-white p-4">
