@@ -6,7 +6,7 @@ Read-only inspection of Vercel project `shafan-hasela-vercal` found five variabl
 
 ## Local browser rehearsal
 
-Vite was started on `127.0.0.1:4177` with `VITE_SUPABASE_URL=https://preview-synthetic.supabase.co` and a synthetic public key. `app/scripts/isolated-preview-ui.cjs` intercepts all requests to that synthetic host and responds from in-memory records; every other external origin is blocked, including image, font and calendar assets. The script uses Playwright through the local Playwright skill runner. It makes no Production request, provider call or database write.
+Vite was started on `127.0.0.1:4177` with `VITE_SUPABASE_URL=https://preview-synthetic.supabase.co` and a synthetic public key. `app/scripts/isolated-preview-ui.cjs` intercepts all requests to that synthetic host and responds from in-memory records; every other external origin is blocked, including image, font and calendar assets. The script uses Playwright through the local Playwright skill runner. Run with `--pelecard` only on a candidate that includes the read-only Pelecard administration screen. It makes no Production request, provider call or database write.
 
 Observed in a real Chromium browser with React Router and the application UI:
 

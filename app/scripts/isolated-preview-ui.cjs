@@ -5,6 +5,7 @@ const { chromium } = require('playwright');
 
 const base = 'http://127.0.0.1:4177';
 const synthetic = 'preview-synthetic.supabase.co';
+const checkPelecard = process.argv.includes('--pelecard');
 const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const customerId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const today = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
@@ -110,22 +111,26 @@ async function main() {
           page.getByRole('button', { name: 'נוכח/ת' }).click(),
         ]);
         assert(calls.some(value => value.includes('/rpc/mark_club_attendance')));
-        await page.goto(`${base}/pelecard-transactions`);
-        await page.getByRole('heading', { name: 'עסקאות פלאקארד' }).waitFor();
-        assert.equal(calls.filter(value => value.includes('/api/pelecard-transactions')).length, 0);
-        await page.getByRole('button', { name: 'טעינת עסקאות' }).click();
-        await page.getByText(/מוצגות 0 מתוך 0/).waitFor();
-        assert.deepEqual(calls.filter(value => value.includes('/api/pelecard-transactions')), ['POST /api/pelecard-transactions range']);
-        results.push('admin: customers create/edit/search/archive, manual club session, attendance, read-only Pelecard retrieval');
+        if (checkPelecard) {
+          await page.goto(`${base}/pelecard-transactions`);
+          await page.getByRole('heading', { name: 'עסקאות פלאקארד' }).waitFor();
+          assert.equal(calls.filter(value => value.includes('/api/pelecard-transactions')).length, 0);
+          await page.getByRole('button', { name: 'טעינת עסקאות' }).click();
+          await page.getByText(/מוצגות 0 מתוך 0/).waitFor();
+          assert.deepEqual(calls.filter(value => value.includes('/api/pelecard-transactions')), ['POST /api/pelecard-transactions range']);
+        }
+        results.push(`admin: customers create/edit/search/archive, manual club session, attendance${checkPelecard ? ', read-only Pelecard retrieval' : ''}`);
       } else if (role === 'cashier') {
         await page.goto(`${base}/customers`);
         await page.getByRole('heading', { name: 'לקוחות' }).waitFor();
         assert.equal(await page.getByRole('button', { name: 'העברה לארכיון' }).count(), 0);
         await page.goto(`${base}/club-attendance`);
         await page.getByRole('heading', { name: 'לוח זמנים' }).waitFor();
-        await page.goto(`${base}/pelecard-transactions`);
-        await page.getByRole('heading', { name: 'לוח זמנים' }).waitFor();
-        assert.equal(calls.filter(value => value.includes('/api/pelecard-transactions')).length, 0);
+        if (checkPelecard) {
+          await page.goto(`${base}/pelecard-transactions`);
+          await page.getByRole('heading', { name: 'לוח זמנים' }).waitFor();
+          assert.equal(calls.filter(value => value.includes('/api/pelecard-transactions')).length, 0);
+        }
         results.push('cashier: customer screen allowed; archive and admin attendance denied');
       } else {
         await page.goto(`${base}/instructor-attendance`);
