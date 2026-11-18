@@ -21,6 +21,9 @@ export function voucherMissingFields({order, register, draft, signature}) {
 }
 export function voucherError(error) {
   if (/order_voucher_exists/.test(error?.message || '')) return 'כבר קיים שובר חתום להזמנה. יש לפתוח אותו בשוברי הקפה; אין ליצור שובר נוסף.';
+  if (/billing_company_id_required/.test(error?.message || '')) return 'לשובר של ארגון נדרש מספר ח.פ. או ע.מ. בן תשע ספרות. עדכנו את כרטיס הלקוח, קשרו מחדש את פרטי החיוב להזמנה ופתחו את טופס השובר מחדש. לא נוצר שובר.';
+  if (/active_register_required/.test(error?.message || '')) return 'הקופה שנבחרה אינה פעילה. סגרו את הטופס, בחרו קופה פעילה וחתמו מחדש. לא נוצר שובר.';
+  if (/voucher_access_denied/.test(error?.message || '')) return 'אין הרשאה ליצור שובר. לא נוצר שובר.';
   if (/snapshot|version|stale/i.test(error?.message || '')) return 'פרטי ההזמנה השתנו. יש לרענן את ההזמנה ולבדוק שוב לפני חתימה.';
   if (/paid|payment/i.test(error?.message || '')) return 'ניתן ליצור שובר רק להזמנה שלא שולמה.';
   return 'תוצאת השמירה אינה ידועה. יש לבדוק אם השובר כבר נשמר. לא תישלח בקשת יצירה נוספת.';
