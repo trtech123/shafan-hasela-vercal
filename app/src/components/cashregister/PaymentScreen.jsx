@@ -393,7 +393,7 @@ export default function PaymentScreen({
       {cashDialog}
       {physicalBillingDialog}
       {digitalBillingDialog}
-      <div className="w-full max-w-lg space-y-8">
+      <div className="w-full max-w-4xl space-y-6">
 
         <div className="text-center">
           <button onClick={onBack} className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors text-sm mb-6 mx-auto">
@@ -406,14 +406,15 @@ export default function PaymentScreen({
           </ul>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-slate-400 text-sm font-medium text-center mb-4">בחר אמצעי תשלום</p>
+        <div className="space-y-3">
+          <p className="text-slate-400 text-sm font-medium text-center">בחר אמצעי תשלום לאישור</p>
           {paymentError && <p role="alert" className="rounded-xl border border-rose-400 bg-rose-950 p-3 text-sm text-rose-100">{paymentError}</p>}
+          <div role="group" aria-label="אמצעי תשלום" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <button
             onClick={() => setSelectedMethod('digital')}
             aria-pressed={selectedMethod === 'digital'}
             disabled={pelecardBusy || !pelecardEnabled}
-            className={`w-full bg-gradient-to-l from-cyan-600 to-sky-700 rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right disabled:opacity-60 disabled:cursor-wait ${selectedMethod === 'digital' ? 'ring-4 ring-white' : ''}`}
+            className={`w-full bg-gradient-to-l from-cyan-600 to-sky-700 rounded-xl p-3 flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all text-right disabled:opacity-60 disabled:cursor-wait ${selectedMethod === 'digital' ? 'ring-4 ring-white' : ''}`}
           >
             <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
               {pelecardBusy
@@ -430,7 +431,7 @@ export default function PaymentScreen({
             <button type="button" onClick={() => setSelectedMethod('physical')}
               aria-pressed={selectedMethod === 'physical'}
               disabled={!physicalTerminalSelectable || pelecardBusy || manualSaleSaving}
-              className={`w-full bg-gradient-to-l from-indigo-600 to-indigo-700 rounded-2xl p-5 flex items-center gap-4 text-right disabled:opacity-60 disabled:cursor-not-allowed ${selectedMethod === 'physical' ? 'ring-4 ring-white' : ''}`}>
+              className={`w-full bg-gradient-to-l from-indigo-600 to-indigo-700 rounded-xl p-3 flex items-center gap-2 text-right disabled:opacity-60 disabled:cursor-not-allowed ${selectedMethod === 'physical' ? 'ring-4 ring-white' : ''}`}>
               <CreditCard className="w-8 h-8 text-white" />
               <span><strong className="block text-lg">תשלום במסופון פיזי</strong>
                 <small className="text-white/70">{physicalTerminalEnabled ? 'הסכום נשלח אוטומטית למסופון המשויך לקופה' :
@@ -447,7 +448,7 @@ export default function PaymentScreen({
                 onClick={() => setSelectedMethod(method.key)}
                 aria-pressed={selectedMethod === method.key}
                 disabled={manualSaleSaving || disabled}
-                className={`w-full bg-gradient-to-l ${method.color} rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all text-right ${selectedMethod === method.key ? 'ring-4 ring-white' : ''}`}
+                className={`w-full bg-gradient-to-l ${method.color} rounded-xl p-3 flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all text-right ${selectedMethod === method.key ? 'ring-4 ring-white' : ''}`}
               >
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                   <Icon className="w-6 h-6 text-white" />
@@ -468,7 +469,7 @@ export default function PaymentScreen({
             onClick={() => setSelectedMethod(SPLIT_METHOD)}
             aria-pressed={selectedMethod === SPLIT_METHOD}
             disabled={manualSaleSaving || !manualMethodsEnabled || !noncardEnabled.cash}
-            className={`w-full mt-2 border border-dashed border-slate-600 rounded-2xl p-4 flex items-center gap-4 hover:bg-slate-800 active:scale-[0.98] transition-all text-right ${selectedMethod === SPLIT_METHOD ? 'ring-4 ring-white' : ''}`}
+            className={`w-full border border-dashed border-slate-600 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-800 active:scale-[0.98] transition-all text-right ${selectedMethod === SPLIT_METHOD ? 'ring-4 ring-white' : ''}`}
           >
             <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
               <Split className="w-6 h-6 text-white" />
@@ -479,9 +480,14 @@ export default function PaymentScreen({
             </div>
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>
+          </div>
           <Button onClick={paySelected} disabled={!selectedMethod || selectedUnavailable || pelecardBusy || manualSaleSaving || physicalTerminalBusy}
             className="w-full h-14 text-lg font-bold" data-testid="cashier-pay">
-            {pelecardBusy || manualSaleSaving ? 'מעבד תשלום…' : 'שלם'}
+            {pelecardBusy || manualSaleSaving || physicalTerminalBusy ? 'מעבד תשלום…' :
+              selectedMethod === 'physical' ? `אשר ושלח ${total.toLocaleString()} ₪ למסופון` :
+                selectedMethod === 'digital' ? `אשר תשלום מאובטח ${total.toLocaleString()} ₪` :
+                  selectedMethod === CASH_METHOD ? `אשר קבלת ${total.toLocaleString()} ₪ במזומן` :
+                    selectedMethod ? `המשך לתשלום ${total.toLocaleString()} ₪` : 'בחר אמצעי תשלום'}
           </Button>
         </div>
       </div>
