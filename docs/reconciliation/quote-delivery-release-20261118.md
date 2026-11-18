@@ -1,0 +1,11 @@
+# Versioned quotation delivery release group — 2026-11-18
+
+This branch builds on operational restoration commit `7614fa6dc9a991efeb18319e7358e6265e5f5ee5` and adds versioned quotation email/WhatsApp controls, immutable PDF hashing, durable delivery history, explicit resend confirmation, and restored Edge source. Historical unversioned quotations retain their existing download/send behavior. It does not change the protected POS, Pelecard, Direct J4, cash, Payper, order scheduling or Vercel deployment controls.
+
+Read-only production inspection found matching signatures for `claim_quotation_delivery`, `claim_manual_quotation_delivery`, and `finish_quotation_delivery`. These SECURITY DEFINER RPCs are not executable by `authenticated`; the Edge service role calls them after authenticating and checking quotation access. Admin/operations quotation revision and delivery-history policies exist. The live six shared delivery modules have SHA-256 hashes identical to the bundled repository versions. Both `send-quote-email` and `send-quote-whatsapp` are deployed, and the required Gmail/Meta secret names exist. The live entry imports `../_shared/quotation-delivery/runtime.ts`, whereas the repository packages an equivalent local `_deployed_shared` module; this packaging difference must be checked in a networked nonproduction Edge build before any Edge release.
+
+Local mocked tests cover authorization before provider access, durable claim, uncertain provider outcome and replay without a second send. They cannot prove that Gmail credentials are valid, Meta templates are approved, or real messages are deliverable. No customer communication was initiated during preparation.
+
+Verification: delivery/Edge/PDF focused suite 8/8; existing quotation creation, conversion and form regression suite 12/12; ESLint and production Vite build passed.
+
+**Release gate:** NO-GO for Production communication until Edge packaging and provider/template acceptance are completed. The UI can be reviewed in a protected Preview with mock data. No migration or provider configuration change is proposed in this branch.

@@ -6,6 +6,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { supabase } from "@/api/supabaseClient";
 import { BRAND } from "@/lib/orderDocText";
+import QuoteDeliveryPanel from './QuoteDeliveryPanel';
 
 const statusLabels = {
   "טיוטה": { label: "טיוטה", color: "#94a3b8" },
@@ -21,12 +22,14 @@ const itemTotal = (item, quote) => Number(item.line_total ?? (Number(item.price_
 export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
   const docRef = useRef(null);
   const [emailStatus, setEmailStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
 
   const isOrder = mode === "order";
+  const versionedDelivery = !isOrder && Boolean(quote.id && quote.quotation_revision_id);
   const title = isOrder ? "אישור הזמנה" : "הצעת מחיר";
   const docNumber = isOrder ? (quote.order_number || quote.quote_number) : quote.quote_number;
 
-  const generatePDFBase64 = async () => {
+  const createPdf = async () => {
     const el = docRef.current;
     const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
     const imgData = canvas.toDataURL("image/png");
@@ -34,8 +37,10 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-    return pdf.output("datauristring").split(",")[1]; // base64 only
+    return pdf;
   };
+
+  const generatePDFBase64 = async () => (await createPdf()).output("datauristring").split(",")[1];
 
   const handleDownloadPDF = async () => {
     const el = docRef.current;
@@ -136,12 +141,12 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
             <Button onClick={handleDownloadPDF} className="gap-2 bg-primary">
               <Download className="w-4 h-4" /> הורד PDF
             </Button>
-            <a href={`https://wa.me/${(quote.client_phone || "").replace(/\D/g, "")}?text=${getWhatsAppText()}`} target="_blank" rel="noreferrer">
+            {!versionedDelivery && <a href={`https://wa.me/${(quote.client_phone || "").replace(/\D/g, "")}?text=${getWhatsAppText()}`} target="_blank" rel="noreferrer">
               <Button variant="outline" className="gap-2 border-green-500 text-green-700 hover:bg-green-50">
                 <MessageCircle className="w-4 h-4" /> שלח וואטסאפ
               </Button>
-            </a>
-            {quote.client_email && (
+            </a>}
+            {!versionedDelivery && quote.client_email && (
               <Button
                 variant="outline"
                 className={`gap-2 ${emailStatus === "error" ? "border-red-400 text-red-600" : ""}`}
@@ -160,8 +165,10 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
               </Button>
             )}
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-5 h-5" /></Button>
+          <Button variant="ghost" size="icon" disabled={deliveryBusy} onClick={onClose}><X className="w-5 h-5" /></Button>
         </div>
+
+        {versionedDelivery && <QuoteDeliveryPanel quote={quote} createPdf={createPdf} onBusyChange={setDeliveryBusy} />}
 
         {/* Document */}
         <div ref={docRef} className="bg-white rounded-2xl shadow-2xl overflow-hidden font-sans" dir="rtl" style={{ fontFamily: "'Heebo', Arial, sans-serif" }}>
