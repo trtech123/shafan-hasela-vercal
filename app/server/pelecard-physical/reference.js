@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 
-// Pelecard retains at most 19 ParamX characters. Use the same stable reference
-// for dispatch and lookup; legacy intents retain their original UUID lookup.
+// Pelecard retains at most 19 ParamX characters. Lowercase base36 uses only
+// digits and letters already observed in the live UUID prefix, with about
+// 98 bits of identifier space. Legacy intents retain their original lookup.
 export function directParamX(intentId) {
-  return createHash('sha256').update(intentId).digest('base64url').slice(0, 19);
+  const digest = createHash('sha256').update(intentId).digest('hex');
+  return (BigInt(`0x${digest}`) % (36n ** 19n)).toString(36).padStart(19, '0');
 }
 
 export function expectedParamX(intent) {

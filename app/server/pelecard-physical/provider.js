@@ -115,6 +115,9 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
           String(detail.PelecardTransactionId) !== payment.transactionId) ||
         (detail.DebitApproveNumber != null &&
           String(detail.DebitApproveNumber) !== payment.approvalId) ||
+        (detail.DebitCurrency != null && String(detail.DebitCurrency) !== '1') ||
+        (detail.AdditionalDetailsParamX != null &&
+          detail.AdditionalDetailsParamX !== payment.paramX) ||
         (detail.ShvaResult != null && String(detail.ShvaResult) !== '000'))
         throw new Error('physical_result_unverified');
       return { status: 'approved', intentId: intent.id, merchantTerminal: terminalNumber,
@@ -150,7 +153,15 @@ export function createPhysicalPelecardProvider({ terminalNumber, user, password,
         String(detail.UID ?? detail.Uid ?? detail.uid ?? '') !== uid ||
         String(detail.termNo ?? '') !== intent.register ||
         String(detail.Amount ?? detail.amount ?? '') !== String(intent.amountMinor) ||
-        String(detail.retailer ?? '') !== terminalNumber)
+        String(detail.retailer ?? '') !== terminalNumber ||
+        (detail.PelecardTransactionId != null &&
+          String(detail.PelecardTransactionId) !== providerTransactionId) ||
+        (detail.DebitApproveNumber != null &&
+          String(detail.DebitApproveNumber) !== approvalId) ||
+        (detail.DebitCurrency != null && String(detail.DebitCurrency) !== '1') ||
+        (detail.AdditionalDetailsParamX != null &&
+          detail.AdditionalDetailsParamX !== paramX) ||
+        (detail.ShvaResult != null && String(detail.ShvaResult) !== '000'))
         throw new Error('physical_result_unverified');
       return { status: 'approved', intentId: intent.id, merchantTerminal: terminalNumber,
         register: intent.register, amountMinor: intent.amountMinor, transactionId: providerTransactionId, approvalId, uid };

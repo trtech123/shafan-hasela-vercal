@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPhysicalPelecardProvider } from './provider.js';
+import { directParamX } from './reference.js';
 
 const source = { id: 'intent-1', register: '004', amountMinor: 1500,
   checkoutSnapshot: { items: [{ name: 'Synthetic order', qty: 1, customPrice: 15 }], discount: null },
@@ -54,7 +55,7 @@ test('saved successful J4 response is confirmed by UID details without another d
   const intent = { id: '833db2d6-18b1-4d66-bbcd-4360b95a315c', register: '004',
     amountMinor: 1500, uidRecoveryEnabled: true };
   const firstResponse = { payment: { statusCode: '000', shvaResult: '000', shvaResultEmv: '000',
-    amountMinor: 1500, currency: '1', paramX: (await import('./reference.js')).directParamX(intent.id),
+    amountMinor: 1500, currency: '1', paramX: directParamX(intent.id),
     uid: 'uid-1', transactionId: 'trx-1', approvalId: 'auth-1' } };
   assert.deepEqual(await provider.confirmFirstResponse(intent, firstResponse), {
     status: 'approved', intentId: intent.id, merchantTerminal: '2814926015',
@@ -111,4 +112,64 @@ test('new J4 sends a 19-character ParamX and recovery looks up the same referenc
   assert.equal(references[0], references[1]);
   assert.equal(references[0].length, 19);
   assert.notEqual(references[0], id);
+});
+
+test('UID recovery refuses a saved response for a different payment or an unapproved result', async () => {
+  let lookups = 0;
+  const id = '833db2d6-18b1-4d66-bbcd-4360b95a315c';
+  const intent = { id, register: '004', amountMinor: 100, uidRecoveryEnabled: true };
+  const payment = { statusCode: '000', shvaResult: '000', shvaResultEmv: '000',
+    currency: '1', amountMinor: 100, paramX: directParamX(id),
+    uid: 'uid-1', transactionId: 'trx-1', approvalId: 'auth-1' };
+  const provider = createPhysicalPelecardProvider({ terminalNumber: '2814926015',
+    user: 'synthetic', password: 'synthetic', fetcher: async () => {
+      lookups++;
+      throw Error('must not query an untrusted response');
+    } });
+  for (const changed of [
+    { paramX: directParamX('different-intent') }, { amountMinor: 200 },
+    { statusCode: '001' }, { shvaResult: '001' }, { shvaResultEmv: '001' },
+    { currency: '2' }, { uid: null }, { transactionId: null }, { approvalId: null },
+  ]) {
+    await assert.rejects(provider.confirmFirstResponse(intent,
+      { payment: { ...payment, ...changed } }), /physical_result_unverified/);
+  }
+  assert.equal(lookups, 0);
+});
+
+test('UID recovery refuses mismatched provider details before finalization', async () => {
+  const id = '833db2d6-18b1-4d66-bbcd-4360b95a315c';
+  const intent = { id, register: '004', amountMinor: 100, uidRecoveryEnabled: true };
+  const first = { payment: { statusCode: '000', shvaResult: '000', shvaResultEmv: '000',
+    currency: '1', amountMinor: 100, paramX: directParamX(id),
+    uid: 'uid-1', transactionId: 'trx-1', approvalId: 'auth-1' } };
+  const good = { UID: 'uid-1', termNo: '004', Amount: '100', retailer: '2814926015',
+    PelecardTransactionId: 'trx-1', DebitApproveNumber: 'auth-1', ShvaResult: '000' };
+  for (const changed of [
+    { UID: 'uid-2' }, { termNo: '003' }, { Amount: '200' },
+    { retailer: '2814926016' }, { PelecardTransactionId: 'trx-2' },
+    { DebitApproveNumber: 'auth-2' }, { ShvaResult: '001' },
+    { DebitCurrency: '2' }, { AdditionalDetailsParamX: 'different-ref' },
+  ]) {
+    const provider = createPhysicalPelecardProvider({ terminalNumber: '2814926015',
+      user: 'synthetic', password: 'synthetic', fetcher: async () =>
+        new Response(JSON.stringify({ StatusCode: '000', ResultData: { ...good, ...changed } })) });
+    await assert.rejects(provider.confirmFirstResponse(intent, first), /physical_result_unverified/);
+  }
+});
+
+test('ParamX inspection also rejects conflicting UID detail fields', async () => {
+  const id = '833db2d6-18b1-4d66-bbcd-4360b95a315c';
+  const provider = createPhysicalPelecardProvider({ terminalNumber: '2814926015',
+    user: 'synthetic', password: 'synthetic', fetcher: async url =>
+      new Response(JSON.stringify(url.endsWith('CheckGoodParamXEMV')
+        ? { StatusCode: '000', UserData: [{ TerminalNumber: '2814926015',
+          DebitTotal: '100', AdditionalDetailsParamX: directParamX(id),
+          ShvaResult: '000', PelecardTransactionId: 'trx-1', UID: 'uid-1',
+          DebitApproveNumber: 'auth-1' }] }
+        : { StatusCode: '000', ResultData: { UID: 'uid-1', termNo: '004',
+          Amount: '100', retailer: '2814926015',
+          PelecardTransactionId: 'different-trx' } })) });
+  await assert.rejects(provider.inspect({ id, register: '004', amountMinor: 100,
+    uidRecoveryEnabled: true }), /physical_result_unverified/);
 });

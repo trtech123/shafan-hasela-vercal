@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { createPhysicalPelecardProvider } from '../../../server/pelecard-physical/provider.js';
+import { directParamX } from '../../../server/pelecard-physical/reference.js';
 
 const config = { terminalNumber: '2814926015', user: 'physical-user', password: 'physical-secret' };
 function provider(fetcher) { return createPhysicalPelecardProvider({ ...config, fetcher }); }
@@ -8,20 +9,20 @@ describe('physical Pelecard provider boundary', () => {
   test('serializes Appendix D PINPAD J4 with empty card fields and five-minute timeout', async () => {
     const timeout = vi.spyOn(AbortSignal, 'timeout');
     const fetcher = vi.fn(async () => new Response(JSON.stringify({ StatusCode: '000', PelecardTransactionId: '12345',
-      ShvaResult: '000', DebitTotal: '2400', AdditionalDetailsParamX: 'intent-1', CreditCardNumber: 'masked', shvaOutput: 'private' }), { status: 200 }));
-    const result = await provider(fetcher).send({ merchantTerminal: '2814926015', register: '004', amountMinor: 2400, intentId: 'intent-1' });
+      ShvaResult: '000', DebitTotal: '2400', AdditionalDetailsParamX: directParamX('intent-1'), CreditCardNumber: 'masked', shvaOutput: 'private' }), { status: 200 }));
+    const result = await provider(fetcher).send({ merchantTerminal: '2814926015', register: '004', amountMinor: 2400, intentId: 'intent-1', uidRecoveryEnabled: true });
     expect(fetcher).toHaveBeenCalledTimes(1);
     const [url, options] = fetcher.mock.calls[0];
     expect(url).toBe('https://gateway21.pelecard.biz/services/DebitRegularType');
     expect(options.headers['Content-Type']).toBe('application/x-www-form-urlencoded; charset=UTF-8');
     expect(JSON.parse(options.body)).toEqual({ ...config, shopNumber: '004', creditCard: '', creditCardDateMmYy: '',
-      token: '', total: '2400', currency: '1', cvv2: '', id: '', authorizationNumber: '', paramX: 'intent-1',
+      token: '', total: '2400', currency: '1', cvv2: '', id: '', authorizationNumber: '', paramX: directParamX('intent-1'),
       QAResultStatus: '', eci: '', xid: '', cavv: '' });
     expect(options.signal).toBeInstanceOf(AbortSignal);
     expect(timeout).toHaveBeenCalledWith(300_000);
     timeout.mockRestore();
     expect(result).toMatchObject({ StatusCode: '000', PelecardTransactionId: '12345', ShvaResult: '000',
-      DebitTotal: '2400', AdditionalDetailsParamX: 'intent-1',
+      DebitTotal: '2400', AdditionalDetailsParamX: directParamX('intent-1'),
       firstResponse: { payment: { transactionId: '12345', amountMinor: 2400 },
         document: { state: 'reconciliation_required' } } });
     expect(JSON.stringify(result)).not.toMatch(/masked|private/);
