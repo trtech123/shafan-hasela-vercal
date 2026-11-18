@@ -15,7 +15,7 @@ The protected cashier, order, scheduling, cash, hosted Pelecard, Direct J4, Payp
 
 ## Rollout boundary
 
-The operational candidate can be previewed independently. A controlled Production rollout should recheck the live application SHA, Supabase RPC/RLS contracts and role behavior, then deploy the exact candidate using the approved manual procedure. Administrator, operations, cashier and instructor accounts must be checked against their permitted screens without creating financial records. If any production dependency differs, stop the rollout. The full restoration candidate is not a prerequisite for this group.
+The operational candidate can be previewed independently **only after a separate Supabase test project, role accounts and isolated Preview variables are available**. The current Vercel Preview inherits live Supabase and Meta variables, so it was not deployed. A controlled Production rollout should recheck the live application SHA, Supabase RPC/RLS contracts and role behavior, then deploy the exact candidate using the approved manual procedure. Administrator, operations, cashier and instructor accounts must be checked against their permitted screens without creating financial records. If any production dependency differs, stop the rollout. The full restoration candidate is not a prerequisite for this group.
 
 ## Local verification
 
@@ -23,3 +23,5 @@ The operational candidate can be previewed independently. A controlled Productio
 - Protected order, POS, hosted/physical payment and Payper regression: 10 files, 71 tests passed. No live payment or accounting call was made.
 - ESLint, production Vite build and `git diff --check` passed after two narrow pre-existing lint fixes in `Leads` (unused import) and `Templates` (hook order).
 - The Production schema/role checks above were read-only. They do not replace controlled role acceptance with authenticated users in Preview.
+- Local Chromium UI rehearsal with synthetic service responses passed for Admin customer create/edit/search/archive, manual sessions and attendance; Cashier customer access and admin-route denial; linked Instructor own roster/attendance and customer-route denial. Every external request was blocked. See `isolated-preview-validation-20261118.md`.
+- A successful login/profile lookup race was found and fixed. `Login.test.jsx` fails on the old code and passes with the authentication-state redirect fix.
