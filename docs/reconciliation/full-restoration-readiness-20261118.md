@@ -1,0 +1,51 @@
+# Full restoration production-readiness evidence — 2026-11-18
+
+## Protected source and scope
+
+- Live application baseline: `73690eee338b400bd9310e8fb283806852f43f29`; deployment `dpl_AQKAKWDGJvcp1s2YokgBVs2xffeP`. The candidate is descended from this commit, not from the older `main` application tree.
+- Existing POS, optional customer details, cash, hosted Pelecard, Direct J4, Payper, scheduling and Vercel deployment controls remain in the candidate. No production changes or provider calls were made for this review.
+- Existing production SQL migrations were rehearsed locally; **no migration should be replayed** merely to release these screens. The release must compare the live schema to the expected contract again immediately before deployment.
+
+## Read-only production dependencies verified
+
+The Supabase production project `divzxsynczeifkpnpupl` was inspected through its dashboard, using SELECT-only SQL and function-code views. These observations establish structure, not successful end-to-end provider delivery.
+
+| Capability | Live evidence | Remaining acceptance |
+|---|---|---|
+| Customers | `customers` SELECT/INSERT/UPDATE policies grant authenticated admin/operations/cashier through role helpers; insert excludes archived records. `archive_customer(uuid, integer)` exists, is invoker security, and is executable by authenticated users. The function's own role/version rules remain authoritative. | Test each role through an approved Preview/live nonfinancial acceptance. |
+| Club and instructor attendance | Live `get_club_attendance_history`, `materialize_club_sessions`, `create_manual_club_session`, `mark_club_attendance`, `get_instructor_club_sessions`, `get_instructor_club_roster`, `get_instructor_user_links` and `set_instructor_user_link` signatures match client calls. Admin roster/audit read policies and instructor-link admin read policy exist. These RPCs are SECURITY DEFINER and executable by authenticated users; their internal role checks are essential. The live `create-user` source already includes `instructor` in `ALLOWED_ROLES`, so **no Edge update is needed** for this role. | Role-based Preview acceptance for admin, instructor and cashier, including the explicit instructor-to-profile link. |
+| Signatures | `order_signature_action(text,jsonb)` and `order_signature_rate_limit(text)` exist. `order-signatures-private` is private, PDF-only, 20 MB limit, with eight existing objects. No direct `storage.objects` policy grants access to that bucket. Live `send-order-signature` entry and handler source hashes match the restored repository copy. `ORDER_SIGNATURE_PUBLIC_ORIGIN` exists in both Supabase Edge and Vercel; the Vercel value includes the live domain. | Verify remaining bundled provider modules, function settings and a controlled nonfinancial Preview PDF/signature flow before release. Never use a real customer order as a test. |
+| Quotation delivery | Live `claim_quotation_delivery`, `claim_manual_quotation_delivery` and `finish_quotation_delivery` signatures match the restored Edge runtime. They are SECURITY DEFINER and **not executable by authenticated**, leaving them to the service role. Staff quotation revisions and admin/operations delivery history RLS exist. The six live shared delivery modules in `send-quote-email` match the restored bundled source by SHA-256. `send-quote-whatsapp` imports the same shared runtime. `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `META_WHATSAPP_TOKEN`, `META_PHONE_NUMBER_ID` and `META_WABA_ID` secret names exist. | The deployed entry import uses `../_shared/quotation-delivery/runtime.ts`, while repository bundled entry uses `./_deployed_shared/...`; the shared core is identical, but a future Edge deploy must validate packaging. Provider credential validity, template approval and actual send are unverified. |
+| Coffee vouchers | `create_hakafa_voucher(uuid,jsonb)` exists with SECURITY DEFINER and authenticated EXECUTE; `hakafa_vouchers` staff SELECT policy exists. Local schema includes versioned/idempotent creation and reporting. The candidate does not restore automatic voucher email. | Accounting treatment and operational acceptance of voucher creation/reporting; do not activate its creation UI solely on the basis of a local mock. |
+| Read-only Pelecard administration | The protected server transaction-retrieval route is unchanged. Vercel `PELECARD_RETRIEVAL_ENABLED` is true and `PELECARD_RETRIEVAL_SCOPE_ID` is nonempty. Candidate UI is admin-only and has no refund/mutation control. | Admin acceptance with authorized read-only retrieval; never issue a financial operation for testing. |
+| Private chatbot documents | `chatbot-assets` is private, 15 MB, PDF/JPEG/PNG, with fourteen existing objects. No direct `storage.objects` policy grants access to the bucket. `whatsapp-webhook` exists, but its deployed private-document contract and asset inventory/hashes have not been reconciled. | **Blocked:** confirm asset inventory, authorization, deployed webhook version, audit and at-most-once delivery before exposing a document path. No old webhook is copied into the candidate. |
+
+The production Supabase Edge secret dashboard lists the names above plus `ORDER_SIGNATURE_PUBLIC_ORIGIN`; only names/digests were inspected, never secret values. Vercel exposes the presence of `SUPABASE_SERVICE_ROLE_KEY` but withholds its value. The dashboard shows a quota grace-period warning; quota availability at release time needs an operator check. No configuration was changed.
+
+## Restored source and safeguards
+
+- The candidate adds customer search/create/edit/archive, club attendance/manual sessions/instructor linking, order signatures with private immutable PDFs, versioned quotation delivery history, voucher management/reporting and admin-only Pelecard retrieval.
+- The Edge sources for `send-order-signature`, `send-quote-email`, `send-quote-whatsapp` and their deployed shared modules have been restored to the repository from main. The current production `send-order-doc` entry remains untouched.
+- Signature signing requires an opaque token, immutable revision, bounded ink data and a private archive. Quotation delivery claims and finishes each request id durably; an uncertain result is replayed without a second provider send. Voucher creation has a fixed ID and uncertainty lock. The read-only Pelecard view cannot call refund APIs.
+- Main-only private chatbot delivery and legacy iCredit/accounting actions remain deliberately absent pending separate review.
+
+## Verification and limits
+
+- Complete Vitest run: 159 files, 1,258/1,263 tests passed. The five failures all came from one real-PDF file because sandboxed Windows Chromium could not launch. The identical PDF file passed **9/9** when run alone with local Chromium outside the command sandbox. These were environment launch failures, not assertion failures.
+- New restored Edge handler tests: **9/9** across three files; they cover unauthorized calls, uncertain delivery replay, private signature archive, provider boundaries and duplicate prevention. They are mocked, so they do not prove live delivery.
+- Earlier focused cashier/order/Payper, attendance, quotation, customer, voucher and Vercel tests passed as recorded in `full-restoration-20261118.md`. Full local PGlite schema rehearsal applied 102 migrations with zero unvalidated constraints.
+- `deno check --cached-only` could not resolve uncached npm imports due network DNS restrictions. Validate Edge packaging in a networked nonproduction build before any Edge release.
+- The protected baseline already has whole-project TypeScript diagnostics in Radix/dependency/test files. The newly restored feature source has no filtered diagnostics. Do not report whole-project typecheck as passing.
+
+## Independent release groups and gates
+
+| Group | Contents | Current decision | Required sequence |
+|---|---|---|---|
+| A: operational | Customers, club attendance, manual sessions, instructor linking and navigation. | **GO for controlled Preview candidate; NO-GO for unreviewed Production.** Live schema and role dependencies exist. | Isolated branch, focused regression/build, then approved role acceptance and controlled deployment. No migrations expected. |
+| B: signed documents | Order signature page, immutable PDFs, staff panel and versioned delivery. | **NO-GO for Production** pending complete Edge/provider module packaging and nonfinancial Preview acceptance. | Deploy app only after verified Edge contract; test private storage, signed PDF and authorization with synthetic data. |
+| C: communication | Versioned quote email/WhatsApp delivery and history. | **NO-GO for Production** pending packaging and provider/template acceptance. | Verify Edge packaging, destination permissions and capabilities before exposing sends. Never auto-retry an uncertain send. |
+| D: vouchers | Voucher creation, register settings and reporting. | **NO-GO** pending accounting decision and controlled nonfinancial acceptance. | Confirm document/accounting treatment before allowing new vouchers. |
+| E: Pelecard admin | Admin-only read-only transaction retrieval. | **GO for controlled Preview; NO-GO for Production** until admin authorization and retrieval acceptance. | Keep existing provider route and gate unchanged; test read-only retrieval only. |
+| F: chatbot private docs | Not integrated. | **NO-GO** pending live webhook/asset security review. | Separate candidate after asset/hash and privacy contract verification. |
+
+There is no authorization in this workstream to merge, deploy, apply migrations, change gates or contact customers. Each Production group needs its own release approval and a fresh production-baseline diff.

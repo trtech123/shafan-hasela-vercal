@@ -1,5 +1,7 @@
 # Full functionality restoration candidate — 2026-11-18
 
+> Updated production read-only verification and release grouping are in [full-restoration-readiness-20261118.md](full-restoration-readiness-20261118.md). Earlier unverified dependencies below are superseded by that report.
+
 ## Source and release boundary
 
 - Protected deployed application: `73690eee338b400bd9310e8fb283806852f43f29`, Vercel `dpl_AQKAKWDGJvcp1s2YokgBVs2xffeP` (READY at read-only inspection).
