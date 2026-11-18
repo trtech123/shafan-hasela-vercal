@@ -29,7 +29,8 @@ async function rpc(name, args) {
 
 const [orders, payments, intent, sales, ledger, registerIntents, device,
   accountingDocuments, accountingEvents, providerPayments, invoiceLedger,
-  paymentSales, paymentLedger, invoiceSystemLedger] = await Promise.all([
+  paymentSales, paymentLedger, invoiceSystemLedger, paymentEvents,
+  accountingOperations] = await Promise.all([
   read('orders', 'id,order_number,status,payment_status,total_price', 'id', orderId),
   read('payment_transactions', 'id,order_id,amount,currency,status,provider_transaction_id,sale_id,operation,created_at', 'order_id', orderId),
   rpc('get_physical_worker_intent', { p_payment_id: paymentId }),
@@ -47,6 +48,10 @@ const [orders, payments, intent, sales, ledger, registerIntents, device,
   read('payper_document_ledger', 'payment_id,order_id,sale_id,state,document_number', 'payment_id', paymentId),
   read('payper_document_ledger', 'payment_id,order_id,sale_id,state,document_number',
     'physical_document_system_id', '3650292'),
+  read('payment_transaction_events', 'event_type,status,metadata,created_at',
+    'payment_transaction_id', paymentId),
+  read('payment_accounting_operations', 'payment_transaction_id,order_id,accounting_status,accounting_provider',
+    'order_id', orderId),
 ]);
 const unresolved = new Set(['reserved', 'dispatching', 'pending', 'uncertain', 'approved']);
 const first = intent?.firstResponse;
@@ -56,19 +61,19 @@ const result = {
   payments,
   intent: intent?.denied ? intent : { ...intent, firstResponse: {
     payment: first?.payment && Object.fromEntries([
-      'StatusCode', 'ShvaResult', 'ShvaResultEmv', 'Amount', 'DebitCurrency',
-      'termNo', 'retailer', 'PelecardTransactionId', 'DebitApproveNumber',
-      'UID', 'AdditionalDetailsParamX',
+      'statusCode', 'shvaResult', 'shvaResultEmv', 'amountMinor', 'currency',
+      'terminal', 'register', 'transactionId', 'approvalId', 'uid', 'paramX',
     ].map(field => [field, first.payment[field]])),
     document: first?.document && {
-      status: first.document.status, documentNumber: first.document.documentNumber,
-      systemId: first.document.systemId, urlPresent: Boolean(first.document.url),
+      state: first.document.state, status: first.document.status,
+      number: first.document.number, systemId: first.document.systemId,
+      documentId: first.document.documentId, urlPresent: Boolean(first.document.url),
     },
   } },
   sales, ledger,
   register004: { device, unresolvedIntents: Array.isArray(registerIntents)
     ? registerIntents.filter(row => unresolved.has(row.state)) : registerIntents },
-  accountingDocuments, accountingEvents,
+  accountingDocuments, accountingEvents, paymentEvents, accountingOperations,
   duplicateChecks: { providerPayments, invoiceLedger, paymentSales, paymentLedger,
     invoiceSystemLedger },
 };
