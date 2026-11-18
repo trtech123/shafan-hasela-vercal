@@ -51,6 +51,18 @@ const renderAtAccounting = (role) => {
 
 afterEach(() => cleanup());
 
+test.each([
+  ['admin', '/club-attendance', 'נוכחות חוגים'],
+  ['מדריך', '/instructor-attendance', 'נוכחות בחוגים'],
+])('%s can open %s', (role, path, label) => {
+  currentRole = role;
+  render(<MemoryRouter initialEntries={[path]}><Routes><Route element={<Layout />}>
+    <Route path={path} element={<h1>מסך בדיקה</h1>} />
+  </Route></Routes></MemoryRouter>);
+  expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', path);
+  expect(screen.getByRole('heading', { name: 'מסך בדיקה' })).toBeInTheDocument();
+});
+
 test.each(['admin', 'אחמ"ש', 'קופאי'])('%s can navigate to customer management', (role) => {
   currentRole = role;
   render(<MemoryRouter initialEntries={['/customers']}><Routes><Route element={<Layout />}>

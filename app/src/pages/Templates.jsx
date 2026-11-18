@@ -30,11 +30,6 @@ export default function Templates() {
   const [edits, setEdits] = useState({});
   const [savingId, setSavingId] = useState(null);
 
-  // Admin-only page.
-  if (user && user.role !== "admin") {
-    return <Navigate to="/" replace />;
-  }
-
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -50,7 +45,7 @@ export default function Templates() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (user?.role === "admin") load(); }, [user?.role]);
 
   const editOf = (t) => edits[t.id] ?? { body: t.body, active: t.active };
   const setEdit = (id, patch) => setEdits((e) => ({ ...e, [id]: { ...(e[id] ?? {}), ...patch } }));
@@ -80,6 +75,11 @@ export default function Templates() {
     if (t.default_body == null) return;
     setEdit(t.id, { body: t.default_body });
   };
+
+  // Keep the hook order stable while enforcing the admin-only page.
+  if (user && user.role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
 
   if (loading) {
     return (
