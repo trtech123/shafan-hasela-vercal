@@ -3,7 +3,6 @@ import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, Wand2, Trash2, Pencil, Check, X, Plus, Copy, FileText, Download } from "lucide-react";
 import QuoteFormDialog from "@/components/quotes/QuoteFormDialog";
 import { toast } from "sonner";

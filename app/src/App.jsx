@@ -10,10 +10,13 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import Customers from './pages/Customers';
+import Vouchers from './pages/Vouchers';
 import Schedule from './pages/Schedule';
 import Activities from './pages/Activities';
 import Instructors from './pages/Instructors';
 import Clubs from './pages/Clubs';
+import ClubAttendance from './pages/ClubAttendance';
+import InstructorAttendance from './pages/InstructorAttendance';
 import Tasks from './pages/Tasks';
 import Maintenance from './pages/Maintenance';
 import Quotes from './pages/Quotes';
@@ -32,8 +35,10 @@ import ChatbotHandoffs from './pages/ChatbotHandoffs';
 import AccountingOperations from './pages/AccountingOperations';
 import PhysicalTerminalSettings from './pages/PhysicalTerminalSettings';
 import PhysicalPayment from './pages/PhysicalPayment';
+import PelecardTransactions from './pages/PelecardTransactions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import DataDeletion from './pages/DataDeletion';
+import OrderSignature from './pages/OrderSignature';
 
 const PaymentReturnRoute = () => {
   const location = useLocation();
@@ -65,10 +70,13 @@ const AuthenticatedApp = () => {
         <Route path="/" element={<Dashboard />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/customers" element={<Customers />} />
+        <Route path="/vouchers" element={<Vouchers />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/activities" element={<Activities />} />
         <Route path="/instructors" element={<Instructors />} />
         <Route path="/clubs" element={<Clubs />} />
+        <Route path="/club-attendance" element={<ClubAttendance />} />
+        <Route path="/instructor-attendance" element={<InstructorAttendance />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/maintenance" element={<Maintenance />} />
         <Route path="/quotes" element={<Quotes />} />
@@ -87,6 +95,7 @@ const AuthenticatedApp = () => {
         <Route path="/chatbot-handoffs" element={<ChatbotHandoffs />} />
         <Route path="/accounting-operations" element={<AccountingOperations />} />
         <Route path="/physical-terminal-settings" element={<PhysicalTerminalSettings />} />
+        <Route path="/pelecard-transactions" element={<PelecardTransactions />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>
@@ -103,6 +112,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/data-deletion" element={<DataDeletion />} />
+            <Route path="/order-sign" element={<OrderSignature />} />
             <Route path="/*" element={<AuthenticatedApp />} />
           </Routes>
         </Router>

@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
-import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText, Trophy, Landmark } from "lucide-react";
+import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText, Trophy, Landmark, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -12,16 +12,20 @@ const allNavItems = [
 { path: "/", label: "דשבורד", icon: LayoutDashboard, roles: ["admin"] },
 { path: "/orders", label: "הזמנות", icon: ClipboardList, roles: ["admin", "אחמ\"ש", "קופאי"] },
 { path: "/customers", label: "לקוחות", icon: Users, roles: ["admin", "אחמ\"ש", "קופאי"] },
+{ path: "/vouchers", label: "שוברי הקפה", icon: FileText, roles: ["admin", "אחמ\"ש", "קופאי"] },
 { path: "/schedule", label: "לוח זמנים", icon: CalendarDays, roles: ["admin", "אחמ\"ש", "מדריך", "קופאי"] },
 { path: "/activities", label: "פעילויות", icon: Mountain, roles: ["admin"] },
 { path: "/instructors", label: "מדריכים", icon: Users, roles: ["admin"] },
 { path: "/clubs", label: "חוגים", icon: Trophy, roles: ["admin"] },
+{ path: "/club-attendance", label: "נוכחות חוגים", icon: ClipboardList, roles: ["admin"] },
+{ path: "/instructor-attendance", label: "נוכחות בחוגים", icon: ClipboardList, roles: ["מדריך"] },
 { path: "/quotes", label: "הצעות מחיר", icon: FileText, roles: ["admin"] },
 { path: "/leads", label: "לידים", icon: UserSearch, roles: ["admin"] },
 { path: "/chatbot-handoffs", label: "תור שפן", icon: MessageSquareText, roles: ["admin", "אחמ\"ש"] },
 { path: "/accounting-operations", label: "בקרת הנה״ח", icon: Landmark, roles: ["admin", "אחמ\"ש"] },
 { path: "/cashregister", label: "קופה", icon: MonitorSmartphone, roles: ["admin", "אחמ\"ש", "קופאי"] },
 { path: "/physical-terminal-settings", label: "הגדרות מסופונים", icon: MonitorSmartphone, roles: ["admin"] },
+{ path: "/pelecard-transactions", label: "עסקאות פלאקארד", icon: CreditCard, roles: ["admin"] },
 { path: "/sales-report", label: "דוח קופה", icon: BarChart2, roles: ["admin"] },
 { path: "/pricing", label: "תמחור", icon: Calculator, roles: ["admin"] },
 { path: "/tasks", label: "משימות", icon: ListTodo, roles: ["admin"] },
