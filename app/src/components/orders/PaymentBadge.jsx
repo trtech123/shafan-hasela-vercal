@@ -7,7 +7,7 @@ const paymentStyles = {
   "שולם במלואו": "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
-export default function PaymentBadge({ status, financial }) {
+export default function PaymentBadge({ status = undefined, financial }) {
   const verified = status === undefined || financial !== undefined
     ? orderFinancialPresentation(financial) : null;
   const tone = financial?.state === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
