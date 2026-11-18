@@ -46,8 +46,10 @@ const rows = await db.query(`SELECT
   (SELECT count(*) FROM public.club_memberships WHERE id='a1000000-0000-4000-8000-000000000004') AS memberships,
   (SELECT count(*) FROM public.club_session_roster WHERE session_id='a1000000-0000-4000-8000-000000000005') AS roster,
   (SELECT count(*) FROM public.sales) AS sales,
+  (SELECT count(*) FROM public.recurring_agreements) AS recurring_agreements,
   (SELECT count(*) FROM public.hakafa_vouchers) AS vouchers`);
-assert.deepEqual(rows.rows[0], { customers: 1, memberships: 1, roster: 1, sales: 0, vouchers: 0 });
+assert.deepEqual(rows.rows[0], { customers: 1, memberships: 1, roster: 1,
+  sales: 0, recurring_agreements: 0, vouchers: 0 });
 const accountIds = {
   admin: 'a2000000-0000-4000-8000-000000000001',
   cashier: 'a2000000-0000-4000-8000-000000000002',
