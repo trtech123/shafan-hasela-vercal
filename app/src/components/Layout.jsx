@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
-import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText, Trophy, Landmark } from "lucide-react";
+import { LayoutDashboard, CalendarDays, ClipboardList, Mountain, Users, Menu, Wrench, ListTodo, FileText, LogOut, UserSearch, MonitorSmartphone, BarChart2, Calculator, UserCog, Package, MessageSquareText, Trophy, Landmark, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -24,6 +24,7 @@ const allNavItems = [
 { path: "/accounting-operations", label: "בקרת הנה״ח", icon: Landmark, roles: ["admin", "אחמ\"ש"] },
 { path: "/cashregister", label: "קופה", icon: MonitorSmartphone, roles: ["admin", "אחמ\"ש", "קופאי"] },
 { path: "/physical-terminal-settings", label: "הגדרות מסופונים", icon: MonitorSmartphone, roles: ["admin"] },
+{ path: "/pelecard-transactions", label: "עסקאות פלאקארד", icon: CreditCard, roles: ["admin"] },
 { path: "/sales-report", label: "דוח קופה", icon: BarChart2, roles: ["admin"] },
 { path: "/pricing", label: "תמחור", icon: Calculator, roles: ["admin"] },
 { path: "/tasks", label: "משימות", icon: ListTodo, roles: ["admin"] },

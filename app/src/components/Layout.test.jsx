@@ -54,6 +54,7 @@ afterEach(() => cleanup());
 test.each([
   ['admin', '/club-attendance', 'נוכחות חוגים'],
   ['מדריך', '/instructor-attendance', 'נוכחות בחוגים'],
+  ['admin', '/pelecard-transactions', 'עסקאות פלאקארד'],
 ])('%s can open %s', (role, path, label) => {
   currentRole = role;
   render(<MemoryRouter initialEntries={[path]}><Routes><Route element={<Layout />}>

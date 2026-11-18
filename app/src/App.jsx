@@ -34,6 +34,7 @@ import ChatbotHandoffs from './pages/ChatbotHandoffs';
 import AccountingOperations from './pages/AccountingOperations';
 import PhysicalTerminalSettings from './pages/PhysicalTerminalSettings';
 import PhysicalPayment from './pages/PhysicalPayment';
+import PelecardTransactions from './pages/PelecardTransactions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import DataDeletion from './pages/DataDeletion';
 
@@ -91,6 +92,7 @@ const AuthenticatedApp = () => {
         <Route path="/chatbot-handoffs" element={<ChatbotHandoffs />} />
         <Route path="/accounting-operations" element={<AccountingOperations />} />
         <Route path="/physical-terminal-settings" element={<PhysicalTerminalSettings />} />
+        <Route path="/pelecard-transactions" element={<PelecardTransactions />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>
