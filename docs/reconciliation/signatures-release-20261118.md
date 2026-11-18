@@ -1,0 +1,11 @@
+# Signed order confirmation release group — 2026-11-18
+
+This isolated branch builds on the verified operational restoration commit `7614fa6dc9a991efeb18319e7358e6265e5f5ee5`. It adds the public signing page, staff version/history controls, immutable unsigned and signed PDF handling, the Vercel signature API, and restored source for `send-order-signature` plus its bundled shared modules. It preserves the protected legacy combined order PDF/email/WhatsApp controls. Cashier, cash, hosted Pelecard, Direct J4, Payper and Vercel deployment-control routes remain unchanged.
+
+Read-only production evidence: `order_signature_action(text,jsonb)` and `order_signature_rate_limit(text)` exist. The `order-signatures-private` bucket is private, PDF-only, size-limited to 20 MB, and has no direct `storage.objects` policy. The live `send-order-signature` entry and handler hashes match the restored source. `ORDER_SIGNATURE_PUBLIC_ORIGIN` is configured in Supabase Edge and Vercel. This does not verify the remaining deployed provider modules or a complete live signing flow.
+
+The immutable revision, opaque token, one-time signing claim, bounded pointer ink, private PDF archive and delivery claim are tested locally. A lost provider response remains uncertain; the database forbids a second original delivery for the same revision/channel and requires explicit confirmation for resend. No real message was sent.
+
+Local tests: 50 UI/Edge tests passed in the initial focused run; two missing-module suites were corrected and passed 18/18; a real Chromium PDF suite passed 9/9 outside the command sandbox using synthetic data. ESLint and Vite production build passed after adding the extracted dependencies (`manualDelivery`, `israeliId`, shared signature-pad wrapper). The PDF browser cannot launch in the command sandbox, so that suite requires the supported local-Chromium test context.
+
+**Release gate:** NO-GO for Production until complete deployed Edge module/settings parity, a networked Deno packaging check, and controlled Preview acceptance of private storage, role authorization, signed PDF rendering and nonfinancial delivery capability are completed. No migration is proposed or applied here. Do not use a real customer order for rehearsal.

@@ -7,6 +7,9 @@ import { Download, MessageCircle, Mail, X, Loader2, Pencil } from "lucide-react"
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { supabase } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
+import { canSendOrderConfirmation } from "@/lib/orderConfirmation";
+import OrderSignaturePanel from "./OrderSignaturePanel";
 import { toast } from "sonner";
 import {
   BRAND,
@@ -138,9 +141,11 @@ function SectionHeader({ title, subtitle = null }) {
 }
 
 export default function OrderConfirmationPDF({ order, activity, onClose }) {
+  const { user } = useAuth();
   const sectionARef = useRef(null);
   const sectionBRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const [signatureBusy, setSignatureBusy] = useState(false);
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [waSending, setWaSending] = useState(false);
@@ -389,13 +394,13 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
         {/* Toolbar — not captured into the PDF */}
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex gap-2">
-            <Button onClick={handleDownload} disabled={busy} className="gap-2 bg-primary">
+            <Button onClick={handleDownload} disabled={busy || signatureBusy} className="gap-2 bg-primary">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {busy ? "מפיק PDF..." : "הורד PDF"}
             </Button>
             {!order.archived_at && <Button
               onClick={handleEmail}
-              disabled={emailBusy}
+              disabled={emailBusy || signatureBusy}
               variant="outline"
               title={recipientEmail.trim() ? `שלח אל ${recipientEmail.trim()}` : "הזן כתובת אימייל לשליחה"}
               className="gap-2 border-blue-500 text-blue-700 hover:bg-blue-50"
@@ -407,7 +412,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
               variant="outline"
               className="gap-2 border-green-700 text-green-800 hover:bg-green-50"
               onClick={handleWhatsAppAPI}
-              disabled={waSending || !order.client_phone}
+              disabled={waSending || signatureBusy || !order.client_phone}
               title={!order.client_phone ? "אין מספר טלפון ללקוח" : "שלח PDF דרך Meta WhatsApp Cloud API"}
             >
               {waSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
@@ -488,6 +493,10 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
               </Button>
             </div>
           )}
+        </div>}
+
+        {canSendOrderConfirmation(user?.role) && <div className="mb-4 rounded-xl bg-white p-3 shadow-sm">
+          <OrderSignaturePanel key={order.id} orderId={order.id} email={order.client_email || ''} onBusyChange={setSignatureBusy} />
         </div>}
 
         <div className="space-y-4">

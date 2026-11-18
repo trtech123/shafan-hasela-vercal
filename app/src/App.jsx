@@ -34,6 +34,7 @@ import ChatbotHandoffs from './pages/ChatbotHandoffs';
 import AccountingOperations from './pages/AccountingOperations';
 import PhysicalTerminalSettings from './pages/PhysicalTerminalSettings';
 import PhysicalPayment from './pages/PhysicalPayment';
+import OrderSignature from './pages/OrderSignature';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import DataDeletion from './pages/DataDeletion';
 
@@ -107,6 +108,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/data-deletion" element={<DataDeletion />} />
+            <Route path="/order-sign" element={<OrderSignature />} />
             <Route path="/*" element={<AuthenticatedApp />} />
           </Routes>
         </Router>
