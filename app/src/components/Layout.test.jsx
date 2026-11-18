@@ -51,6 +51,26 @@ const renderAtAccounting = (role) => {
 
 afterEach(() => cleanup());
 
+test.each(['admin', 'אחמ"ש', 'קופאי'])('%s can navigate to customer management', (role) => {
+  currentRole = role;
+  render(<MemoryRouter initialEntries={['/customers']}><Routes><Route element={<Layout />}>
+    <Route path="/customers" element={<h1>מסך לקוחות</h1>} />
+    <Route path="/schedule" element={<h1>לוח זמנים</h1>} />
+  </Route></Routes></MemoryRouter>);
+  expect(screen.getByRole('link', { name: 'לקוחות' })).toHaveAttribute('href', '/customers');
+  expect(screen.getByRole('heading', { name: 'מסך לקוחות' })).toBeInTheDocument();
+});
+
+test('an instructor cannot open customer management', () => {
+  currentRole = 'מדריך';
+  render(<MemoryRouter initialEntries={['/customers']}><Routes><Route element={<Layout />}>
+    <Route path="/customers" element={<h1>מסך לקוחות</h1>} />
+    <Route path="/schedule" element={<h1>לוח זמנים</h1>} />
+  </Route></Routes></MemoryRouter>);
+  expect(screen.queryByRole('link', { name: 'לקוחות' })).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'לוח זמנים' })).toBeInTheDocument();
+});
+
 test('an authenticated instructor can open the cashier for physical collection', () => {
   currentRole = 'מדריך';
   render(<MemoryRouter initialEntries={['/cashregister']}><Routes><Route element={<Layout />}>

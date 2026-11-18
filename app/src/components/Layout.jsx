@@ -11,6 +11,7 @@ import { BRAND } from "@/lib/orderDocText";
 const allNavItems = [
 { path: "/", label: "דשבורד", icon: LayoutDashboard, roles: ["admin"] },
 { path: "/orders", label: "הזמנות", icon: ClipboardList, roles: ["admin", "אחמ\"ש", "קופאי"] },
+{ path: "/customers", label: "לקוחות", icon: Users, roles: ["admin", "אחמ\"ש", "קופאי"] },
 { path: "/schedule", label: "לוח זמנים", icon: CalendarDays, roles: ["admin", "אחמ\"ש", "מדריך", "קופאי"] },
 { path: "/activities", label: "פעילויות", icon: Mountain, roles: ["admin"] },
 { path: "/instructors", label: "מדריכים", icon: Users, roles: ["admin"] },
