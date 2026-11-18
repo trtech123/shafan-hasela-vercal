@@ -428,10 +428,26 @@ try {
           [direct.paymentId])).rows[0].value;
         assert.equal(saved.firstResponse.document.number, '200005');
         assert.equal(saved.uidRecoveryEnabled, true);
+        const verifiedDirectResult = { status: 'approved', intentId: direct.paymentId,
+          merchantTerminal: '2814926015', register: '004', amountMinor: 1500,
+          transactionId: '12346', approvalId: 'auth-direct-1', uid: 'uid-direct-1' };
+        await db.query('BEGIN');
+        try {
+          await db.query('SELECT public.observe_physical_result($1,$2::jsonb)',
+            [direct.paymentId, JSON.stringify(verifiedDirectResult)]);
+          await db.query('SELECT public.finalize_physical_payment($1)', [direct.paymentId]);
+          await db.query('SELECT public.record_physical_direct_document($1)', [direct.paymentId]);
+        } finally { await db.query('ROLLBACK'); }
+        const afterRollback = (await db.query(`SELECT i.state AS intent_state,
+          p.status AS payment_status,
+          (SELECT count(*)::int FROM public.sales s WHERE s.payment_transaction_id=p.id) AS sales,
+          (SELECT count(*)::int FROM public.payper_document_ledger l WHERE l.payment_id=p.id) AS documents
+          FROM public.physical_payment_intents i JOIN public.payment_transactions p
+          ON p.id=i.payment_id WHERE i.payment_id=$1`, [direct.paymentId])).rows[0];
+        assert.deepEqual(afterRollback, { intent_state: 'dispatching', payment_status: 'initiated',
+          sales: 0, documents: 0 }, 'a rolled-back reconciliation must preserve the original lock and ledger');
         await db.query('SELECT public.observe_physical_result($1,$2::jsonb)', [direct.paymentId,
-          JSON.stringify({ status: 'approved', intentId: direct.paymentId,
-            merchantTerminal: '2814926015', register: '004', amountMinor: 1500,
-            transactionId: '12346', approvalId: 'auth-direct-1', uid: 'uid-direct-1' })]);
+          JSON.stringify(verifiedDirectResult)]);
         const final = (await db.query('SELECT public.finalize_physical_payment($1) AS value',
           [direct.paymentId])).rows[0].value;
         assert.equal(final.orderId, directOrder);
@@ -445,6 +461,13 @@ try {
           [direct.paymentId])).rows[0].value, true);
         assert.equal((await db.query('SELECT public.record_physical_direct_document($1) AS value',
           [direct.paymentId])).rows[0].value, true);
+        const repeatedFinal = (await db.query('SELECT public.finalize_physical_payment($1) AS value',
+          [direct.paymentId])).rows[0].value;
+        assert.equal(repeatedFinal.saleId, final.saleId,
+          'repeated finalization must return the original sale');
+        assert.equal((await db.query(`SELECT count(*)::int AS total FROM public.sales
+          WHERE payment_transaction_id=$1`, [direct.paymentId])).rows[0].total, 1,
+        'repeated finalization must not create another sale');
         const document = (await db.query(`SELECT document_number,physical_document_id,state
           FROM public.payper_document_ledger WHERE payment_id=$1`, [direct.paymentId])).rows[0];
         assert.deepEqual(document, { document_number: '200005', physical_document_id: '551',

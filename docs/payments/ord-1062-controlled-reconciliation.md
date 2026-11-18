@@ -47,6 +47,25 @@ Pelecard merchant credentials available in Production are masked by Vercel's
 sensitive-variable controls and there is no connected read-only Pelecard
 portal. Independent Pelecard verification remains mandatory.
 
+At `2026-11-18T20:42:14Z`, another read-only Production snapshot still found
+one `initiated` payment and one `uncertain` direct intent, no sale, no Payper
+ledger row, no payment accounting document or event, and one unresolved intent
+on CT20 004. The order remained `ממתין לאישור` / `לא שולם` at ILS 1.00. The
+saved J4 response exactly matched transaction `3199515577`, authorization
+`0031683`, UID `26111814405328149265672`, 100 agorot, currency `1`, and
+legacy 19-character ParamX `833db2d6-18b1-4d66-`. Its embedded Payper result
+reported `Success`, Invoice-Receipt `200006`, system ID `3650292`, and a
+signed document URL. The Payper page again returned HTTP 200 and displayed
+that document and ILS 1.00. This snapshot is still not an independent
+Pelecard lifecycle or Payper issuance-history verification.
+
+The merchant has personally reported that the charge was processed and the
+Invoice-Receipt was issued and emailed. Before an operator changes financial
+records, attach a portal export or screenshot that identifies this specific
+debit and confirms no void, refund, reversal or duplicate debit, plus Payper
+document detail/history confirming one original document, its source debit,
+and the outbound email event. Redact card and customer data in shared copies.
+
 ## Mandatory read-only checks immediately before correction
 
 1. Capture a timestamped snapshot of the order, payment, intent, sale,
@@ -105,12 +124,34 @@ outcome: inspect the database before any repeat attempt.
 4. Capture a timestamped after-snapshot: one successful payment, one sale,
    zero order balance, one linked Payper Invoice-Receipt, no duplicate provider
    charge or document, and an unlocked register only as the natural result of
-   completed state. Record the before/after diff in the audit ticket.
+   completed state. Assert the sale's `payment_transaction_id` and the
+   payment's `sale_id` refer to each other, the order's `payment_status` is
+   `פלאקארד` while the independent approval status remains `ממתין לאישור`,
+   the ledger's document origin is `automatic` and its
+   `provider_trx_record_id` is `3199515577`. Preserve the immutable
+   `payment_transaction_events`, the frozen first J4 response, the sale's
+   receipt number and the before/after diff in the audit ticket.
 
 If any step fails, stop. Preserve all evidence and existing locks; continue
 only after a new read-only assessment of the resulting state. Never
 compensate by recharging, issuing a document, manually editing ledger rows, or
 unlocking the register.
+
+## Required visible post-correction checks
+
+With an authorized admin session, open `/accounting-operations` and confirm
+the Payper issued-documents section shows document `200006`, linked payment
+`833db2d6-18b1-4d66-bbcd-4360b95a315c` and Pelecard transaction
+`3199515577`, with a working view/print link. The separate Rivhit event table
+does not represent this Payper document and must not be fabricated merely to
+make that table show a row. Open ORD-1062 in the orders view: payment status
+must show Pelecard and the cashier order collection view must show ILS 1.00
+paid, ILS 0.00 outstanding, exactly one payment, and document `200006` with
+the same link. Check CT20 004 through the read-only worker-intent query: this
+intent must be `succeeded` and no longer unresolved; do not call an unlock
+operation. Capture screenshots and URLs (with signed tokens redacted in the
+audit report). If the live page does not match the database, stop and treat
+it as a separate visibility issue; do not repeat any financial RPC.
 
 ## Release relationship
 
