@@ -16,6 +16,7 @@ BEGIN
     SELECT o.id, o.order_number, o.total_price, o.payment_status, o.status,
       o.archived_at,
       coalesce(p.paid,0)+coalesce(s.paid,0) AS paid,
+      coalesce(p.adjusted,false) AS adjusted,
       coalesce(p.unresolved,false) OR
         EXISTS(SELECT 1 FROM public.physical_payment_intents i
           JOIN public.payment_transactions t ON t.id=i.payment_id
@@ -36,6 +37,8 @@ BEGIN
         WHEN t.operation='void' AND t.status='voided' THEN -t.amount
         WHEN t.operation='payment' AND t.status='succeeded' THEN t.amount
         ELSE 0 END),0) AS paid,
+        coalesce(bool_or(t.operation IN ('refund','void') AND
+          t.status IN ('refunded','voided')),false) AS adjusted,
         coalesce(bool_or(t.status IN
           ('initiated','pending_provider','timed_out','refund_pending','void_pending')),false)
           AS unresolved
@@ -56,10 +59,11 @@ BEGIN
         WHEN archived_at IS NOT NULL OR status='בוטל' OR total_price IS NULL OR
           total_price<=0 OR total_price*100<>trunc(total_price*100) THEN 'unavailable'
         WHEN unresolved OR paid<0 OR paid>total_price OR
-          ((payment_status IS NULL OR payment_status NOT IN ('לא שולם','שולם חלקית'))
-            AND paid<total_price) OR
-          (payment_status='לא שולם' AND paid>0) OR
-          (payment_status='שולם חלקית' AND paid<=0)
+          (NOT adjusted AND (
+            ((payment_status IS NULL OR payment_status NOT IN ('לא שולם','שולם חלקית'))
+              AND paid<total_price) OR
+            (payment_status='לא שולם' AND paid>0) OR
+            (payment_status='שולם חלקית' AND paid<=0)))
           THEN 'review'
         WHEN paid=total_price THEN 'paid'
         WHEN paid>0 THEN 'partial'

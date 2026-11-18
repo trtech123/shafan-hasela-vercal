@@ -498,7 +498,7 @@ try {
     parent_transaction_id,amount,currency,status,idempotency_key,checkout_snapshot,created_by)
     VALUES('manual_cash','refund',$1,$2,600,'ILS','refunded','badge-refund',
       '{"schema_version":1,"items":[]}'::jsonb,$3)`, [badgeOrder, balancePayment, cashier]);
-  assert.equal((await badge()).state, 'review', 'stale paid labels must not hide a refund');
+  assert.equal((await badge()).state, 'partial', 'completed refunds determine the outstanding balance');
   await db.query("UPDATE public.orders SET payment_status='שולם חלקית' WHERE id=$1", [badgeOrder]);
   assert.deepEqual(await badge(), { orderId: badgeOrder, state: 'partial',
     totalMinor: 100000, paidMinor: 40000, balanceMinor: 60000 });
@@ -506,7 +506,7 @@ try {
     parent_transaction_id,amount,currency,status,idempotency_key,checkout_snapshot,created_by)
     VALUES('manual_cash','void',$1,$2,400,'ILS','voided','badge-void',
       '{"schema_version":1,"items":[]}'::jsonb,$3)`, [badgeOrder, badgePayment, cashier]);
-  assert.equal((await badge()).state, 'review', 'a stale partial label must not hide a completed void');
+  assert.equal((await badge()).state, 'unpaid', 'completed voids determine the outstanding balance');
   await db.query("UPDATE public.orders SET payment_status='לא שולם' WHERE id=$1", [badgeOrder]);
   assert.deepEqual(await badge(), { orderId: badgeOrder, state: 'unpaid',
     totalMinor: 100000, paidMinor: 0, balanceMinor: 100000 });
