@@ -6,6 +6,6 @@ Read-only production inspection found matching signatures for `claim_quotation_d
 
 Local mocked tests cover authorization before provider access, durable claim, uncertain provider outcome and replay without a second send. They cannot prove that Gmail credentials are valid, Meta templates are approved, or real messages are deliverable. No customer communication was initiated during preparation.
 
-Verification: delivery/Edge/PDF focused suite 8/8; existing quotation creation, conversion and form regression suite 12/12; ESLint and production Vite build passed.
+Verification: delivery/Edge/PDF focused suite 8/8; existing quotation creation, conversion and form regression suite 12/12. After merging the operational login fix, a seven-file focused run passed **25/25**, and ESLint and the production Vite build passed again. Networked `deno check` passes for both quote-delivery entries and the preserved `send-order-doc` entry. This resolves the earlier local package-resolution blocker and proves source imports/type syntax, but does not simulate a Supabase Edge release or validate live provider credentials.
 
-**Release gate:** NO-GO for Production communication until Edge packaging and provider/template acceptance are completed. The UI can be reviewed in a protected Preview with mock data. No migration or provider configuration change is proposed in this branch.
+**Release gate:** NO-GO for remote Preview and Production communication until an isolated Preview with test Supabase data and no live Supabase/Meta inheritance exists, then Edge deployment packaging and provider/template acceptance are completed. The existing Vercel Preview is not isolated, so it was not deployed. No migration or provider configuration change is proposed in this branch.
