@@ -80,14 +80,16 @@ is:
 {"status":"approved","intentId":"833db2d6-18b1-4d66-bbcd-4360b95a315c","merchantTerminal":"2814926015","register":"004","amountMinor":100,"transactionId":"3199515577","approvalId":"0031683","uid":"26111814405328149265672"}
 ```
 
-Prefer one authorized database transaction containing the guarded before
-snapshot, the three RPC calls below, and guarded after-assertions, followed by
-`COMMIT` only if every assertion passes. A failed assertion must `ROLLBACK`,
-leaving the original unresolved state. If this cannot be executed in one
-transaction, perform the RPCs one at a time, snapshot and audit after each,
-and never blindly repeat a call after a timeout. The worker may process an
-`approved` state after step 1; its completion uses the same payment ID and
-unique database sale identity, so inspect that state before continuing.
+For this order, require **one authorized database transaction** containing a
+guarded before-snapshot, the three RPC calls below, and guarded
+after-assertions. Commit only if every assertion passes. A failed assertion
+must roll back the entire transaction, leaving the original unresolved state.
+If the available administration channel cannot execute all steps in one
+transaction, stop and prepare a reviewed transactional runner; do not perform
+three separate REST RPC calls. The intent, payment and order rows must be
+locked during the transaction. The worker cannot observe the intermediate
+`approved` state before commit. A lost connection after commit has an unknown
+outcome: inspect the database before any repeat attempt.
 
 1. Call `observe_physical_result(payment_id, verified_result_json)` once. It
    records the independently verified approval on the existing intent.
@@ -106,7 +108,7 @@ unique database sale identity, so inspect that state before continuing.
    completed state. Record the before/after diff in the audit ticket.
 
 If any step fails, stop. Preserve all evidence and existing locks; continue
-only after a new read-only assessment of the partially completed state. Never
+only after a new read-only assessment of the resulting state. Never
 compensate by recharging, issuing a document, manually editing ledger rows, or
 unlocking the register.
 
