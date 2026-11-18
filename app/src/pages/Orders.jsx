@@ -535,7 +535,9 @@ export default function Orders() {
       </div>
 
       <OrderFormDialog open={dialogOpen} onClose={() => setDialogOpen(false)} order={editingOrder}
-        financial={financialByOrder[editingOrder?.id]} activities={activities} onSaved={loadData} />
+        financial={financialByOrder[editingOrder?.id]}
+        canCollect={user?.role === 'admin' || user?.role === 'קופאי'}
+        activities={activities} onSaved={loadData} />
 
       <Dialog open={!!billingOrder} onOpenChange={() => setBillingOrder(null)}>
         <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto">

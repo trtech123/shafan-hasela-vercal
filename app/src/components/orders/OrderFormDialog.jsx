@@ -43,7 +43,7 @@ const emptyForm = {
   billing_accounting_email: "",
 };
 
-export default function OrderFormDialog({ open, onClose, order, financial, activities, onSaved }) {
+export default function OrderFormDialog({ open, onClose, order, financial, canCollect, activities, onSaved }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [instructors, setInstructors] = useState([]);
@@ -260,7 +260,7 @@ export default function OrderFormDialog({ open, onClose, order, financial, activ
           )}
         </DialogHeader>
         {order?.id && !isTaskMode && <OrderCollectionAction financial={financial}
-          allowed orderId={order.id} />}
+          allowed={canCollect} orderId={order.id} />}
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <Tabs defaultValue="order" dir="rtl">
             <TabsList className="w-full">
