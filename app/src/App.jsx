@@ -10,6 +10,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import Customers from './pages/Customers';
+import Vouchers from './pages/Vouchers';
 import Schedule from './pages/Schedule';
 import Activities from './pages/Activities';
 import Instructors from './pages/Instructors';
@@ -67,6 +68,7 @@ const AuthenticatedApp = () => {
         <Route path="/" element={<Dashboard />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/customers" element={<Customers />} />
+        <Route path="/vouchers" element={<Vouchers />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/activities" element={<Activities />} />
         <Route path="/instructors" element={<Instructors />} />
