@@ -31,7 +31,7 @@ The production Supabase Edge secret dashboard lists the names above plus `ORDER_
 
 ## Verification and limits
 
-- Complete Vitest run: 159 files, 1,258/1,263 tests passed. The five failures all came from one real-PDF file because sandboxed Windows Chromium could not launch. The identical PDF file passed **9/9** when run alone with local Chromium outside the command sandbox. These were environment launch failures, not assertion failures.
+- Final complete Vitest run outside the command sandbox with `--maxWorkers=2`: **163/163 files and 1,277/1,277 tests passed**. The unrestricted parallel run had two real-PDF tests hit their 60-second timeout under resource contention (1,275/1,277); the same PDF suite passed 9/9 alone and the full limited-worker run passed all tests. The earlier sandboxed run could not launch Windows Chromium at all.
 - New restored Edge handler tests: **9/9** across three files; they cover unauthorized calls, uncertain delivery replay, private signature archive, provider boundaries and duplicate prevention. They are mocked, so they do not prove live delivery.
 - Live chatbot bundle tests: **21/21** across the new parity test and existing inbound/integration tests. They cover atomic claim order, duplicate rejection, uncertain outcome handoff and checksum rejection with synthetic records.
 - Earlier focused cashier/order/Payper, attendance, quotation, customer, voucher and Vercel tests passed as recorded in `full-restoration-20261118.md`. Full local PGlite schema rehearsal applied 102 migrations with zero unvalidated constraints.
