@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "content_version": "client-update-2026-10-22-he",
+  "automatic_triggers": [
+    "quote_request",
+    "specific_price",
+    "complaint_or_problem",
+    "event_over_50",
+    "complex_or_custom_package",
+    "handoff_only_content",
+    "explicit_human_request"
+  ],
+  "capture_fields": [
+    { "id": "name", "required": false },
+    { "id": "phone", "required": false },
+    { "id": "email", "required": false },
+    { "id": "company", "required": false },
+    { "id": "requested_site", "required": false },
+    { "id": "requested_activity", "required": false },
+    { "id": "group_size", "required": false },
+    { "id": "preferred_date", "required": false },
+    { "id": "summary", "required": true, "fallback": "original_customer_message" }
+  ],
+  "transfer_response": "הבקשה שלך הועברה לנציג. נשמח לעזור! הנושא הזה הכי טוב בידיים אנושיות 😄 📞 050-3504478 💬 וואטסאפ: wa.me/972503504478 📧 Info.shafan@gmail.com 📠 פקס: 04-681-7738 נחזור אליך תוך יום עסקים ✅",
+  "stale_reset_response": "לא התקיימה פעילות בשיחה בזמן האחרון, לכן החזרתי אותך לתפריט הראשי.",
+  "unknown_behavior": {
+    "action": "state_based_navigation",
+    "entry_response": "welcome_and_main_menu",
+    "active_menu_response": "clarify_and_repeat_current_menu"
+  },
+  "automation_lock": {
+    "statuses": ["awaiting_human", "human_active"],
+    "allowed_automatic_responses": [],
+    "resume_requires_staff_action": true,
+    "unclaimed_timeout_minutes": 10,
+    "unclaimed_timeout_on_next_inbound": true,
+    "close_requires_staff_action": true
+  },
+  "contacts": {
+    "phone": "050-3504478",
+    "whatsapp": "wa.me/972503504478",
+    "email": "Info.shafan@gmail.com",
+    "fax": "04-681-7738"
+  },
+  "response_commitment": "תוך יום עסקים"
+}
