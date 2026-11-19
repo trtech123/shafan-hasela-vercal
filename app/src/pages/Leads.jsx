@@ -542,9 +542,10 @@ export default function Leads() {
                           {lead.full_name && <button onClick={() => copyToClipboard(lead.full_name)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"><Copy className="w-3 h-3" /></button>}
                         </div>
                         {lead.lead_source === 'landing_page' && <div className="text-xs font-normal text-muted-foreground mt-1">
-                          <span>דף נחיתה</span>
+                          <span>{lead.lead_attribution?.sourceLabel || 'דף נחיתה'}</span>
                           {(lead.lead_attribution?.campaign || lead.lead_attribution?.utmCampaign) &&
                             <span className="ms-1">{lead.lead_attribution.campaign || lead.lead_attribution.utmCampaign}</span>}
+                          {lead.lead_attribution?.topic && <span className="ms-1">{lead.lead_attribution.topic}</span>}
                         </div>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
@@ -679,9 +680,10 @@ export default function Leads() {
                 <div className="flex items-start justify-between gap-2">
                   <div><div className="font-semibold text-base">{lead.full_name || "—"}</div>
                     {lead.lead_source === 'landing_page' && <div className="text-xs text-muted-foreground">
-                      <span>דף נחיתה</span>
+                      <span>{lead.lead_attribution?.sourceLabel || 'דף נחיתה'}</span>
                       {(lead.lead_attribution?.campaign || lead.lead_attribution?.utmCampaign) &&
                         <span className="ms-1">{lead.lead_attribution.campaign || lead.lead_attribution.utmCampaign}</span>}
+                      {lead.lead_attribution?.topic && <span className="ms-1">{lead.lead_attribution.topic}</span>}
                     </div>}
                   </div>
                   <div className="flex flex-wrap gap-1 justify-end shrink-0">
@@ -705,6 +707,7 @@ export default function Leads() {
                   {lead.company && <div className="flex justify-between gap-2"><span>חברה</span><span className="text-foreground">{lead.company}</span></div>}
                   {lead.site && <div className="flex justify-between gap-2"><span>אתר</span><span className="text-foreground">{lead.site}</span></div>}
                   {lead.event_date && <div className="flex justify-between gap-2"><span>תאריך אירוע</span><span className="text-foreground">{lead.event_date}</span></div>}
+                  {lead.lead_attribution?.pageUrl && <div className="break-all">{lead.lead_attribution.pageUrl}</div>}
                 </div>
                 {(lead.notes || lead.source_text) && (
                   <div className="text-xs text-muted-foreground border-t border-border/50 pt-2 line-clamp-3">
