@@ -97,6 +97,17 @@ test('stale visible balance cannot initialize a charge', async () => {
   expect(state.request.mock.calls.filter(([, body]) => body.action === 'initialize')).toHaveLength(0);
 });
 
+test('stale cashier state cannot initialize after an unresolved attempt appears on the server', async () => {
+  state.request.mockResolvedValue({ ...base, canInitialize: false,
+    payment: { id: 'c0000000-0000-4000-8000-000000000002',
+      status: 'pending_provider', canResume: false } });
+  render(<OrderDigitalCheckout orderId={orderId} balanceMinor={1500} />);
+  fireEvent.click(screen.getByRole('button', { name: 'שלם באשראי דיגיטלי' }));
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('קיים ניסיון תשלום'));
+  expect(state.request.mock.calls.map(([, body]) => body.action)).toEqual(['status']);
+  expect(state.redirect).not.toHaveBeenCalled();
+});
+
 test('historical partial payment stays blocked even if billing is also missing', async () => {
   state.request.mockResolvedValue({ ...base, canInitialize: false, billingDefaults: null,
     eligibilityIssues: ['digital_partial_unsupported', 'vat_required'] });

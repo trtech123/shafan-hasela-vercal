@@ -70,6 +70,45 @@ test('keeps an uncertain physical intent on its recovery link', async () => {
   expect(link).toHaveAttribute('href', `/payment/physical?orderId=${orderId}`);
 });
 
+test('direct cashier navigation blocks every collection method for an uncertain unpaid order', async () => {
+  vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
+  state.invoke.mockResolvedValue({ data: { ...view(), orderNumber: 'ORD-1064', unresolvedPayment: true }, error: null });
+  render(<OrderCollection orderId={orderId} />);
+  expect(await screen.findByText(/ORD-1064/)).toBeInTheDocument();
+  expect(screen.getByText('תשלום בבדיקה')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'שלם באשראי דיגיטלי' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'שלם במסופון פיזי' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /רשום תשלום והפק מסמך/ })).toBeNull();
+  expect(screen.getByRole('link', { name: /בדיקת תשלום קיים במסופון פיזי/ })).toBeInTheDocument();
+  expect(state.physical).not.toHaveBeenCalled();
+  expect(state.direct).not.toHaveBeenCalled();
+});
+
+test('accounting reconciliation blocks digital, physical, cash and check collection', async () => {
+  vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
+  state.invoke.mockResolvedValue({ data: { ...view(), accountingReviewRequired: true,
+    billingIssues: ['accounting_review_required'] }, error: null });
+  render(<OrderCollection orderId={orderId} />);
+  expect(await screen.findByText(/ORD-123/)).toBeInTheDocument();
+  expect(screen.getByText('תשלום בבדיקה')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'שלם באשראי דיגיטלי' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'שלם במסופון פיזי' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /רשום תשלום והפק מסמך/ })).toBeNull();
+});
+
+test('refresh removes collection controls when an unpaid order becomes uncertain and restores them after resolution', async () => {
+  state.invoke.mockResolvedValueOnce({ data: view(), error: null })
+    .mockResolvedValueOnce({ data: { ...view(), unresolvedPayment: true }, error: null })
+    .mockResolvedValueOnce({ data: view(), error: null });
+  render(<OrderCollection orderId={orderId} />);
+  expect(await screen.findByRole('button', { name: 'שלם באשראי דיגיטלי' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: /רענן יתרה ומסמכים/ }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'שלם באשראי דיגיטלי' })).toBeNull());
+  expect(screen.getByText('תשלום בבדיקה')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /רענן יתרה ומסמכים/ }));
+  expect(await screen.findByRole('button', { name: 'שלם באשראי דיגיטלי' })).toBeEnabled();
+});
+
 test('eligible saved order starts hosted EMV directly for the server balance', async () => {
   vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED', 'true');
   state.invoke.mockResolvedValue({ data: view(2000), error: null });
@@ -149,6 +188,7 @@ test('paid cash order shows its issued invoice and no obsolete billing warning',
     'https://app.payper.co.il/public/invoice_show/3630819?ak=opaqueproviderkey123');
   expect(screen.queryByText(/לפני גבייה במזומן/)).toBeNull();
   expect(screen.queryByText(/גבייה נוספת חסומה/)).toBeNull();
+  expect(screen.queryByText('תשלום בבדיקה')).toBeNull();
   expect(screen.queryByRole('button', { name: 'השלמת פרטי חיוב להזמנה זו' })).toBeNull();
 });
 

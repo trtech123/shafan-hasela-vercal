@@ -81,4 +81,38 @@ describe("commercial order payment permissions", () => {
     expect(reserve).not.toHaveBeenCalled();
     expect(call).not.toHaveBeenCalled();
   });
+
+  test('direct API initialization rejects an unresolved prior payment without reserving or dispatching', async () => {
+    const { handler, view, eligibility, reserve, call } = handlerFor('cashier');
+    const priorPaymentId = 'c0000000-0000-4000-8000-000000000002';
+    view.mockResolvedValue({ ...await view(), payment_id: priorPaymentId,
+      payment_state: 'pending_provider', payment_amount: 118, payment_currency: 'ILS' });
+    eligibility.mockResolvedValue([]);
+    const response = await handler(new Request('https://example.org/payment', { method: 'POST',
+      headers: { Authorization: 'Bearer valid', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'initialize', orderId, expectedAmountMinor: 11800,
+        previousPaymentId: priorPaymentId, billing: { kind: 'person', name: 'Test',
+          identity: '000000018', email: 'test@example.org' } }),
+    }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: { code: 'payment_attempt_exists' } });
+    expect(reserve).not.toHaveBeenCalled();
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  test('direct API initialization rejects an accounting reconciliation block', async () => {
+    const { handler, eligibility, reserve, call } = handlerFor('cashier');
+    eligibility.mockResolvedValue(['accounting_review_required']);
+    const response = await handler(new Request('https://example.org/payment', { method: 'POST',
+      headers: { Authorization: 'Bearer valid', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'initialize', orderId, expectedAmountMinor: 11800,
+        previousPaymentId: null, billing: { kind: 'person', name: 'Test',
+          identity: '000000018', email: 'test@example.org' } }),
+    }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: { code: 'order_billing_incomplete',
+      issues: ['accounting_review_required'] } });
+    expect(reserve).not.toHaveBeenCalled();
+    expect(call).not.toHaveBeenCalled();
+  });
 });
