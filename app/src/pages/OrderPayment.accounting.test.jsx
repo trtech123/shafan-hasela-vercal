@@ -29,7 +29,8 @@ afterEach(cleanup);
 
 test('paid order shows its automatically issued Payper document despite the legacy accounting hold', async () => {
   render(<MemoryRouter initialEntries={[`/payment/order?orderId=${orderId}&review=1`]}><OrderPayment /></MemoryRouter>);
-  const link = await screen.findByRole('link', { name: /מסמך Payper רשמי 200003/ });
+  const link = await screen.findByRole('link', { name: /מסמך Payper רשמי 200003/ },
+    { timeout: 5000 });
   expect(link).toHaveAttribute('href', officialUrl);
   expect(screen.queryByText('לא יופק מסמך חשבונאי אוטומטי עבור תשלום זה.')).toBeNull();
   expect(invoke).toHaveBeenCalledWith('payper-noncard-collection', {

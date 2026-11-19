@@ -52,9 +52,9 @@ BEGIN
     WHERE public.is_admin_or_ops() OR public.is_cashier() OR
       o.instructor_id=public.get_my_instructor_id()
   ), classified AS (
-    SELECT id, (total_price*100)::integer AS total_minor,
-      (paid*100)::integer AS paid_minor,
-      ((total_price-paid)*100)::integer AS balance_minor,
+    SELECT id, (total_price*100)::bigint AS total_minor,
+      (paid*100)::bigint AS paid_minor,
+      ((total_price-paid)*100)::bigint AS balance_minor,
       CASE
         WHEN archived_at IS NOT NULL OR status='בוטל' OR total_price IS NULL OR
           total_price<=0 OR total_price*100<>trunc(total_price*100) THEN 'unavailable'
@@ -62,7 +62,6 @@ BEGIN
           (NOT adjusted AND (
             ((payment_status IS NULL OR payment_status NOT IN ('לא שולם','שולם חלקית'))
               AND paid<total_price) OR
-            (payment_status='לא שולם' AND paid>0) OR
             (payment_status='שולם חלקית' AND paid<=0)))
           THEN 'review'
         WHEN paid=total_price THEN 'paid'

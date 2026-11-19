@@ -470,6 +470,8 @@ try {
     RETURNING id`, [badgeOrder, badgePayment, cashier])).rows[0].id;
   await db.query('UPDATE public.payment_transactions SET sale_id=$1 WHERE id=$2',
     [badgeSale, badgePayment]);
+  assert.equal((await badge()).state, 'partial',
+    'a stale unpaid order label cannot hide the verified remaining balance');
   await db.query("UPDATE public.orders SET payment_status='שולם חלקית' WHERE id=$1", [badgeOrder]);
   assert.deepEqual(await badge(), { orderId: badgeOrder, state: 'partial',
     totalMinor: 100000, paidMinor: 40000, balanceMinor: 60000 });
@@ -492,6 +494,9 @@ try {
     RETURNING id`, [badgeOrder, balancePayment, cashier])).rows[0].id;
   await db.query('UPDATE public.payment_transactions SET sale_id=$1 WHERE id=$2',
     [balanceSale, balancePayment]);
+  await db.query("UPDATE public.orders SET payment_status='לא שולם' WHERE id=$1", [badgeOrder]);
+  assert.equal((await badge()).state, 'paid',
+    'a verified zero balance must display paid despite the stale order label');
   await db.query("UPDATE public.orders SET payment_status='פלאקארד' WHERE id=$1", [badgeOrder]);
   assert.equal((await badge()).state, 'paid');
   await db.query(`INSERT INTO public.payment_transactions(provider,operation,order_id,
