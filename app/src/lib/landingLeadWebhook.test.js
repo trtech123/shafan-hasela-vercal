@@ -75,6 +75,30 @@ describe('signed landing lead receiver', () => {
       attribution: { pageUrl: 'https://vegan-climb-the-summit.base44.app/', topic: 'יום גיבוש לחברות' } });
   });
 
+  test('uses one form identity for both Base44 placements and deduplicates a replay', async () => {
+    const seen = new Set();
+    const ingest = vi.fn(async ({ submissionKey }) => {
+      const created = !seen.has(submissionKey);
+      seen.add(submissionKey);
+      return { created, leadId: 'synthetic-lead' };
+    });
+    const { run } = handler(ingest, {
+      allowedForms: ['nurit-team-building'],
+      allowedHosts: ['vegan-climb-the-summit.base44.app'],
+    });
+    const base44 = { formId: 'nurit-team-building', submittedAt: now.toISOString(),
+      pageUrl: 'https://vegan-climb-the-summit.base44.app/',
+      fields: { name: 'Synthetic Visitor', phone: '0501234567' } };
+    const hero = await (await run(await request({ ...base44,
+      placement: 'hero', submissionId: 'synthetic-a' }))).json();
+    const footer = await (await run(await request({ ...base44,
+      placement: 'footer', submissionId: 'synthetic-b' }))).json();
+    const replay = await (await run(await request({ ...base44,
+      placement: 'footer', submissionId: 'synthetic-a' }))).json();
+    expect([hero.duplicate, footer.duplicate, replay.duplicate]).toEqual([false, false, true]);
+    expect(seen.size).toBe(2);
+  });
+
   test('requires a stable submission ID and uses the phone for contact rate limiting', async () => {
     const { run, ingest } = handler();
     expect((await run(await request({ ...payload, submissionId: undefined }))).status).toBe(400);
