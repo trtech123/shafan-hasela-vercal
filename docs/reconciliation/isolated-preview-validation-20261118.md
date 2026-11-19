@@ -8,7 +8,7 @@ Read-only inspection of Vercel project `shafan-hasela-vercal` found five variabl
 
 Vite was started on `127.0.0.1:4177` with `VITE_SUPABASE_URL=https://preview-synthetic.supabase.co` and a synthetic public key. `app/scripts/isolated-preview-ui.cjs` intercepts all requests to that synthetic host and responds from in-memory records; every other external origin is blocked, including image, font and calendar assets. The script uses Playwright through the local Playwright skill runner. The optional `--pelecard` mode is for the separate read-only administration candidate and was not used on this branch. It makes no Production request, provider call or database write.
 
-Observed in a real Chromium browser with React Router and the application UI:
+Observed in a real Chromium browser with React Router and the application UI at desktop (1440×900) and mobile (390×844) viewports. The mobile run uses `--mobile` with the same blocked external origins and synthetic responses:
 
 - Admin: create, edit, search and archive a synthetic customer; create a manual club session; mark attendance.
 - Cashier: open customer management; cannot archive; direct route to admin attendance redirects to the schedule.

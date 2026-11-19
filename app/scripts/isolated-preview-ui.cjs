@@ -6,6 +6,7 @@ const { chromium } = require('playwright');
 const base = 'http://127.0.0.1:4177';
 const synthetic = 'preview-synthetic.supabase.co';
 const checkPelecard = process.argv.includes('--pelecard');
+const mobile = process.argv.includes('--mobile');
 const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const customerId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const today = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
@@ -23,7 +24,11 @@ async function main() {
   const results = [];
   try {
     for (const role of ['admin', 'cashier', 'instructor']) {
-      const context = await browser.newContext({ serviceWorkers: 'block' });
+      const context = await browser.newContext({
+        serviceWorkers: 'block',
+        viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+        deviceScaleFactor: mobile ? 2 : 1,
+      });
       const page = await context.newPage();
       const calls = [];
       page.on('pageerror', error => console.error('PAGE ERROR', role, error.message));
