@@ -9,6 +9,17 @@ import QuotePDFDocument from "./QuotePDFDocument";
 afterEach(cleanup);
 
 describe("QuotePDFDocument product rows", () => {
+  test("opens the customer's Israeli mobile number in international WhatsApp format", () => {
+    render(<QuotePDFDocument mode="quote" onClose={vi.fn()} quote={{
+      quote_number: 'QUO-TEST', client_name: 'Synthetic customer',
+      client_phone: '053-522-1017', selected_activities: [],
+    }} />);
+
+    const link = screen.getByText('שלח וואטסאפ').closest('a');
+    expect(link?.href).toMatch(/^https:\/\/wa\.me\/972535221017\?text=/);
+    expect(new URL(link.href).searchParams.get('text')).toContain('QUO-TEST');
+  });
+
   test('shows the saved item quantity rather than the event participant count in an order preview', () => {
     render(<QuotePDFDocument mode="order" onClose={vi.fn()} quote={{
       order_number: 'ORD-TEST', client_name: 'Synthetic customer', client_phone: '0500000000',

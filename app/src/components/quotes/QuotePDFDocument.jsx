@@ -25,6 +25,8 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
   const isOrder = mode === "order";
   const title = isOrder ? "אישור הזמנה" : "הצעת מחיר";
   const docNumber = isOrder ? (quote.order_number || quote.quote_number) : quote.quote_number;
+  const phoneDigits = (quote.client_phone || "").replace(/\D/g, "");
+  const waPhone = phoneDigits.startsWith("0") ? `972${phoneDigits.slice(1)}` : phoneDigits;
 
   const generatePDFBase64 = async () => {
     const el = docRef.current;
@@ -136,7 +138,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
             <Button onClick={handleDownloadPDF} className="gap-2 bg-primary">
               <Download className="w-4 h-4" /> הורד PDF
             </Button>
-            <a href={`https://wa.me/${(quote.client_phone || "").replace(/\D/g, "")}?text=${getWhatsAppText()}`} target="_blank" rel="noreferrer">
+            <a href={`https://wa.me/${waPhone}?text=${getWhatsAppText()}`} target="_blank" rel="noreferrer">
               <Button variant="outline" className="gap-2 border-green-500 text-green-700 hover:bg-green-50">
                 <MessageCircle className="w-4 h-4" /> שלח וואטסאפ
               </Button>
