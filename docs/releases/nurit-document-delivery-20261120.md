@@ -1,5 +1,7 @@
 # Nurit document delivery release preparation — 2026-11-20
 
+> Historical preparation note for the original isolated branch. The updated live baseline, verified UUIDs and release gates are in `nurit-documents-signatures-live-preflight-20261120.md`.
+
 ## Protected baseline and scope
 
 The Vercel Production alias was checked read-only on 2026-11-20: deployment `dpl_B9uaMSKzVYSnuxXpuJXPi7Lawty6` is READY and still serves application SHA `e29fedd5b0270704dbe93b9e5fae7f81477ce631`. The later checkout-safety change is not in that deployed application. This candidate starts at the deployed SHA and changes quotation delivery only. It does not import the payment workstream, alter the webhook, run migrations, or change provider settings.
