@@ -52,6 +52,7 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
   const [warningConflicts, setWarningConflicts] = useState([]);
   const [instructorTouched, setInstructorTouched] = useState(false);
   const [quoteTouched, setQuoteTouched] = useState(false);
+  const [receiptNumbers, setReceiptNumbers] = useState([]);
 
   const selectedActivity = activities.find(a => a.id === form.activity_id);
   const isTaskMode = selectedActivity && TASK_CATEGORIES.includes(selectedActivity.category);
@@ -86,6 +87,24 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
     setInstructorTouched(false);
     setQuoteTouched(false);
   }, [order, open]);
+
+  useEffect(() => {
+    setReceiptNumbers([]);
+    if (!open || !order?.id || !canCollect) return;
+    let active = true;
+    const fetchReceipts = async () => {
+      try {
+        const { data, error } = await supabase.from('sales').select('receipt_number')
+          .eq('order_id', order.id).order('created_at', { ascending: false }).limit(20);
+        if (active && !error) setReceiptNumbers([...new Set((data || [])
+          .map(row => row.receipt_number).filter(value => typeof value === 'string' && value))]);
+      } catch {
+        // The financial status remains authoritative if receipt lookup fails.
+      }
+    };
+    fetchReceipts();
+    return () => { active = false; };
+  }, [open, order?.id, canCollect]);
 
   useEffect(() => {
     if (order) {
@@ -261,6 +280,9 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
         </DialogHeader>
         {order?.id && !isTaskMode && <OrderCollectionAction financial={financial}
           allowed={canCollect} orderId={order.id} />}
+        {order?.id && receiptNumbers.length > 0 && <p className="text-xs text-muted-foreground">
+          {receiptNumbers.map(number => `אישור מכירה פנימי ${number}`).join(' · ')}
+        </p>}
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <Tabs defaultValue="order" dir="rtl">
             <TabsList className="w-full">

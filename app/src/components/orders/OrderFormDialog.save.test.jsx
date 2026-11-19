@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
-  blocks: [], orders: [], saveResult: { data: { id: 'order-1' }, error: null },
+  blocks: [], orders: [], sales: [], saveResult: { data: { id: 'order-1' }, error: null },
   instructors: [{ id: 'instructor-1', full_name: 'מדריך', phone: '0500000000', status: 'פעיל' }],
   writes: [], success: vi.fn(), error: vi.fn(), info: vi.fn(),
 }));
@@ -21,7 +21,7 @@ vi.mock('@/api/supabaseClient', () => ({
       update: (data) => { mutation = true; state.writes.push({ table, kind: 'update', data }); return builder; },
       insert: (data) => { mutation = true; state.writes.push({ table, kind: 'insert', data }); return builder; },
       single: () => Promise.resolve(state.saveResult),
-      then: (resolve) => resolve({ data: table === 'blocked_slots' ? state.blocks : table === 'orders' && !mutation ? state.orders : table === 'instructors' ? state.instructors : [], error: null }),
+      then: (resolve) => resolve({ data: table === 'blocked_slots' ? state.blocks : table === 'orders' && !mutation ? state.orders : table === 'instructors' ? state.instructors : table === 'sales' ? state.sales : [], error: null }),
     };
     return builder;
   } },
@@ -35,9 +35,9 @@ const order = {
   activity_date: '2026-11-10', start_time: '10:00:00', end_time: '11:00:00',
   site: 'עכו', status: 'מאושר', instructor_id: 'instructor-1', activity_id: 'activity-1',
 };
-const renderDialog = (currentOrder = order) => {
+const renderDialog = (currentOrder = order, extraProps = {}) => {
   const onSaved = vi.fn();
-  const view = render(<OrderFormDialog open onClose={vi.fn()} order={currentOrder} activities={[{ id: 'activity-1', name: 'פעילות', status: 'פעיל' }]} onSaved={onSaved} />);
+  const view = render(<OrderFormDialog open onClose={vi.fn()} order={currentOrder} activities={[{ id: 'activity-1', name: 'פעילות', status: 'פעיל' }]} onSaved={onSaved} {...extraProps} />);
   return { ...view, onSaved };
 };
 
@@ -48,12 +48,23 @@ beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = () => {};
   state.blocks = [];
   state.orders = [];
+  state.sales = [];
   state.saveResult = { data: { id: 'order-1' }, error: null };
   state.writes = [];
   state.success.mockClear();
   state.error.mockClear();
 });
 afterEach(cleanup);
+
+test('shows a verified paid order with its existing internal sale receipt in details', async () => {
+  state.sales = [{ receipt_number: 'RCP-1048' }];
+  renderDialog(order, { canCollect: true,
+    financial: { state: 'paid', totalMinor: 100, paidMinor: 100, balanceMinor: 0 } });
+  expect(await screen.findByText(/אישור מכירה פנימי RCP-1048/)).toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('התשלום בוצע');
+  expect(screen.queryByRole('link', { name: 'גבייה בקופה' })).not.toBeInTheDocument();
+  expect(state.writes).toHaveLength(0);
+});
 
 describe('existing order save', () => {
   test('persists a changed date and linked activity/instructor before showing success', async () => {
