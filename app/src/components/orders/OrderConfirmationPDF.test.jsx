@@ -5,6 +5,10 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import OrderConfirmationPDF from "./OrderConfirmationPDF";
 
+const authState = vi.hoisted(() => ({ role: 'מדריך' }));
+vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: authState.role } }) }));
+vi.mock('./OrderSignaturePanel', () => ({ default: () => <section aria-label="ניהול חתימות" /> }));
+
 const invokeMock = vi.fn();
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
@@ -65,6 +69,7 @@ const activity = {
 };
 
 beforeEach(() => {
+  authState.role = 'מדריך';
   invokeMock.mockReset();
   invokeMock.mockResolvedValue({ data: { ok: true }, error: null });
   toastErrorMock.mockReset();
@@ -90,6 +95,12 @@ afterEach(() => {
 });
 
 describe("OrderConfirmationPDF recipient email", () => {
+  test('authorized staff see versioned signature management alongside the existing PDF', () => {
+    authState.role = 'admin';
+    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
+    expect(screen.getByLabelText('ניהול חתימות')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'הורד PDF' })).toBeInTheDocument();
+  });
   test("keeps archived history downloadable without offering new customer notifications", () => {
     render(<OrderConfirmationPDF order={{ ...order, archived_at: '2026-11-04T10:00:00Z' }} activity={activity} onClose={() => {}} />);
     expect(screen.getByRole('button', { name: 'הורד PDF' })).toBeInTheDocument();

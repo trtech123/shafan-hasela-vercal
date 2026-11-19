@@ -1,0 +1,15 @@
+# Order signatures: separate release candidate — 2026-11-20
+
+This branch starts at protected Production application SHA `e29fedd5b0270704dbe93b9e5fae7f81477ce631`. It imports only the restored order-signature UI, Vercel PDF API and its dependencies, private-PDF renderer, restored `send-order-signature` source, tests and related Vercel function configuration. It does not import older Orders/Schedule/financial application files or alter the current payment backend, chatbot webhook or provider settings. No schema migration is proposed here: the previously audited live database contains the signature RPCs and private bucket, but those conditions must be checked again before release.
+
+The server creates a frozen order-confirmation revision, stores the unsigned PDF in `order-signatures-private`, hashes it, issues an opaque expiring signing URL, validates bounded signature strokes, and stores the signed version under a deterministic private key. Staff PDF reads verify stored hashes. Public token reads are limited to the associated revision. The recipient for email delivery is validated on the server and the delivery RPC claims an attempt before provider contact. Unknown provider outcomes stay uncertain; a repeat requires an explicit manual-resend decision. The historical PDF download and existing order UI remain present.
+
+## Acceptance after exact-commit approval
+
+1. Recheck Production app SHA/alias, backup, `order_signature_action`, `order_signature_delivery`, rate-limit RPC, private bucket MIME/size/no-public-policy, Vercel `ORDER_SIGNATURE_PUBLIC_ORIGIN`, Edge deployed `send-order-signature` bundle and sender secret names. Never print secret values.
+2. Deploy the application manually, without a migration or Edge redeploy. Confirm new API route and the `order-sign` page on a synthetic unpaid order. The test record must use only the requester's verified contact fields, entered at test time; no personal contact is stored in Git.
+3. Create revision 1 and open the unsigned PDF; verify it contains the marked test order and no accounting document. Confirm the Storage object is private to the app service path. Test expired/wrong token, instructor access denial and staff role boundaries without delivering anything.
+4. With distinct approval for a customer message, email exactly one unsigned order confirmation/signing link to the verified personal address. Confirm inbox attachment/link and durable delivery attempt. A response timeout is not a failed send. Sign only with a clearly synthetic signature if the requester approves that step; inspect the signed PDF and immutable version 1, then edit the test order and verify revision 2 does not overwrite version 1.
+5. Preserve Storage artifacts and delivery evidence if an email was sent. Archive the test order after dependency review; never delete signed evidence or official documents as cleanup.
+
+Rollback: restore the previous READY Vercel application deployment. Do not restore the database, delete private PDFs, or retry uncertain delivery. The PDF renderer test uses real local Chromium and synthetic data; no Production object was created during preparation.
