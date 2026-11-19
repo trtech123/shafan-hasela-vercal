@@ -4,17 +4,25 @@ Status: **prepared; do not migrate or deploy until every gate below passes and t
 
 ## Source and scope
 
-- Production deployment at preparation: `dpl_AQKAKWDGJvcp1s2YokgBVs2xffeP` (READY, CLI source). Its uploaded source content hashes for `Orders.jsx`, `Schedule.jsx`, `App.jsx`, `orderPayments.js`, `payperBilling.js`, `physical/client.js`, `pelecard-physical.js`, `pelecard-order.js`, `package.json`, `vite.config.js`, and `vercel.json` match commit `73690eee338b400bd9310e8fb283806852f43f29` after Windows CRLF normalization.
-- Release branch: `codex/checkout-status-release-20261119`. The final release commit must be recorded after tests and review.
+- Production deployment at integration: `dpl_2z6PRpf8qeD9wjECEi773XN43b3j` (READY), alias `shafan-hasela-vercal.vercel.app`, source commit `86dab2b1c9d1b6de8a61c39b5a42458557e5eb0b`. The Group A operational UI and instructor permissions are the protected baseline.
+- Release branch: `codex/checkout-status-group-a-20261119`, created from that exact Production commit. Six checkout-status commits through `cce76e0` were applied without path conflicts. The final release commit must be recorded after tests and review.
 - One additive read-only RPC: `supabase/migrations/202611180002_order_financial_badges.sql`. It returns order totals, ledger-paid amounts, remaining balances and a collection state to authenticated users authorized for each order. It performs no table writes and grants no new table privileges.
 - A stale `orders.payment_status='לא שולם'` does not override a verified partial or fully paid ledger balance. An unresolved payment/physical intent still yields `review` and blocks a second collection. A stored paid label with a missing ledger payment also yields `review`.
 - Frontend changes: Orders list and details, Schedule order card, and read-only existing `sales.receipt_number` display in order details. Existing payment, POS, Payper, sales and accounting endpoints are unchanged.
-- Compatibility rehearsal branch `codex/checkout-restoration-compat-20261119` applies status changes over restoration commit `9669eb5`; its `Orders.jsx` preserves the restoration voucher action. It is not the Production release source.
+- Integration correction: re-fetch the verified balance whenever the order list is reloaded, even if it contains the same order IDs. This prevents a stale collection badge after an order-change event; a regression test covers the transition from unpaid to paid.
+- The earlier `codex/checkout-restoration-compat-20261119` rehearsal and the old-baseline checkout branch are not the Production release source.
+
+## Read-only Production preflight on 2026-11-19
+
+- Supabase scheduled physical backup `2026-11-19 17:34:02 UTC` shows a Restore action. This is later than the ORD-1062 reconciliation. Its restorability was not tested by a restore; Storage objects are excluded. Recheck backup age and any later critical financial writes immediately before authorization to migrate.
+- A read-only post-backup audit found zero rows created or updated after that timestamp in `orders`, `sales`, `payment_transactions`, `payment_transaction_events`, `physical_payment_intents`, `payper_document_ledger`, `accounting_documents`, `manual_order_payments`, `payper_noncard_payments`, `pelecard_live_audit`, `pelecard_test_payments`, and `immediate_accounting_payment_evidence`. This is a point-in-time observation, not a lock against later writes.
+- The live schema has all 21 columns referenced by the new RPC across `orders`, `payment_transactions`, `physical_payment_intents`, and `sales`; `is_admin_or_ops()`, `is_cashier()`, and `get_my_instructor_id()` exist; `get_order_financial_badges(uuid[])` does not yet exist.
+- ORD-1062 is unchanged: total ₪1, one succeeded ₪1 payment, linked ₪1 physical-terminal sale, physical intent `succeeded`, zero orphan sales/payments. The candidate's balance algorithm therefore returns `paid`, `paidMinor=100`, `balanceMinor=0`, displayed as `התשלום בוצע`. This is a read-only prediction until the migration is applied and the authenticated RPC is queried.
 
 ## Gates before approval and execution
 
-1. Verify the Production alias still targets the recorded deployment and compare source file fingerprints again if the deployment changed. Rebase/review if its source changed.
-2. Supabase Dashboard → project `divzxsynczeifkpnpupl` → Database → Backups: record the **completed** backup timestamp and visible Restore action. Timestamp must be after `2026-11-19 14:02:10 UTC` (ORD-1062 reconciliation). The `2026-11-18 17:34 UTC` backup is insufficient. Do not restore Production merely to test this release.
+1. Verify the Production alias still targets `dpl_2z6PRpf8qeD9wjECEi773XN43b3j` and rebase/review if its source changed.
+2. Supabase Dashboard → project `divzxsynczeifkpnpupl` → Database → Backups: record the latest **completed** backup timestamp and visible Restore action. It must cover the ORD-1062 reconciliation and any subsequent critical financial changes. The 2026-11-19 17:34:02 UTC backup meets the first condition; compare it against current audit records before release. Do not restore Production merely to test this release.
 3. In a read-only Production SQL Editor session, check the required schema and absence of this RPC:
 
 ```sql
@@ -39,7 +47,7 @@ ORDER BY tablename,policyname;
 Stop if a helper function or column is missing, the new RPC already exists with unknown provenance, or current financial schema differs from the reviewed migration. The RPC runs as a definer with an empty `search_path`, explicit authenticated/profile guard, per-order admin/operations/cashier/instructor authorization, a 100-order limit, and EXECUTE only for `authenticated`; it does not rely on exposing the protected financial tables to the browser.
 
 4. Confirm the release diff contains only the documented migration, frontend status/receipt changes, regression tests and this runbook. No API, worker, POS, Payper or financial write function may be present in the diff.
-5. Require green full Vitest, migration rehearsal, full-schema rehearsal, focused lint on changed files, and build. Whole-repository lint currently has three pre-existing errors in `Leads.jsx`, `Templates.jsx`, and `Users.jsx`; these are outside this release.
+5. Require green checkout-status and payment regression tests, migration rehearsal, full-schema rehearsal, whole-app lint, and build. Recheck all gates on the final SHA.
 
 ## Approved execution sequence (not yet authorized)
 
