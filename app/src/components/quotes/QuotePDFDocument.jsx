@@ -1,11 +1,10 @@
 import { useRef, useState } from "react";
 import moment from "moment";
 import { Button } from "@/components/ui/button";
-import { Download, Send, MessageCircle, X, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Download, X } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { supabase } from "@/api/supabaseClient";
-import { BRAND } from "@/lib/orderDocText";
+import QuoteDeliveryPanel from './QuoteDeliveryPanel';
 
 const statusLabels = {
   "טיוטה": { label: "טיוטה", color: "#94a3b8" },
@@ -20,13 +19,14 @@ const itemTotal = (item, quote) => Number(item.line_total ?? (Number(item.price_
 
 export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
   const docRef = useRef(null);
-  const [emailStatus, setEmailStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
 
   const isOrder = mode === "order";
+  const versionedDelivery = !isOrder && Boolean(quote.id);
   const title = isOrder ? "אישור הזמנה" : "הצעת מחיר";
   const docNumber = isOrder ? (quote.order_number || quote.quote_number) : quote.quote_number;
 
-  const generatePDFBase64 = async () => {
+  const createPdf = async () => {
     const el = docRef.current;
     const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
     const imgData = canvas.toDataURL("image/png");
@@ -34,7 +34,7 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-    return pdf.output("datauristring").split(",")[1]; // base64 only
+    return pdf;
   };
 
   const handleDownloadPDF = async () => {
@@ -48,85 +48,6 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
     pdf.save(`${title}_${docNumber || "מסמך"}.pdf`);
   };
 
-  const handleSendEmail = async () => {
-    setEmailStatus("sending");
-    try {
-      const pdfBase64 = await generatePDFBase64();
-      const activitiesList = (quote.selected_activities || [])
-        .map(a => `<li>${a.activity_name}${a.duration_hours ? ` — ${a.duration_hours} שע׳` : ""} — ${itemTotal(a, quote).toLocaleString()}₪</li>`)
-        .join("");
-
-      const htmlBody = `
-        <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #1a4a2e, #2d7a4f); padding: 32px; border-radius: 12px 12px 0 0;">
-            <h1 style="color: white; margin: 0;">${BRAND.name}</h1>
-            <p style="color: rgba(255,255,255,0.7); margin: 4px 0 0;">${title}</p>
-          </div>
-          <div style="background: #f8fafc; padding: 32px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0;">
-            <p>שלום ${quote.client_name},</p>
-            <p>מצורף ${title} מספר <strong>${docNumber || "—"}</strong> עבורך.</p>
-            ${quote.event_date ? `<p>📅 תאריך האירוע: <strong>${moment(quote.event_date).format("DD/MM/YYYY")}</strong></p>` : ""}
-            ${quote.site ? `<p>📍 אתר: <strong>${quote.site}</strong></p>` : ""}
-            <p>👥 מספר משתתפים: <strong>${quote.num_participants || "—"}</strong></p>
-            <ul>${activitiesList}</ul>
-            ${quote.discount > 0 ? `<p>הנחה: <strong>-${quote.discount.toLocaleString()}₪</strong></p>` : ""}
-            <p style="font-size: 18px; font-weight: bold; color: #1a4a2e;">סה״כ לתשלום: ${(quote.final_price || 0).toLocaleString()}₪</p>
-            ${quote.notes ? `<p>הערות: ${quote.notes}</p>` : ""}
-            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-            <p style="color: #94a3b8; font-size: 12px; text-align: center;">${BRAND.name} — חוויות טבע ואתגר בגליל</p>
-          </div>
-        </div>
-      `;
-
-      // TODO: deploy supabase/functions/send-quote-email Edge Function (Deno + Resend)
-      const { error: fnError } = await supabase.functions.invoke("send-quote-email", {
-        body: {
-          to:       quote.client_email,
-          subject:  `${title} מ${BRAND.name} — ${quote.client_name}`,
-          htmlBody,
-          pdfBase64,
-          fileName: `${title}_${docNumber || "מסמך"}.pdf`,
-        },
-      });
-      if (fnError) throw fnError;
-
-      setEmailStatus("sent");
-      setTimeout(() => setEmailStatus(null), 4000);
-    } catch (err) {
-      setEmailStatus("error");
-      setTimeout(() => setEmailStatus(null), 5000);
-    }
-  };
-
-  const getWhatsAppText = () => {
-    const lines = [
-      `*${title} - ${BRAND.name}*`,
-      `מספר: ${docNumber || "—"}`,
-      `לקוח: ${quote.client_name}`,
-      quote.organization ? `ארגון: ${quote.organization}` : "",
-      quote.event_date ? `תאריך: ${moment(quote.event_date).format("DD/MM/YYYY")}` : "",
-      quote.site ? `אתר: ${quote.site}` : "",
-      `משתתפים: ${quote.num_participants || "—"}`,
-      "",
-      "*פעילויות:*",
-      ...(quote.selected_activities || []).map(a =>
-        `• ${a.activity_name}${a.duration_hours ? ` — ${a.duration_hours} שע׳` : ""} — ${itemTotal(a, quote).toLocaleString()}₪`
-      ),
-      "",
-      quote.discount > 0 ? `סה״כ לפני הנחה: ${(quote.total_price || 0).toLocaleString()}₪` : "",
-      quote.discount > 0 ? `הנחה: ${quote.discount.toLocaleString()}₪` : "",
-      `*סה״כ לתשלום: ${(quote.final_price || 0).toLocaleString()}₪*`,
-      quote.notes ? `\nהערות: ${quote.notes}` : "",
-    ].filter(Boolean).join("\n");
-    return encodeURIComponent(lines);
-  };
-
-  const getEmailHref = () => {
-    const subject = encodeURIComponent(`${title} מ${BRAND.name} — ${quote.client_name}`);
-    const body = decodeURIComponent(getWhatsAppText()).replace(/\*/g, "");
-    return `mailto:${quote.client_email || ""}?subject=${subject}&body=${encodeURIComponent(body)}`;
-  };
-
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 overflow-y-auto">
       <div className="w-full max-w-2xl">
@@ -136,32 +57,11 @@ export default function QuotePDFDocument({ quote, mode = "quote", onClose }) {
             <Button onClick={handleDownloadPDF} className="gap-2 bg-primary">
               <Download className="w-4 h-4" /> הורד PDF
             </Button>
-            <a href={`https://wa.me/${(quote.client_phone || "").replace(/\D/g, "")}?text=${getWhatsAppText()}`} target="_blank" rel="noreferrer">
-              <Button variant="outline" className="gap-2 border-green-500 text-green-700 hover:bg-green-50">
-                <MessageCircle className="w-4 h-4" /> שלח וואטסאפ
-              </Button>
-            </a>
-            {quote.client_email && (
-              <Button
-                variant="outline"
-                className={`gap-2 ${emailStatus === "error" ? "border-red-400 text-red-600" : ""}`}
-                onClick={handleSendEmail}
-                disabled={emailStatus === "sending" || emailStatus === "sent"}
-              >
-                {emailStatus === "sending" ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> שולח...</>
-                ) : emailStatus === "sent" ? (
-                  <><CheckCircle className="w-4 h-4 text-green-600" /> נשלח!</>
-                ) : emailStatus === "error" ? (
-                  <><AlertCircle className="w-4 h-4" /> שגיאה בשליחה</>
-                ) : (
-                  <><Send className="w-4 h-4" /> שלח מייל</>
-                )}
-              </Button>
-            )}
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-5 h-5" /></Button>
+          <Button variant="ghost" size="icon" disabled={deliveryBusy} onClick={onClose}><X className="w-5 h-5" /></Button>
         </div>
+
+        {versionedDelivery && <QuoteDeliveryPanel quote={quote} createPdf={createPdf} onBusyChange={setDeliveryBusy} />}
 
         {/* Document */}
         <div ref={docRef} className="bg-white rounded-2xl shadow-2xl overflow-hidden font-sans" dir="rtl" style={{ fontFamily: "'Heebo', Arial, sans-serif" }}>
