@@ -146,8 +146,6 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   const sectionBRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [signatureBusy, setSignatureBusy] = useState(false);
-  const [emailBusy, setEmailBusy] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
   const [waSending, setWaSending] = useState(false);
   const [waSendStep, setWaSendStep] = useState(null); // null | "מייצר PDF..." | "שולח..."
   const [waResult, setWaResult] = useState(null); // null | { type: "success" | "error", message: string }
@@ -163,7 +161,6 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     setRecipientEmail(nextRecipientEmail);
     setEmailError(nextEmailError);
     setIsEditingEmail(Boolean(nextEmailError));
-    setEmailSent(false);
     setWaResult(null);
   }, [order?.id, order?.client_email]);
 
@@ -246,8 +243,8 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     }
   };
 
-  // Generate the same PDF, send it as a real attachment via the send-order-doc
-  // Edge Function (Resend) to the order's client email.
+  // The deployed send-order-doc function requires a saved version and request ID.
+  // Open the versioned panel instead of sending this unsaved browser PDF.
   const handleEmail = async () => {
     const normalizedRecipientEmail = recipientEmail.trim();
     const validationError = getEmailError(normalizedRecipientEmail);
@@ -259,48 +256,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
 
     setRecipientEmail(normalizedRecipientEmail);
     setIsEditingEmail(false);
-    setEmailBusy(true);
-    // Track which stage we're in so a failure points at the real culprit
-    // (PDF generation vs. Supabase invoke vs. Edge function) instead of a
-    // single opaque message. Diagnostics go to console; the toast surfaces
-    // the real error text to the user.
-    let step = "יצירת PDF";
-    try {
-      const pdf = await buildPdf();
-      const pdfBase64 = pdf.output("datauristring").split(",")[1];
-      const kb = Math.round((pdfBase64.length * 3) / 4 / 1024);
-      console.info(`OrderConfirmationPDF: PDF built — base64 ${pdfBase64.length} chars (~${kb} KB)`);
-
-      step = "שליחה לשרת";
-      console.info(`OrderConfirmationPDF: invoking send-order-doc → ${normalizedRecipientEmail}`);
-      const { data, error } = await supabase.functions.invoke("send-order-doc", {
-        body: {
-          to: normalizedRecipientEmail,
-          orderNumber: order.order_number || "",
-          clientName: order.client_name || "",
-          activityName,
-          activityDate: dateFormatted,
-          pdfBase64,
-          fileName,
-        },
-      });
-      if (error) throw error;
-
-      step = "שרת המייל";
-      if (data && data.ok === false) throw new Error(JSON.stringify(data.error));
-
-      setEmailSent(true);
-      toast.success("המייל נשלח ✓");
-    } catch (err) {
-      const detail =
-        err?.message ||
-        (err?.context ? JSON.stringify(err.context) : "") ||
-        String(err);
-      console.error(`OrderConfirmationPDF email error [שלב: ${step}]:`, err);
-      toast.error(`שליחת המייל נכשלה (${step}): ${detail}`);
-    } finally {
-      setEmailBusy(false);
-    }
+    document.getElementById("order-versioned-delivery")?.scrollIntoView?.({ block: "start", behavior: "smooth" });
   };
 
   const handleRecipientDone = () => {
@@ -318,7 +274,6 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   const handleRecipientChange = (event) => {
     const value = event.target.value;
     setRecipientEmail(value);
-    setEmailSent(false);
     if (emailError) {
       setEmailError(getEmailError(value));
     }
@@ -398,15 +353,15 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {busy ? "מפיק PDF..." : "הורד PDF"}
             </Button>
-            {!order.archived_at && <Button
+            {!order.archived_at && canSendOrderConfirmation(user?.role) && <Button
               onClick={handleEmail}
-              disabled={emailBusy || signatureBusy}
+              disabled={signatureBusy}
               variant="outline"
-              title={recipientEmail.trim() ? `שלח אל ${recipientEmail.trim()}` : "הזן כתובת אימייל לשליחה"}
+              title="פתח שליחה של גרסת אישור שמורה"
               className="gap-2 border-blue-500 text-blue-700 hover:bg-blue-50"
             >
-              {emailBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-              {emailBusy ? "שולח..." : emailSent ? "נשלח ✓" : "שלח במייל"}
+              <Mail className="w-4 h-4" />
+              שליחה במייל — גרסה שמורה
             </Button>}
             {!order.archived_at && <Button
               variant="outline"
@@ -441,7 +396,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
           </p>
         )}
 
-        {!order.archived_at && <div className="mb-3 rounded-xl bg-white px-3 py-3 shadow-sm">
+        {!order.archived_at && canSendOrderConfirmation(user?.role) && <div className="mb-3 rounded-xl bg-white px-3 py-3 shadow-sm">
           {isEditingEmail ? (
             <div>
               <Label htmlFor="order-pdf-recipient-email" className="text-sm font-medium text-slate-700">
@@ -495,8 +450,8 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
           )}
         </div>}
 
-        {canSendOrderConfirmation(user?.role) && <div className="mb-4 rounded-xl bg-white p-3 shadow-sm">
-          <OrderSignaturePanel key={order.id} orderId={order.id} email={order.client_email || ''} onBusyChange={setSignatureBusy} />
+        {canSendOrderConfirmation(user?.role) && <div id="order-versioned-delivery" className="mb-4 rounded-xl bg-white p-3 shadow-sm">
+          <OrderSignaturePanel key={order.id} orderId={order.id} email={recipientEmail} onBusyChange={setSignatureBusy} />
         </div>}
 
         <div className="space-y-4">

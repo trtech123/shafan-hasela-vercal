@@ -8,6 +8,7 @@ import {canManuallyResend} from '@/lib/manualDelivery';
 export default function OrderSignaturePanel({orderId,email='',onBusyChange}) {
  const [revisions,setRevisions]=useState([]),[deliveries,setDeliveries]=useState([]),[legacy,setLegacy]=useState([]),[recipient,setRecipient]=useState(email),[link,setLink]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false),[message,setMessage]=useState(''),[confirmation,setConfirmation]=useState(null);
  const [preview,setPreview]=useState(null);
+ useEffect(()=>setRecipient(email),[email]);
  const previewGeneration=useRef(0),previewRef=useRef(null);
  useEffect(()=>{if(preview)previewRef.current?.scrollIntoView?.({block:'start',behavior:'smooth'});},[preview]);
  useEffect(()=>{previewGeneration.current++;setPreview(null);return()=>{previewGeneration.current++;};},[orderId]);

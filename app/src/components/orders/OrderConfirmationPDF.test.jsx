@@ -7,7 +7,7 @@ import OrderConfirmationPDF from "./OrderConfirmationPDF";
 
 const authState = vi.hoisted(() => ({ role: 'מדריך' }));
 vi.mock('@/lib/AuthContext', () => ({ useAuth: () => ({ user: { role: authState.role } }) }));
-vi.mock('./OrderSignaturePanel', () => ({ default: () => <section aria-label="ניהול חתימות" /> }));
+vi.mock('./OrderSignaturePanel', () => ({ default: ({ email }) => <section aria-label="ניהול חתימות">{email}</section> }));
 
 const invokeMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -69,7 +69,7 @@ const activity = {
 };
 
 beforeEach(() => {
-  authState.role = 'מדריך';
+  authState.role = 'admin';
   invokeMock.mockReset();
   invokeMock.mockResolvedValue({ data: { ok: true }, error: null });
   toastErrorMock.mockReset();
@@ -112,7 +112,7 @@ describe("OrderConfirmationPDF recipient email", () => {
   test("shows a valid recipient in compact mode by default", () => {
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
-    expect(screen.getAllByText("original@example.com")).toHaveLength(2);
+    expect(screen.getAllByText("original@example.com")).toHaveLength(3);
     expect(screen.queryByLabelText("כתובת אימייל לשליחה")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "עריכת כתובת אימייל" })).toBeInTheDocument();
   });
@@ -128,7 +128,7 @@ describe("OrderConfirmationPDF recipient email", () => {
     fireEvent.click(screen.getByRole("button", { name: "סיום" }));
 
     expect(screen.queryByLabelText("כתובת אימייל לשליחה")).not.toBeInTheDocument();
-    expect(screen.getByText("new@example.com")).toBeInTheDocument();
+    expect(screen.getByLabelText('ניהול חתימות')).toHaveTextContent('new@example.com');
   });
 
   test("keeps the editor open when Done receives an invalid recipient", async () => {
@@ -177,14 +177,14 @@ describe("OrderConfirmationPDF recipient email", () => {
     fireEvent.change(screen.getByLabelText("כתובת אימייל לשליחה"), {
       target: { value: "invalid-email" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "שלח במייל" }));
+    fireEvent.click(screen.getByRole("button", { name: "שליחה במייל — גרסה שמורה" }));
 
     expect(screen.getByLabelText("כתובת אימייל לשליחה")).toHaveValue("invalid-email");
     expect(await screen.findByRole("alert")).toHaveTextContent("כתובת האימייל אינה תקינה");
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  test("sends to a valid recipient saved from edit mode", async () => {
+  test("opens versioned delivery with the edited recipient and does not call the legacy Edge contract", async () => {
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
     fireEvent.click(screen.getByRole("button", { name: "עריכת כתובת אימייל" }));
@@ -192,16 +192,9 @@ describe("OrderConfirmationPDF recipient email", () => {
       target: { value: "  new@example.com  " },
     });
     fireEvent.click(screen.getByRole("button", { name: "סיום" }));
-    fireEvent.click(screen.getByRole("button", { name: "שלח במייל" }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith(
-        "send-order-doc",
-        expect.objectContaining({
-          body: expect.objectContaining({ to: "new@example.com" }),
-        })
-      );
-    });
+    fireEvent.click(screen.getByRole("button", { name: "שליחה במייל — גרסה שמורה" }));
+    expect(screen.getByLabelText('ניהול חתימות')).toHaveTextContent('new@example.com');
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });
 
