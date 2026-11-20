@@ -18,6 +18,18 @@ export function signingLinkFromPdf(document,origin) {
   }
   throw new SignatureError('artifact_unavailable',503);
 }
+export function signatureEdgeHeaders(env=process.env) {
+  const token=env.SUPABASE_EDGE_SERVICE_ROLE_JWT;
+  try {
+    const parts=token?.split('.');
+    if(parts?.length!==3||parts.some(part=>!/^[A-Za-z0-9_-]+$/.test(part))) throw Error();
+    const header=JSON.parse(Buffer.from(parts[0],'base64url').toString('utf8'));
+    const claims=JSON.parse(Buffer.from(parts[1],'base64url').toString('utf8'));
+    if(header.alg!=='HS256'||claims.role!=='service_role'||!Number.isInteger(claims.exp)||claims.exp<=Math.floor(Date.now()/1000)+60) throw Error();
+  }catch {throw new SignatureError('server_not_configured',503);}
+  // Local checks catch misconfiguration; Supabase verifies the JWT signature.
+  return {'Content-Type':'application/json',Authorization:'Bearer '+token,apikey:token};
+}
 export function signatureRuntime(env=process.env) {
   const url=env.SUPABASE_URL||env.VITE_SUPABASE_URL, key=env.SUPABASE_SERVICE_ROLE_KEY;
   const origin=env.ORDER_SIGNATURE_PUBLIC_ORIGIN;
@@ -53,11 +65,12 @@ export function signatureRuntime(env=process.env) {
       return readPdf(path);
     },
     deliver:async({actorId,revision,channel,requestId,recipient,resendOf,confirmed})=>{
+      const edgeHeaders=signatureEdgeHeaders(env);
       const bytes=await readPdf(revision.unsigned_path);
       if(sha256(bytes)!==revision.unsigned_hash) throw new SignatureError('artifact_unavailable',503);
       const signingUrl=signingLinkFromPdf(await PDFDocument.load(bytes),origin);
       const response=await fetch(url+'/functions/v1/send-order-signature',{
-        method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key,apikey:key},
+        method:'POST',headers:edgeHeaders,
         body:JSON.stringify({actorId,revisionId:revision.id,channel,requestId,recipient,signingUrl,resendOf,confirmed}),signal:AbortSignal.timeout(55000),
       });
       const data=await response.json();

@@ -1,7 +1,7 @@
 ﻿import {describe,it,expect,vi} from 'vitest';
 import {createSignatureHandler} from '../../server/order-confirmation/handler.js';
 import {confirmationHtml} from '../../server/order-confirmation/renderer.js';
-import {sha256,RENDER_VERSION} from '../../server/order-confirmation/contract.js';
+import {sha256,RENDER_VERSION,SignatureError} from '../../server/order-confirmation/contract.js';
 const token='a'.repeat(43), id='98000000-0000-4000-8000-000000000001';
 const request=(body,headers={})=>new Request('https://example.invalid/api/order-confirmation',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
 function deps(){return {authorize:vi.fn(async()=>id),rateLimit:vi.fn(async()=>true),action:vi.fn(async()=>({id,revision_number:1,status:'pending',snapshot:{data:{},text:{}},unsigned_path:id+'/unsigned.pdf',unsigned_hash:'hash'})),readPdf:vi.fn(async()=>Buffer.from('%PDF-test')),writePdf:vi.fn(),renderUnsigned:vi.fn(async()=>Buffer.from('%PDF-test')),renderSigned:vi.fn(async()=>Buffer.from('%PDF-signed')),origin:'https://example.invalid',days:7};}
@@ -32,6 +32,26 @@ describe('order signature HTTP boundary',()=>{
  it('uses authoritative server revision and bundled text when creating',async()=>{const d=deps(),r=await createSignatureHandler(d)(request({action:'create',orderId:id}));expect(r.status).toBe(200);expect(d.authorize).toHaveBeenCalledOnce();expect(d.action.mock.calls[0][0]).toBe('create');expect(d.action.mock.calls[0][1].text.ORDER_TERMS).toBeDefined();expect(d.renderUnsigned.mock.calls[0][0]).toEqual({data:{},text:{}});expect((await r.json()).signingUrl).toMatch(/^https:\/\/example.invalid\/order-sign#[A-Za-z0-9_-]{43}$/);});
  it('rate limits before database token lookup',async()=>{const d=deps();d.rateLimit.mockResolvedValue(false);const r=await createSignatureHandler(d)(request({action:'view',token}));expect(r.status).toBe(429);expect(d.action).not.toHaveBeenCalled();});
  it('requires staff auth for revocation and history',async()=>{const d=deps();d.authorize.mockRejectedValue(Error('bad jwt'));expect((await createSignatureHandler(d)(request({action:'history',orderId:id}))).status).toBe(401);expect(d.action).not.toHaveBeenCalled();});
+ it('allows an authorized staff member to reach the role-checked delivery action',async()=>{
+  const d=deps();d.deliver=vi.fn(async()=>({ok:true}));
+  const response=await createSignatureHandler(d)(request({action:'deliver',revisionId:id,requestId:id,channel:'email',recipient:'test@example.invalid'}));
+  expect(response.status).toBe(200);
+  expect(d.action).toHaveBeenCalledWith('staff_read',{actorId:id,revisionId:id});
+  expect(d.deliver).toHaveBeenCalledOnce();
+ });
+ it('rejects missing and expired staff sessions before Edge delivery',async()=>{
+  for(const reason of ['missing session','expired session']) {
+    const d=deps();d.deliver=vi.fn();d.authorize.mockRejectedValue(Error(reason));
+    const response=await createSignatureHandler(d)(request({action:'deliver',revisionId:id,requestId:id,channel:'email'}));
+    expect(response.status).toBe(401);
+    expect(d.action).not.toHaveBeenCalled();expect(d.deliver).not.toHaveBeenCalled();
+  }
+ });
+ it('rejects staff without a permitted role before Edge delivery',async()=>{
+  const d=deps();d.deliver=vi.fn();d.action.mockRejectedValue(new SignatureError('signature_forbidden',403));
+  const response=await createSignatureHandler(d)(request({action:'deliver',revisionId:id,requestId:id,channel:'email'}));
+  expect(response.status).toBe(403);expect(d.deliver).not.toHaveBeenCalled();
+ });
  it('rejects blank signature without claiming token',async()=>{const d=deps();const r=await createSignatureHandler(d)(request({action:'sign',token,requestId:id,signerId:'012345674',fullName:'ישראל ישראלי',strokes:[],accepted:true}));expect(r.status).toBe(400);expect(d.action).not.toHaveBeenCalled();});
  it('finalizes only after storing evidence from the verified original bytes',async()=>{
   const d=deps(),unsigned=Buffer.from('%PDF-test'),signed=Buffer.from('%PDF-stored-evidence');
