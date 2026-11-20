@@ -34,10 +34,10 @@ describe('order signature HTTP boundary',()=>{
  it('requires staff auth for revocation and history',async()=>{const d=deps();d.authorize.mockRejectedValue(Error('bad jwt'));expect((await createSignatureHandler(d)(request({action:'history',orderId:id}))).status).toBe(401);expect(d.action).not.toHaveBeenCalled();});
  it('allows an authorized staff member to reach the role-checked delivery action',async()=>{
   const d=deps();d.deliver=vi.fn(async()=>({ok:true}));
-  const response=await createSignatureHandler(d)(request({action:'deliver',revisionId:id,requestId:id,channel:'email',recipient:'test@example.invalid'}));
+  const response=await createSignatureHandler(d)(request({action:'deliver',revisionId:id,requestId:id,channel:'email',recipient:'test@example.invalid'},{Authorization:'Bearer synthetic-user-jwt'}));
   expect(response.status).toBe(200);
   expect(d.action).toHaveBeenCalledWith('staff_read',{actorId:id,revisionId:id});
-  expect(d.deliver).toHaveBeenCalledOnce();
+  expect(d.deliver).toHaveBeenCalledWith(expect.objectContaining({actorId:id,authorization:'Bearer synthetic-user-jwt'}));
  });
  it('rejects missing and expired staff sessions before Edge delivery',async()=>{
   for(const reason of ['missing session','expired session']) {

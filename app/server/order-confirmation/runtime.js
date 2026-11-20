@@ -18,17 +18,11 @@ export function signingLinkFromPdf(document,origin) {
   }
   throw new SignatureError('artifact_unavailable',503);
 }
-export function signatureEdgeHeaders(env=process.env) {
-  const token=env.SUPABASE_EDGE_SERVICE_ROLE_JWT;
-  try {
-    const parts=token?.split('.');
-    if(parts?.length!==3||parts.some(part=>!/^[A-Za-z0-9_-]+$/.test(part))) throw Error();
-    const header=JSON.parse(Buffer.from(parts[0],'base64url').toString('utf8'));
-    const claims=JSON.parse(Buffer.from(parts[1],'base64url').toString('utf8'));
-    if(header.alg!=='HS256'||claims.role!=='service_role'||!Number.isInteger(claims.exp)||claims.exp<=Math.floor(Date.now()/1000)+60) throw Error();
-  }catch {throw new SignatureError('server_not_configured',503);}
-  // Local checks catch misconfiguration; Supabase verifies the JWT signature.
-  return {'Content-Type':'application/json',Authorization:'Bearer '+token,apikey:token};
+export function signatureEdgeHeaders(authorization,env=process.env) {
+  if(!/^Bearer \S+$/.test(authorization||'')) throw new SignatureError('authentication_required',401);
+  const anon=env.VITE_SUPABASE_ANON_KEY||env.SUPABASE_ANON_KEY;
+  if(!anon) throw new SignatureError('server_not_configured',503);
+  return {'Content-Type':'application/json',Authorization:authorization,apikey:anon};
 }
 export function signatureRuntime(env=process.env) {
   const url=env.SUPABASE_URL||env.VITE_SUPABASE_URL, key=env.SUPABASE_SERVICE_ROLE_KEY;
@@ -64,8 +58,8 @@ export function signatureRuntime(env=process.env) {
       if(String(error.statusCode)!=='409' && error.message!=='The resource already exists') throw new SignatureError('artifact_unavailable',503);
       return readPdf(path);
     },
-    deliver:async({actorId,revision,channel,requestId,recipient,resendOf,confirmed})=>{
-      const edgeHeaders=signatureEdgeHeaders(env);
+    deliver:async({actorId,authorization,revision,channel,requestId,recipient,resendOf,confirmed})=>{
+      const edgeHeaders=signatureEdgeHeaders(authorization,env);
       const bytes=await readPdf(revision.unsigned_path);
       if(sha256(bytes)!==revision.unsigned_hash) throw new SignatureError('artifact_unavailable',503);
       const signingUrl=signingLinkFromPdf(await PDFDocument.load(bytes),origin);

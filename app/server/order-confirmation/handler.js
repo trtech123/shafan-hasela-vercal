@@ -69,7 +69,7 @@ export function createSignatureHandler(deps) {
         if(!validId(body.requestId)||!['email','whatsapp'].includes(body.channel)) throw new SignatureError('invalid_request');
         const r=await deps.action('staff_read',{actorId,revisionId:body.revisionId});
         if(body.resendOf&&(!validId(body.resendOf)||body.confirmed!==true)) throw new SignatureError('invalid_request');
-        return json(await deps.deliver({actorId,revision:r,channel:body.channel,requestId:body.requestId,recipient:body.recipient,resendOf:body.resendOf,confirmed:body.confirmed}));
+        return json(await deps.deliver({actorId,authorization:request.headers.get('authorization'),revision:r,channel:body.channel,requestId:body.requestId,recipient:body.recipient,resendOf:body.resendOf,confirmed:body.confirmed}));
       }
     }catch(error) {
       return json({error:error instanceof SignatureError?error.message:'signature_unavailable'},error instanceof SignatureError?error.status:503);

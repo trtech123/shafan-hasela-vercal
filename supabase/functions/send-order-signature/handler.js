@@ -4,10 +4,12 @@ export function createSignatureDeliveryHandler(deps) {
   return async request=>{
     if(request.method!=='POST') return json({error:'method_not_allowed'},405);
     try {
-      if(!await deps.authorize(request)) return json({error:'authentication_required'},401);
+      const actorId=await deps.authorize(request);
+      if(!actorId) return json({error:'authentication_required'},401);
       const raw=await request.text();if(raw.length>4096) return json({error:'invalid_request'},400);
       const body=JSON.parse(raw);
       if(Object.keys(body).some(k=>!['actorId','revisionId','channel','requestId','recipient','signingUrl','resendOf','confirmed'].includes(k))||!['email','whatsapp'].includes(body.channel)||!['actorId','revisionId','requestId'].every(k=>validId(body[k]))||(body.channel==='whatsapp'&&body.recipient!==undefined)||(body.resendOf&&(!validId(body.resendOf)||body.confirmed!==true))) return json({error:'invalid_request'},400);
+      if(body.actorId!==actorId) return json({error:'signature_forbidden'},403);
       const revision=await deps.read(body.revisionId,body.actorId);
       await deps.verifyLink(body.signingUrl,revision.id);
       const destination=destinationFor(body.channel,revision.snapshot.data,body.recipient);
