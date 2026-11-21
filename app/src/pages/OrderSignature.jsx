@@ -28,7 +28,7 @@ export default function OrderSignature() {
   event.preventDefault();if(locked.current||!revision||!pdfUrl)return;
   if(!submission.current){
    if(!name.trim()){setError('יש להזין שם מלא: שם פרטי ושם משפחה.');return;}
-   if(!validSignerName(name)){setError('יש להזין שם פרטי ושם משפחה תקינים, באותיות.');return;}
+   if(!validSignerName(name)){setError('כתוב את השם כפי שמופיע בהזמנה');return;}
    if(!validSignature(signature)){setError('יש לצייר חתימה באצבע או בעכבר לפני האישור.');return;}
    if(!accepted){setError('יש לסמן שקראתם ואישרתם את ההזמנה והתנאים הכלליים.');return;}
   }

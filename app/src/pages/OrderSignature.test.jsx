@@ -55,8 +55,8 @@ describe('public order confirmation signing',()=>{
 describe('local signing guidance and touch consent',()=>{
  it.each([
   ['', 'יש להזין שם מלא: שם פרטי ושם משפחה.'],
-  ['ישראל','יש להזין שם פרטי ושם משפחה תקינים, באותיות.'],
-  ['123 abc','יש להזין שם פרטי ושם משפחה תקינים, באותיות.']
+  ['ישראל','כתוב את השם כפי שמופיע בהזמנה'],
+  ['123 abc','כתוב את השם כפי שמופיע בהזמנה']
  ])('explains invalid name %s without submitting',async(name,message)=>{
   render(<OrderSignature/>);await fill();fireEvent.change(screen.getByLabelText('שם מלא'),{target:{value:name}});
   fireEvent.click(screen.getByRole('button',{name:'אישור וחתימה'}));
