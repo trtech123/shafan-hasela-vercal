@@ -71,11 +71,19 @@ export function preflight(io) {
 
 export function deploy(io) {
   const source = preflight(io);
-  const deploymentUrl = io.run('vercel', [
+  const deploymentOutput = io.run('vercel', [
     'deploy', '--prod', '--cwd', '.',
     '--meta', `sourceBranch=${source.branch}`,
     '--meta', `sourceCommitSha=${source.commitSha}`,
   ]).trim();
+  const candidates = deploymentOutput.split(/\r?\n/).map((line) => {
+    const value = line.trim();
+    return value.match(/^Production:\s*(https:\/\/[^\s]+\.vercel\.app)(?:\s|$)/i)?.[1]
+      ?? (/^https:\/\/[^\s]+\.vercel\.app$/.test(value) ? value : null);
+  }).filter(Boolean);
+  const unique = [...new Set(candidates)];
+  if (unique.length !== 1) throw new Error('Vercel did not return one unambiguous Production deployment URL');
+  const deploymentUrl = unique[0];
   const host = new URL(deploymentUrl).hostname;
   if (!host.endsWith('.vercel.app')) throw new Error(`Unexpected deployment URL: ${deploymentUrl}`);
 

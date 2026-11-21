@@ -84,6 +84,23 @@ test('deploy records exact source and verified READY production alias', () => {
   assert.deepEqual(JSON.parse(writes[0].value), record);
 });
 
+test('deploy extracts the Production URL from annotated Vercel CLI output', () => {
+  const key = `vercel deploy --prod --cwd . --meta sourceBranch=main --meta sourceCommitSha=${SHA}`;
+  const output = 'Inspect: https://vercel.com/trtechs-projects/shafan-hasela-vercal/abc\nProduction: https://shafan-hasela-abc.vercel.app\n';
+  const { io, writes } = fixture({ outputs: { [key]: output } });
+  const record = deploy(io);
+  assert.equal(record.deploymentUrl, 'https://shafan-hasela-abc.vercel.app');
+  assert.equal(writes.length, 1);
+});
+
+test('deploy rejects ambiguous Production URLs without recording a release', () => {
+  const key = `vercel deploy --prod --cwd . --meta sourceBranch=main --meta sourceCommitSha=${SHA}`;
+  const output = 'Production: https://shafan-hasela-abc.vercel.app\nProduction: https://other.vercel.app\n';
+  const { io, writes } = fixture({ outputs: { [key]: output } });
+  assert.throws(() => deploy(io), /unambiguous Production deployment URL/);
+  assert.equal(writes.length, 0);
+});
+
 test('deploy refuses to record an unaliased deployment', () => {
   const key = `vercel api /v4/aliases/${ALIAS}?projectId=${PROJECT}&teamId=${TEAM} --cwd .`;
   const { io, writes } = fixture({ outputs: { [key]: JSON.stringify({ alias: ALIAS, projectId: PROJECT, deploymentId: 'dpl_other' }) } });
