@@ -42,4 +42,31 @@ describe("WhatsApp inbound reply sender", () => {
     await expect(sender.sendText({ channel: "whatsapp", to: "972501234567", text: "hello" }))
       .rejects.not.toThrow(/provider secret detail|secret-token/);
   });
+
+  test("uses the inbound number and its own token during a temporary cutover", async () => {
+    const fetchImpl = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ messages: [{ id: "wamid.out" }] }), { status: 200 }));
+    const sender = createWhatsAppSender({
+      token: "new-token", phoneNumberId: "new-id",
+      fallbackToken: "old-token", fallbackPhoneNumberId: "old-id", fetchImpl,
+    });
+    await sender.sendText({ channel: "whatsapp", to: "972501234567", text: "reply", sourcePhoneNumberId: "old-id" });
+    expect(fetchImpl.mock.calls[0][0]).toContain("/old-id/messages");
+    expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe("Bearer old-token");
+    await sender.sendText({ channel: "whatsapp", to: "972501234567", text: "proactive" });
+    expect(fetchImpl.mock.calls[1][0]).toContain("/new-id/messages");
+    expect(fetchImpl.mock.calls[1][1].headers.Authorization).toBe("Bearer new-token");
+  });
+
+  test("rejects unknown inbound numbers and fails closed for an uncredentialed fallback", async () => {
+    const fetchImpl = vi.fn();
+    const sender = createWhatsAppSender({ token: "new-token", phoneNumberId: "new-id", fallbackPhoneNumberId: "old-id", fetchImpl });
+    expect(sender.acceptsInboundPhoneNumberId("new-id")).toBe(true);
+    expect(sender.acceptsInboundPhoneNumberId("old-id")).toBe(true);
+    expect(sender.acceptsInboundPhoneNumberId(null)).toBe(false);
+    await expect(sender.sendText({ channel: "whatsapp", to: "972501234567", text: "reply", sourcePhoneNumberId: "old-id" }))
+      .rejects.toThrow("whatsapp_not_configured");
+    await expect(sender.sendText({ channel: "whatsapp", to: "972501234567", text: "reply", sourcePhoneNumberId: "unexpected-id" }))
+      .rejects.toThrow("unrecognized_phone_number_id");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });

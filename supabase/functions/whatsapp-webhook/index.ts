@@ -6,6 +6,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 import { createChatbotRepository } from "../_shared/chatbot/repository.js";
 import { processVerifiedEvent } from "../_shared/chatbot/process-event.js";
 import { createWhatsAppWebhookHandler } from "./handler.js";
+import { routeInboundWhatsAppEvent } from "./route-event.js";
 import { createWhatsAppSender } from "./sender.js";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -20,6 +21,8 @@ const repository = client ? createChatbotRepository(client) : null;
 const sender = createWhatsAppSender({
   token: Deno.env.get("META_WHATSAPP_TOKEN"),
   phoneNumberId: Deno.env.get("META_PHONE_NUMBER_ID"),
+  fallbackToken: Deno.env.get("META_FALLBACK_WHATSAPP_TOKEN"),
+  fallbackPhoneNumberId: Deno.env.get("META_FALLBACK_PHONE_NUMBER_ID"),
   fetchImpl: fetch,
 });
 
@@ -28,7 +31,11 @@ const handler = createWhatsAppWebhookHandler({
   verifyToken: Deno.env.get("META_WEBHOOK_VERIFY_TOKEN"),
   processEvent: async (event: unknown) => {
     if (!repository) throw new Error("chatbot_repository_not_configured");
-    return processVerifiedEvent({ event, repository, sender });
+    return routeInboundWhatsAppEvent({
+      event,
+      sender,
+      processEvent: (routedEvent: unknown, routedSender: unknown) => processVerifiedEvent({ event: routedEvent, repository, sender: routedSender }),
+    });
   },
 });
 
