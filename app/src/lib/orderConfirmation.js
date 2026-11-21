@@ -22,7 +22,11 @@ export function orderConfirmationModel(order) {
     const total = numeric(item.line_total) ?? (quantity !== null && unit !== null ? Math.round(quantity * unit * 100) / 100 : null);
     return {name:item.activity_name || 'שם הפריט לא נשמר',type:item.item_type,quantity,unit,total,description:item.description || '',duration:numeric(item.duration_hours),site:item.site,date:item.activity_date || item.event_date};
   });
-  const legacy = !savedItems.length;
+  const activity = order.activity_snapshot;
+  if (!items.length && activity && typeof activity.name === 'string' && activity.name.trim()) {
+    items.push({name:activity.name,type:'activity',quantity:numeric(order.num_participants),unit:numeric(order.price_per_person),total:numeric(order.total_price),description:activity.description || '',duration:numeric(activity.duration_hours),site:order.site,date:order.activity_date});
+  }
+  const legacy = !items.length;
   if (legacy) items.push({name:'פירוט פעילות/מוצר היסטורי לא נשמר',quantity:numeric(order.num_participants),unit:numeric(order.price_per_person),total:numeric(order.total_price),description:'מוצגים רק נתונים שנשמרו בהזמנה. פרטים לא הושלמו מהקטלוג הנוכחי.'});
   return {orderNumber:order.order_number || '—',customer,vat,vatLabel,items,legacy,total:numeric(order.total_price),discount:numeric(quote.discount),subtotal:numeric(quote.total_price),paymentStatus:order.payment_status || 'לא תועד',date:order.activity_date,start:order.start_time,end:order.end_time,site:order.site,participants:numeric(order.num_participants),savedAt:order.updated_at || order.created_at,notes:order.notes,quotationNotes:quote.notes && quote.notes !== order.notes ? quote.notes : null};
 }

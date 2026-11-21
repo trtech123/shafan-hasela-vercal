@@ -31,6 +31,14 @@ describe('confirmation PDF security and frozen copy',()=>{
   expect(()=>confirmationHtml({...snapshot,text:{...text,SAFETY_MINORS_TEXT:''}},url)).toThrow();
   expect(confirmationHtml({...snapshot,text:{...text,ORDER_TERMS:['frozen-vat-wording']}},url)).toContain('frozen-vat-wording');
  });
+ it('uses frozen order activity after catalog changes or deletion',()=>{
+  const frozen={...snapshot,data:{...snapshot.data,quotation_snapshot:null,activity_snapshot:{name:'פיצה מקורית',description:'תיאור שנשמר בהזמנה',duration_hours:2}}};
+  const html=confirmationHtml(frozen,url);
+  expect(html).toContain('פיצה מקורית');
+  expect(html).toContain('תיאור שנשמר בהזמנה');
+  expect(html).not.toContain('פירוט פעילות/מוצר היסטורי לא נשמר');
+  expect(confirmationHtml({...frozen,data:{...frozen.data,activity_snapshot:null}},url)).toContain('פירוט פעילות/מוצר היסטורי לא נשמר');
+ });
  it('replaces the signing CTA inside the full frozen confirmation before safety',()=>{
   const html=evidenceHtml(boundEvidence(snapshot,Buffer.from('fixture')));
   expect(RENDER_VERSION).toBe('3');

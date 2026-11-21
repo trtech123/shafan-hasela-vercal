@@ -1,5 +1,7 @@
 # ORD-1065 signature email: confirmed 401 cause and corrected contract
 
+> Superseded for release planning by `order-signature-complete-20261121.md`, which includes the separate historical-activity PDF correction and migration. Do not deploy this authentication change alone for the ORD-1065 acceptance test.
+
 ## Observed production evidence
 
 - The one approved email attempt reached `send-order-signature` and returned HTTP 401 on 20 November 2026 at 16:40:25 Israel time. The delivery table has no row for revision `ec5ea25f-be4c-4ec0-8b09-38070aabf92e`. Do not retry based on that 401 without a new controlled decision.
