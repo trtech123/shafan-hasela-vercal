@@ -6,7 +6,7 @@ import OrderSignature from './OrderSignature';
 import {signatureRequest} from '@/lib/orderSignatureClient';
 vi.mock('@/api/supabaseClient',()=>({supabase:{}}));
 vi.mock('@/lib/orderSignatureClient',async importOriginal=>({...await importOriginal(),signatureRequest:vi.fn()}));
-const token='a'.repeat(43),revision={id:'r1',revision_number:1,status:'awaiting_signature',expires_at:'2026-10-18T12:00:00Z',snapshot:{acceptanceText:'קראתי ומאשר את ההזמנה והתנאים הכלליים'}};
+const token='a'.repeat(43),revision={id:'r1',revision_number:1,status:'awaiting_signature',expires_at:'2026-10-18T12:00:00Z',snapshot:{data:{client_name:'לקוח ההזמנה'},acceptanceText:'קראתי ומאשר את ההזמנה והתנאים הכלליים'}};
 beforeEach(()=>{
  vi.clearAllMocks();window.history.replaceState(null,'','/order-sign#'+token);
  URL.createObjectURL=vi.fn(()=> 'blob:local-pdf');URL.revokeObjectURL=vi.fn();
@@ -55,8 +55,8 @@ describe('public order confirmation signing',()=>{
 describe('local signing guidance and touch consent',()=>{
  it.each([
   ['', 'יש להזין שם מלא: שם פרטי ושם משפחה.'],
-  ['ישראל','כתוב את השם כפי שמופיע בהזמנה'],
-  ['123 abc','כתוב את השם כפי שמופיע בהזמנה']
+  ['ישראל','יש להזין שם מלא עם לפחות שני חלקים, ללא מספרים.'],
+  ['123 abc','יש להזין שם מלא עם לפחות שני חלקים, ללא מספרים.']
  ])('explains invalid name %s without submitting',async(name,message)=>{
   render(<OrderSignature/>);await fill();fireEvent.change(screen.getByLabelText('שם מלא'),{target:{value:name}});
   fireEvent.click(screen.getByRole('button',{name:'אישור וחתימה'}));
@@ -82,5 +82,14 @@ describe('local signing guidance and touch consent',()=>{
   fireEvent.click(screen.getByText(revision.snapshot.acceptanceText));expect(checkbox.checked).toBe(true);
   fireEvent.click(screen.getByRole('button',{name:'אישור וחתימה'}));await screen.findByText('האישור נחתם בהצלחה');
   expect(signatureRequest.mock.calls.find(([body])=>body.action==='sign')[0]).toMatchObject({fullName:'ישראל ישראלי',accepted:true,strokes:[[{x:0.03125,y:0.125},{x:0.3125,y:0.5}]]});
+ });
+ it.each(['ישראל ישראלי','דניאל בן דוד','שרה כהן-לוי'])(
+  'accepts valid representative name %s without requiring an order-customer match',async signerName=>{
+  render(<OrderSignature/>);await fill();
+  fireEvent.change(screen.getByLabelText('שם מלא'),{target:{value:signerName}});
+  fireEvent.click(screen.getByRole('button',{name:'אישור וחתימה'}));
+  await screen.findByText('האישור נחתם בהצלחה');
+  expect(signatureRequest.mock.calls.find(([body])=>body.action==='sign')[0].fullName).toBe(signerName);
+  expect(revision.snapshot.data.client_name).not.toBe(signerName);
  });
 });
