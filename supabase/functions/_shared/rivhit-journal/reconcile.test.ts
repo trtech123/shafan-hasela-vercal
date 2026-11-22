@@ -9,7 +9,7 @@ const claim = { id: 'entry-1', status: 'reconciliation_required', expectedVat: 1
 const row = { journal_id: 42, journal_year: 2026, journal_month: 11,
   debit_customer_id: 101, credit_customer_id: 201, sort_code: 12,
   total_amount: 118, total_vat: 18, total_without_vat: 100,
-  reference_date: '22112026', reference1: '200010', reference2: 'RCP-2000' };
+  reference_date: '22/11/2026', reference1: '200010', reference2: 'RCP-2000' };
 
 describe('readback-only journal recovery', () => {
   test('verifies a saved provider response against exact readback without reposting', async () => {

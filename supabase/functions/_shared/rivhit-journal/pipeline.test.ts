@@ -36,7 +36,7 @@ describe('synthetic Payper to Rivhit pipeline', () => {
       journalsReport: vi.fn(async () => savedResponse ? [{
         journal_id: 42, journal_year: 2026, journal_month: 11,
         debit_customer_id: 101, credit_customer_id: 201, sort_code: 12,
-        reference1: '200010', reference2: 'RCP-2000', reference_date: '22112026',
+        reference1: '200010', reference2: 'RCP-2000', reference_date: '22/11/2026',
         total_amount: 118, total_vat: 18, total_without_vat: 100,
       }] : []),
       addJournal: vi.fn(async () => ({ year: 2026, month: 11, line: 9 })),
