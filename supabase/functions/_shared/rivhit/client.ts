@@ -2,6 +2,9 @@ import type {
   RivhitCustomerDraft,
   RivhitCustomerResult,
   RivhitDocumentResult,
+  RivhitJournalDraft,
+  RivhitJournalResult,
+  RivhitJournalReportRow,
 } from "./types.ts";
 
 const DEFAULT_BASE_URL = "https://api.rivhit.co.il/online/RivhitOnlineAPI.svc";
@@ -121,7 +124,7 @@ export class RivhitClient {
       response = await this.fetchImpl(`${this.baseUrl}/${method}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_token: this.apiToken, ...request }),
+        body: JSON.stringify({ ...request, api_token: this.apiToken }),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch {
@@ -224,5 +227,72 @@ export class RivhitClient {
       documentUrl: String(data.document_link),
       amount: numberOrNull(data.amount),
     };
+  }
+
+  async addJournal(request: RivhitJournalDraft): Promise<RivhitJournalResult> {
+    if (!Number.isSafeInteger(request.sort_code) || !Number.isSafeInteger(request.customer_id_debit)
+      || (request.customer_id_credit !== undefined && !Number.isSafeInteger(request.customer_id_credit))
+      || !Number.isFinite(request.amount) || request.amount <= 0
+      || !request.request_reference?.trim()) {
+      throw new RivhitError("Rivhit journal request is invalid");
+    }
+    let response: RivhitEnvelope;
+    try {
+      response = await this.post("Accounting.AddJournal", request as unknown as Record<string, unknown>);
+    } catch (error) {
+      if (error instanceof RivhitError && error.errorCode === null
+        && (error.retryable || error.reconciliationRequired)) {
+        throw new RivhitError("Rivhit journal outcome requires reconciliation", {
+          reconciliationRequired: true, httpStatus: error.httpStatus,
+        });
+      }
+      throw error;
+    }
+    const data = response.data;
+    const year = numberOrNull(data?.year);
+    const month = numberOrNull(data?.month);
+    const line = numberOrNull(data?.line);
+    if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month)
+      || !Number.isSafeInteger(line) || month! < 1 || month! > 12 || line! < 1) {
+      throw new RivhitError("Rivhit journal response lacks a valid journal reference", {
+        reconciliationRequired: true,
+      });
+    }
+    return { year: year!, month: month!, line: line! };
+  }
+
+  async journalsReport(date: string): Promise<RivhitJournalReportRow[]> {
+    if (!/^\d{8}$/.test(date)) throw new RivhitError("Rivhit journal report date is invalid");
+    const response = await this.post("Accounting.JournalsReport", { date });
+    const rows = response.data?.journals_report;
+    if (!Array.isArray(rows)) {
+      throw new RivhitError("Rivhit journal report response is invalid");
+    }
+    if (!rows.every((row) => {
+      if (!row || typeof row !== "object") return false;
+      const value = row as Record<string, unknown>;
+      return Number.isSafeInteger(value.journal_id)
+        && Number.isSafeInteger(value.journal_year)
+        && Number.isSafeInteger(value.journal_month)
+        && Number.isSafeInteger(value.debit_customer_id)
+        && (value.credit_customer_id === null || Number.isSafeInteger(value.credit_customer_id))
+        && Number.isSafeInteger(value.sort_code)
+        && (value.reference1 === null || typeof value.reference1 === "string")
+        && (value.reference2 === null || typeof value.reference2 === "string")
+        && (value.reference_date === null || typeof value.reference_date === "string")
+        && typeof value.total_amount === "number" && Number.isFinite(value.total_amount)
+        && (value.total_vat === null || (typeof value.total_vat === "number" && Number.isFinite(value.total_vat)));
+    })) throw new RivhitError("Rivhit journal report response is invalid");
+    return rows as RivhitJournalReportRow[];
+  }
+
+  async sortCodeList(): Promise<Array<{ sort_code: number; description: string }>> {
+    const response = await this.post("Accounting.SortCodeList", { documents_only: false });
+    const rows = response.data as unknown;
+    if (!Array.isArray(rows) || !rows.every((row) => row && typeof row === "object"
+      && Number.isSafeInteger(row.sort_code) && typeof row.description === "string")) {
+      throw new RivhitError("Rivhit sort code list response is invalid");
+    }
+    return rows as Array<{ sort_code: number; description: string }>;
   }
 }

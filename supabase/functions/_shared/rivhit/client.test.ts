@@ -11,6 +11,64 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("RivhitClient", () => {
+  test("submits one journal with a server token and keeps the returned year, month and line", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
+      error_code: 0, data: { year: 2026, month: 11, line: 42 },
+    }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+    const draft = {
+      sort_code: 1, customer_id_debit: 100, customer_id_credit: 200,
+      amount: 4, reference_date: "08112026", reference1: "200002",
+      request_reference: "payper:200002:journal:1",
+    };
+
+    await expect(client.addJournal(draft)).resolves.toEqual({ year: 2026, month: 11, line: 42 });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl.mock.calls[0][0]).toBe("https://api.rivhit.co.il/online/RivhitOnlineAPI.svc/Accounting.AddJournal");
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ api_token: token, ...draft });
+  });
+
+  test("treats a lost journal response as uncertain and never retries it inside the client", async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error("connection dropped"));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+
+    await expect(client.addJournal({
+      sort_code: 1, customer_id_debit: 100, customer_id_credit: 200,
+      amount: 4, request_reference: "payper:200002:journal:1",
+    })).rejects.toMatchObject({ reconciliationRequired: true, retryable: false });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  test("does not allow a journal draft to override the configured API token", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
+      error_code: 0, data: { year: 2026, month: 11, line: 42 },
+    }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+    await client.addJournal({
+      sort_code: 1, customer_id_debit: 100, customer_id_credit: 200,
+      amount: 4, request_reference: "payper:200002:journal:1",
+      api_token: "untrusted-value",
+    } as Parameters<RivhitClient["addJournal"]>[0]);
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).api_token).toBe(token);
+  });
+
+  test("reads journal reports without posting and preserves reference and amount evidence", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
+      error_code: 0, data: { journals_report: [{
+        journal_id: 55, journal_year: 2026, journal_month: 11,
+        debit_customer_id: 100, credit_customer_id: 200, sort_code: 1,
+        reference1: "200002", reference2: "RCP-1026", reference_date: "08112026",
+        total_amount: 4, total_vat: 0.61, total_without_vat: 3.39,
+      }] },
+    }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+
+    await expect(client.journalsReport("08112026")).resolves.toEqual([expect.objectContaining({
+      journal_id: 55, reference1: "200002", total_amount: 4,
+    })]);
+    expect(fetchImpl.mock.calls[0][0]).toContain("Accounting.JournalsReport");
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ api_token: token, date: "08112026" });
+  });
   test("finds a customer by acc_ref", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
       error_code: 0,
@@ -250,5 +308,32 @@ describe("RivhitClient", () => {
       request_reference: "x",
       prevent_duplicates: true,
     })).rejects.toMatchObject({ reconciliationRequired: true });
+  });
+
+  test("rejects a negative journal amount before contacting Rivhit", async () => {
+    const fetchImpl = vi.fn();
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+    await expect(client.addJournal({
+      sort_code: 1, customer_id_debit: 100, amount: -4,
+      request_reference: "negative-test",
+    })).rejects.toThrow("Rivhit journal request is invalid");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test("rejects malformed journal report rows before reconciliation", async () => {
+    const client = new RivhitClient({ apiToken: token, fetchImpl: vi.fn().mockResolvedValue(jsonResponse({
+      error_code: 0, data: { journals_report: [{ journal_id: 12, reference1: "200002" }] },
+    })) });
+    await expect(client.journalsReport("08112026")).rejects.toThrow("Rivhit journal report response is invalid");
+  });
+
+  test("reads the chart classification codes without a write operation", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
+      error_code: 0, data: [{ sort_code: 102, description: 'income' }],
+    }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+    await expect(client.sortCodeList()).resolves.toEqual([{ sort_code: 102, description: 'income' }]);
+    expect(fetchImpl.mock.calls[0][0]).toContain('Accounting.SortCodeList');
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).documents_only).toBe(false);
   });
 });

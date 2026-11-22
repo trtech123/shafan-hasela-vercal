@@ -40,6 +40,9 @@ vi.mock("@/components/accounting/PayperIssuedDocuments", () => ({
 vi.mock("@/components/accounting/PayperNoncardObligations", () => ({
   default: () => null,
 }));
+vi.mock("@/components/accounting/RivhitJournalStatus", () => ({
+  default: () => null,
+}));
 vi.mock("sonner", () => ({
   toast: {
     error: (...args) => toastError(...args),

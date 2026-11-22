@@ -23,6 +23,7 @@ import PayperDispatchStatus from "@/components/accounting/PayperDispatchStatus";
 import PelecardPendingReview from "@/components/accounting/PelecardPendingReview";
 import PayperIssuedDocuments from "@/components/accounting/PayperIssuedDocuments";
 import PayperNoncardObligations from "@/components/accounting/PayperNoncardObligations";
+import RivhitJournalStatus from "@/components/accounting/RivhitJournalStatus";
 
 const OPERATION_COLUMNS = [
   "event_id", "source_type", "source_id", "purpose", "accounting_provider",
@@ -249,6 +250,7 @@ export default function AccountingOperations() {
       {user?.role === 'admin' && <><PayperDispatchStatus /><PayperManualReview /><PayperNoncardObligations /></>}
       {user?.role === 'admin' && <PelecardPendingReview />}
       {user?.role === 'admin' && <PayperIssuedDocuments />}
+      {user?.role === 'admin' && <RivhitJournalStatus />}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="סיכום הנהלת חשבונות">
         <SummaryCard icon={CheckCircle2} label="תשלומים שהצליחו" value={counts.payments} tone="green" />

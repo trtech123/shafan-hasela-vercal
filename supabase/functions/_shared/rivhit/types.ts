@@ -91,3 +91,45 @@ export interface RivhitDocumentResult {
   documentUrl: string;
   amount: number | null;
 }
+
+export interface RivhitJournalDraft {
+  sort_code: number;
+  customer_id_debit: number;
+  customer_id_credit?: number;
+  amount: number;
+  request_reference: string;
+  year?: number;
+  month?: number;
+  reference_date?: string;
+  due_date?: string;
+  reference1?: string;
+  reference2?: string;
+  details?: string;
+  currency_id?: number;
+  foreign_amount?: number;
+  exchange_rate?: number;
+  project_id?: number;
+  id_number?: number;
+  shaam_invoice?: number;
+}
+
+export interface RivhitJournalResult {
+  year: number;
+  month: number;
+  line: number;
+}
+
+export interface RivhitJournalReportRow {
+  journal_id: number;
+  journal_year: number;
+  journal_month: number;
+  debit_customer_id: number;
+  credit_customer_id: number | null;
+  sort_code: number;
+  reference1: string | null;
+  reference2: string | null;
+  reference_date: string | null;
+  total_amount: number;
+  total_vat: number | null;
+  total_without_vat: number | null;
+}

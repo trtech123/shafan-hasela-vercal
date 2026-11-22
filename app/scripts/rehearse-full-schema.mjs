@@ -537,6 +537,22 @@ try {
     [badgeOrder])).rows[0].value, [],
   'an instructor cannot inspect the amount or payment state of another order');
   await db.query("SELECT set_config('app.test_role','service_role',false)");
+  if (files.some(name => name.includes('rivhit_journal_outbox_disabled'))) {
+    const gate = (await db.query(`SELECT capture_enabled,posting_enabled,cutover_at,
+      approved_mapping_version FROM public.rivhit_journal_control`)).rows[0];
+    assert.deepEqual(gate, { capture_enabled: false, posting_enabled: false,
+      cutover_at: null, approved_mapping_version: null },
+    'the prepared journal migration must remain incapable of posting');
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM public.rivhit_journal_sources')).rows[0].n, 0,
+      'existing and rehearsal Payper documents must not be captured retroactively');
+    const privileges = (await db.query(`SELECT
+      has_function_privilege('authenticated',
+        'public.reserve_rivhit_journal_entry(uuid)','EXECUTE') AS user_can_reserve,
+      has_function_privilege('anon',
+        'public.stage_rivhit_journal_entry(uuid,text,text,text,jsonb,text,numeric)','EXECUTE') AS anon_can_stage`)).rows[0];
+    assert.deepEqual(privileges, { user_can_reserve: false, anon_can_stage: false },
+      'only the service role may use journal transitions');
+  }
   const installed = (await db.query(`SELECT count(*)::int AS tables FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relkind='r'`)).rows[0].tables;
   const functions = (await db.query(`SELECT count(*)::int AS functions FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
