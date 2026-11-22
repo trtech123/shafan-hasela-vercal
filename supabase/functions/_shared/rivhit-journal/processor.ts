@@ -25,14 +25,28 @@ function sameMoney(a: number, b: number): boolean {
   return Number.isFinite(a) && Number.isFinite(b) && Math.round(a * 100) === Math.round(b * 100);
 }
 
+function journalDate(value: string | null | undefined): string | null {
+  const match = typeof value === 'string'
+    ? /^(\d{2})(\d{2})(\d{4})$/.exec(value)
+      ?? /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)
+    : null;
+  if (!match) return null;
+  const day = Number(match[1]), month = Number(match[2]), year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCDate() !== day || date.getUTCMonth() !== month - 1
+    || date.getUTCFullYear() !== year) return null;
+  return `${match[1]}${match[2]}${match[3]}`;
+}
+
 export function sameEntry(row: RivhitJournalReportRow, claim: ClaimedJournal): boolean {
   const { draft, expectedVat } = claim;
+  const reportDate = journalDate(row.reference_date);
   return row.reference1 === draft.reference1
     && row.reference2 === draft.reference2
     && row.sort_code === draft.sort_code
     && row.debit_customer_id === draft.customer_id_debit
     && row.credit_customer_id === (draft.customer_id_credit ?? null)
-    && row.reference_date === draft.reference_date
+    && reportDate !== null && reportDate === journalDate(draft.reference_date)
     && sameMoney(row.total_amount, draft.amount)
     && sameMoney(row.total_vat ?? NaN, expectedVat);
 }

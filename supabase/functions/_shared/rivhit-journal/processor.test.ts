@@ -10,7 +10,7 @@ const draft = {
 const row = {
   journal_id: 55, journal_year: 2026, journal_month: 11,
   debit_customer_id: 100, credit_customer_id: 200, sort_code: 1,
-  reference1: "200002", reference2: "RCP-1026", reference_date: "08112026",
+  reference1: "200002", reference2: "RCP-1026", reference_date: "08/11/2026",
   total_amount: 4, total_vat: 0.61, total_without_vat: 3.39,
 };
 
@@ -62,6 +62,15 @@ describe("Rivhit journal dispatch", () => {
     expect(store.hold).toHaveBeenCalledWith("event-1", "manual_existing_match");
     expect(store.reserve).not.toHaveBeenCalled();
     expect(provider.addJournal).not.toHaveBeenCalled();
+  });
+
+  test("a malformed report date cannot verify a journal", async () => {
+    const { store, provider } = fixture();
+    provider.journalsReport.mockReset().mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ ...row, reference_date: '31/02/2026' }]);
+    await expect(processRivhitJournal("event-1", { store, provider }))
+      .resolves.toBe("reconciliation_required");
+    expect(store.verify).not.toHaveBeenCalled();
   });
 
   test("an interrupted response is held without retrying or claiming success", async () => {
