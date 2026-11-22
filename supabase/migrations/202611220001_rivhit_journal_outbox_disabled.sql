@@ -8,14 +8,32 @@ CREATE TABLE public.rivhit_journal_control (
   capture_enabled boolean NOT NULL DEFAULT false CHECK (capture_enabled = false),
   posting_enabled boolean NOT NULL DEFAULT false CHECK (posting_enabled = false),
   cutover_at timestamptz,
-  approved_mapping_version text,
-  CHECK (NOT posting_enabled OR (capture_enabled AND cutover_at IS NOT NULL
-    AND approved_mapping_version IS NOT NULL))
+  CHECK (NOT posting_enabled OR (capture_enabled AND cutover_at IS NOT NULL))
 );
 INSERT INTO public.rivhit_journal_control(singleton) VALUES (true);
 ALTER TABLE public.rivhit_journal_control ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.rivhit_journal_control FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON public.rivhit_journal_control TO service_role;
+CREATE POLICY rivhit_journal_control_admin_read ON public.rivhit_journal_control
+  FOR SELECT TO authenticated USING (EXISTS (
+    SELECT 1 FROM public.profiles p WHERE p.id=auth.uid() AND p.role::text='admin'));
+GRANT SELECT ON public.rivhit_journal_control TO authenticated;
+
+-- Empty until Anat approves each provider/site mapping in a separate activation release.
+CREATE TABLE public.rivhit_journal_approved_mappings (
+  provider text NOT NULL CHECK (provider IN ('pelecard','manual_cash','manual_check')),
+  site text NOT NULL DEFAULT '' CHECK (site IN ('','עכו','טבריה','נוף הגליל','שטח')),
+  mapping_version text NOT NULL CHECK (mapping_version ~ '^v1-[0-9a-f]{64}$'),
+  approved_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp(),
+  PRIMARY KEY (provider,site)
+);
+ALTER TABLE public.rivhit_journal_approved_mappings ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.rivhit_journal_approved_mappings FROM PUBLIC, anon, authenticated, service_role;
+CREATE POLICY rivhit_journal_approved_mappings_admin_read
+  ON public.rivhit_journal_approved_mappings FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.profiles p
+    WHERE p.id=auth.uid() AND p.role::text='admin'));
+GRANT SELECT ON public.rivhit_journal_approved_mappings TO authenticated, service_role;
 
 CREATE TABLE public.rivhit_journal_sources (
   id uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
@@ -28,9 +46,12 @@ CREATE TABLE public.rivhit_journal_sources (
   source_facts jsonb NOT NULL CHECK (pg_catalog.jsonb_typeof(source_facts) = 'object'),
   state text NOT NULL DEFAULT 'mapping_required' CHECK (state IN
     ('mapping_required','mapped','manual_existing','reconciliation_required')),
-  captured_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp()
+  captured_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp(),
+  next_mapping_check_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp()
 );
 CREATE INDEX rivhit_journal_sources_payment_idx ON public.rivhit_journal_sources(payment_id);
+CREATE INDEX rivhit_journal_sources_queue_idx ON public.rivhit_journal_sources
+  (next_mapping_check_at,id) WHERE state='mapping_required';
 ALTER TABLE public.rivhit_journal_sources ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.rivhit_journal_sources FROM PUBLIC, anon, authenticated, service_role;
 CREATE POLICY rivhit_journal_sources_admin_read ON public.rivhit_journal_sources
@@ -57,7 +78,9 @@ CREATE TABLE public.rivhit_journal_entries (
   report_journal_id integer,
   response_saved_at timestamptz,
   verified_at timestamptz,
+  next_reconciliation_check_at timestamptz,
   hold_reason text,
+  reconciliation_evidence jsonb,
   created_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp(),
   UNIQUE (source_id, entry_key),
   CHECK (status = 'ready' OR dispatch_reserved_at IS NOT NULL
@@ -66,6 +89,9 @@ CREATE TABLE public.rivhit_journal_entries (
     AND provider_line IS NOT NULL AND report_journal_id IS NOT NULL AND verified_at IS NOT NULL))
 );
 CREATE INDEX rivhit_journal_entries_review_idx ON public.rivhit_journal_entries(status,created_at);
+CREATE INDEX rivhit_journal_entries_reconcile_idx ON public.rivhit_journal_entries
+  (next_reconciliation_check_at,id)
+  WHERE status IN ('reserved','response_saved','reconciliation_required');
 ALTER TABLE public.rivhit_journal_entries ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.rivhit_journal_entries FROM PUBLIC, anon, authenticated, service_role;
 CREATE POLICY rivhit_journal_entries_admin_read ON public.rivhit_journal_entries
@@ -96,6 +122,7 @@ REVOKE ALL ON FUNCTION public.protect_rivhit_journal_entry_identity()
 CREATE FUNCTION public.capture_rivhit_journal_source() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE p public.payment_transactions%ROWTYPE; s public.sales%ROWTYPE;
+  o public.orders%ROWTYPE; b public.payper_payment_billing_snapshots%ROWTYPE;
   cutoff timestamptz;
 BEGIN
   IF NEW.state <> 'succeeded' OR NEW.document_origin <> 'automatic'
@@ -107,7 +134,10 @@ BEGIN
   IF cutoff IS NULL THEN RETURN NEW; END IF;
   SELECT * INTO p FROM public.payment_transactions WHERE id = NEW.payment_id;
   SELECT * INTO s FROM public.sales WHERE id = NEW.sale_id;
-  IF p.id IS NULL OR s.id IS NULL OR p.status <> 'succeeded'
+  SELECT * INTO o FROM public.orders WHERE id = NEW.order_id;
+  SELECT * INTO b FROM public.payper_payment_billing_snapshots WHERE payment_id=NEW.payment_id;
+  IF p.id IS NULL OR s.id IS NULL OR (NEW.order_id IS NOT NULL AND o.id IS NULL)
+    OR p.status <> 'succeeded'
     OR p.operation <> 'payment' OR p.sale_id IS DISTINCT FROM s.id
     OR NEW.order_id IS DISTINCT FROM p.order_id
     OR p.currency <> 'ILS' OR p.amount IS DISTINCT FROM s.total OR p.created_at < cutoff
@@ -126,7 +156,12 @@ BEGIN
   VALUES (NEW.id,p.id,s.id,NEW.document_number,NEW.document_url,
     pg_catalog.jsonb_build_object('paymentId',p.id,'saleId',s.id,'orderId',p.order_id,
       'provider',p.provider,'amount',p.amount,'currency',p.currency,
-      'saleMethod',s.method,'receiptNumber',s.receipt_number,
+      'vatApplicable',coalesce(b.vat_applicable,o.vat_applicable,
+        CASE WHEN pg_catalog.jsonb_typeof(NEW.source_facts->'vatApplicable')='boolean'
+          THEN (NEW.source_facts->>'vatApplicable')::boolean ELSE NULL END,
+        CASE WHEN pg_catalog.jsonb_typeof(NEW.source_facts->'billing'->'vat_applicable')='boolean'
+          THEN (NEW.source_facts->'billing'->>'vat_applicable')::boolean ELSE NULL END),
+      'saleMethod',s.method,'site',o.site,'receiptNumber',s.receipt_number,
       'documentNumber',NEW.document_number,'documentOrigin',NEW.document_origin,
       'paymentCreatedAt',p.created_at,'paymentVerifiedAt',p.verified_at,
       'sourceFacts',NEW.source_facts))
@@ -149,8 +184,12 @@ BEGIN
   IF auth.role() <> 'service_role' THEN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE = '42501'; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.rivhit_journal_control c
-    WHERE c.singleton AND c.capture_enabled
-      AND c.approved_mapping_version = p_mapping_version) THEN
+    JOIN public.rivhit_journal_sources s ON s.id=p_source_id
+    JOIN public.rivhit_journal_approved_mappings m
+      ON m.provider=s.source_facts->>'provider'
+      AND m.site=coalesce(s.source_facts->>'site','')
+      AND m.mapping_version=p_mapping_version
+    WHERE c.singleton AND c.capture_enabled) THEN
     RAISE EXCEPTION 'rivhit_journal_mapping_disabled' USING ERRCODE = '42501'; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.rivhit_journal_sources s
     JOIN public.payper_document_ledger l ON l.id=s.payper_ledger_id
@@ -192,12 +231,30 @@ BEGIN
         AND e.payload_hash = p_payload_hash AND e.expected_vat = p_expected_vat;
     IF result IS NULL THEN RAISE EXCEPTION 'rivhit_journal_idempotency_mismatch' USING ERRCODE='23505'; END IF;
   END IF;
+  UPDATE public.rivhit_journal_sources SET state='mapped'
+    WHERE id=p_source_id AND state='mapping_required';
   RETURN result;
 END $$;
 REVOKE ALL ON FUNCTION public.stage_rivhit_journal_entry(uuid,text,text,text,jsonb,text,numeric)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.stage_rivhit_journal_entry(uuid,text,text,text,jsonb,text,numeric)
   TO service_role;
+
+CREATE FUNCTION public.defer_rivhit_journal_source(p_source_id uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE changed integer;
+BEGIN
+  IF auth.role() <> 'service_role' THEN
+    RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
+  UPDATE public.rivhit_journal_sources
+    SET next_mapping_check_at=pg_catalog.clock_timestamp()+INTERVAL '15 minutes'
+  WHERE id=p_source_id AND state='mapping_required';
+  GET DIAGNOSTICS changed=ROW_COUNT;
+  RETURN changed=1;
+END $$;
+REVOKE ALL ON FUNCTION public.defer_rivhit_journal_source(uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.defer_rivhit_journal_source(uuid) TO service_role;
 
 CREATE FUNCTION public.reserve_rivhit_journal_entry(p_entry_id uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
@@ -207,13 +264,18 @@ BEGIN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.rivhit_journal_control c
     WHERE c.singleton AND c.posting_enabled AND c.capture_enabled
-      AND c.cutover_at IS NOT NULL AND c.approved_mapping_version IS NOT NULL) THEN
+      AND c.cutover_at IS NOT NULL) THEN
     RAISE EXCEPTION 'rivhit_journal_posting_disabled' USING ERRCODE='42501'; END IF;
   UPDATE public.rivhit_journal_entries e SET status = 'reserved',
-    dispatch_reserved_at = pg_catalog.clock_timestamp()
+    dispatch_reserved_at = pg_catalog.clock_timestamp(),
+    next_reconciliation_check_at = pg_catalog.clock_timestamp()+INTERVAL '2 minutes'
   WHERE e.id = p_entry_id AND e.status = 'ready'
-    AND EXISTS (SELECT 1 FROM public.rivhit_journal_control c
-      WHERE c.singleton AND c.approved_mapping_version = e.mapping_version)
+    AND EXISTS (SELECT 1 FROM public.rivhit_journal_sources s
+      JOIN public.rivhit_journal_approved_mappings m
+        ON m.provider=s.source_facts->>'provider'
+        AND m.site=coalesce(s.source_facts->>'site','')
+        AND m.mapping_version=e.mapping_version
+      WHERE s.id=e.source_id)
     AND EXISTS (SELECT 1 FROM public.rivhit_journal_sources s
       JOIN public.payper_document_ledger l ON l.id=s.payper_ledger_id
       JOIN public.payment_transactions p ON p.id=s.payment_id
@@ -258,7 +320,9 @@ BEGIN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
   IF p_reason IS NULL OR p_reason !~ '^[a-z0-9_]{1,80}$' THEN
     RAISE EXCEPTION 'rivhit_journal_hold_reason_invalid' USING ERRCODE='22023'; END IF;
-  UPDATE public.rivhit_journal_entries SET status='reconciliation_required',hold_reason=p_reason
+  UPDATE public.rivhit_journal_entries SET status='reconciliation_required',
+    hold_reason=p_reason,
+    next_reconciliation_check_at=pg_catalog.clock_timestamp()+INTERVAL '15 minutes'
   WHERE id=p_entry_id AND status IN ('ready','reserved','response_saved');
   GET DIAGNOSTICS changed=ROW_COUNT;
   RETURN changed=1;
@@ -275,9 +339,9 @@ BEGIN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
   IF p_journal_id IS NULL OR p_journal_id < 1 THEN
     RAISE EXCEPTION 'rivhit_journal_id_invalid' USING ERRCODE='22023'; END IF;
-  UPDATE public.rivhit_journal_entries SET status='verified',
+  UPDATE public.rivhit_journal_entries SET status='verified',hold_reason=NULL,
     report_journal_id=p_journal_id,verified_at=pg_catalog.clock_timestamp()
-  WHERE id=p_entry_id AND status='response_saved'
+  WHERE id=p_entry_id AND status IN ('response_saved','reconciliation_required')
     AND provider_year IS NOT NULL AND provider_month IS NOT NULL AND provider_line IS NOT NULL;
   GET DIAGNOSTICS changed=ROW_COUNT;
   RETURN changed=1;
@@ -285,6 +349,31 @@ END $$;
 REVOKE ALL ON FUNCTION public.verify_rivhit_journal_entry(uuid,integer)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.verify_rivhit_journal_entry(uuid,integer) TO service_role;
+
+CREATE FUNCTION public.record_rivhit_journal_reconciliation(
+  p_entry_id uuid,p_report_journal_id integer,p_reason text
+) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE changed integer;
+BEGIN
+  IF auth.role() <> 'service_role' THEN
+    RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
+  IF p_report_journal_id IS NULL OR p_report_journal_id < 1
+    OR p_reason IS NULL
+    OR p_reason NOT IN ('candidate_without_response','readback_conflict') THEN
+    RAISE EXCEPTION 'rivhit_journal_reconciliation_invalid' USING ERRCODE='22023'; END IF;
+  UPDATE public.rivhit_journal_entries SET status='reconciliation_required',
+    hold_reason=p_reason,
+    next_reconciliation_check_at=pg_catalog.clock_timestamp()+INTERVAL '15 minutes',
+    reconciliation_evidence=pg_catalog.jsonb_build_object(
+      'reportJournalId',p_report_journal_id,'observedAt',pg_catalog.clock_timestamp())
+  WHERE id=p_entry_id AND status IN ('reserved','response_saved','reconciliation_required');
+  GET DIAGNOSTICS changed=ROW_COUNT;
+  RETURN changed=1;
+END $$;
+REVOKE ALL ON FUNCTION public.record_rivhit_journal_reconciliation(uuid,integer,text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_rivhit_journal_reconciliation(uuid,integer,text)
+  TO service_role;
 
 COMMENT ON TABLE public.rivhit_journal_entries IS
   'Prepared Rivhit journal lines only. Posting remains disabled pending accountant mappings and manual-entry reconciliation.';

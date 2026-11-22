@@ -538,13 +538,29 @@ try {
   'an instructor cannot inspect the amount or payment state of another order');
   await db.query("SELECT set_config('app.test_role','service_role',false)");
   if (files.some(name => name.includes('rivhit_journal_outbox_disabled'))) {
-    const gate = (await db.query(`SELECT capture_enabled,posting_enabled,cutover_at,
-      approved_mapping_version FROM public.rivhit_journal_control`)).rows[0];
+    const gate = (await db.query(`SELECT capture_enabled,posting_enabled,cutover_at
+      FROM public.rivhit_journal_control`)).rows[0];
     assert.deepEqual(gate, { capture_enabled: false, posting_enabled: false,
-      cutover_at: null, approved_mapping_version: null },
+      cutover_at: null },
     'the prepared journal migration must remain incapable of posting');
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM public.rivhit_journal_approved_mappings')).rows[0].n, 0,
+      'no financial mapping may be approved in the preparation migration');
     assert.equal((await db.query('SELECT count(*)::int AS n FROM public.rivhit_journal_sources')).rows[0].n, 0,
       'existing and rehearsal Payper documents must not be captured retroactively');
+    let disabledStageRejected = false;
+    let disabledStageError = '';
+    try {
+      await db.query(`SELECT public.stage_rivhit_journal_entry(
+        '00000000-0000-4000-8000-000000000001'::uuid,'gross','v1-test','test',
+        '{}'::jsonb,'0000000000000000000000000000000000000000000000000000000000000000',0)`);
+    } catch (error) { disabledStageError = error.message; disabledStageRejected = /rivhit_journal_mapping_disabled/.test(error.message); }
+    assert.equal(disabledStageRejected, true, `unapproved journal mapping must be rejected: ${disabledStageError}`);
+    let disabledReserveRejected = false;
+    try {
+      await db.query(`SELECT public.reserve_rivhit_journal_entry(
+        '00000000-0000-4000-8000-000000000001'::uuid)`);
+    } catch (error) { disabledReserveRejected = /rivhit_journal_posting_disabled/.test(error.message); }
+    assert.equal(disabledReserveRejected, true, 'journal posting must be rejected in the database');
     const privileges = (await db.query(`SELECT
       has_function_privilege('authenticated',
         'public.reserve_rivhit_journal_entry(uuid)','EXECUTE') AS user_can_reserve,

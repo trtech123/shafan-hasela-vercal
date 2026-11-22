@@ -45,6 +45,13 @@ describe("future Payper journal source", () => {
     })).toThrow("journal_source_mismatch");
   });
 
+  test("accepts a standalone POS document without an order link", () => {
+    expect(prepareJournalSource({
+      ...source, ledger: { ...source.ledger, orderId: null },
+      payment: { ...source.payment, orderId: null },
+    }).amountMinor).toBe(400);
+  });
+
   test("rejects an uncertain document or payment without an official number", () => {
     expect(() => prepareJournalSource({
       ...source, ledger: { ...source.ledger, state: "reconciliation_required", documentNumber: null },

@@ -21,6 +21,9 @@ verify_jwt = true
 [functions.rivhit-journal-worker]
 verify_jwt = true
 
+[functions.rivhit-journal-readonly]
+verify_jwt = true
+
 [functions.payper-issuance-worker]
 verify_jwt = false
 

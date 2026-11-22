@@ -9,11 +9,14 @@ vi.mock('@/api/supabaseClient', () => ({ supabase: { from: (...args) => from(...
 afterEach(() => { cleanup(); from.mockReset(); });
 
 function query(data, error = null) {
-  return { select: () => ({ order: () => ({ limit: () => Promise.resolve({ data, error }) }) }) };
+  return { select: () => ({ order: () => ({ limit: () => Promise.resolve({ data, error }) }),
+    single: () => Promise.resolve({ data, error }) }) };
 }
+const control = { capture_enabled: false, posting_enabled: false, cutover_at: null };
 
 test('shows Payper and Rivhit references without posting or retry controls', async () => {
-  from.mockImplementation((table) => table === 'rivhit_journal_sources'
+  from.mockImplementation((table) => table === 'rivhit_journal_control' ? query(control)
+    : table === 'rivhit_journal_sources'
     ? query([{ id: 'source-1', payper_document_number: '200010', state: 'mapped', payper_document_url: 'https://app.payper.co.il/public/invoice_show/3554599?ak=opaque' }])
     : query([{ id: 'entry-1', source_id: 'source-1', status: 'verified', provider_year: 2026,
       provider_month: 11, provider_line: 42, hold_reason: null }]));
@@ -22,6 +25,7 @@ test('shows Payper and Rivhit references without posting or retry controls', asy
   expect(screen.getByText(/2026\/11\/42/)).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'מסמך Payper' })).toHaveAttribute('rel', 'noopener noreferrer');
   expect(screen.queryByRole('button', { name: /שדר|נסה שוב|אשר/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('שידור לריווחית: כבוי');
 });
 
 test('shows unavailable rather than claiming zero records on permission failure', async () => {
@@ -31,7 +35,8 @@ test('shows unavailable rather than claiming zero records on permission failure'
 });
 
 test('shows each journal line when an accounting document needs multiple entries', async () => {
-  from.mockImplementation((table) => table === 'rivhit_journal_sources'
+  from.mockImplementation((table) => table === 'rivhit_journal_control' ? query(control)
+    : table === 'rivhit_journal_sources'
     ? query([{ id: 'source-1', payper_document_number: '200010', state: 'mapped' }])
     : query([
       { id: 'entry-1', source_id: 'source-1', status: 'verified', provider_year: 2026, provider_month: 11, provider_line: 42 },

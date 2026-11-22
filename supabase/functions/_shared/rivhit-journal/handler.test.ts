@@ -32,4 +32,17 @@ describe('private journal worker', () => {
     expect(process).toHaveBeenCalledWith(id);
     expect((await handler(request('secret-test-key', '{}'))).status).toBe(400);
   });
+
+  test('accepts one authenticated batch wake while posting is disabled', async () => {
+    const process = vi.fn();
+    const batch = vi.fn().mockResolvedValue({ staged: 1, processed: 0, reconciled: 0, blocked: 0 });
+    const handler = createRivhitJournalHandler({ serviceKey: 'secret-test-key',
+      enabled: false, ingestionEnabled: true, batch, process });
+    const response = await handler(request('secret-test-key', JSON.stringify({ run: 'batch' })));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ staged: 1, processed: 0, reconciled: 0, blocked: 0 });
+    expect(process).not.toHaveBeenCalled();
+    expect(batch).toHaveBeenCalledOnce();
+    expect((await handler(request('wrong', JSON.stringify({ run: 'batch' })))).status).toBe(401);
+  });
 });

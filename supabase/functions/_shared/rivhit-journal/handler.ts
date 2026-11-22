@@ -18,6 +18,9 @@ function json(body: Record<string, unknown>, status: number): Response {
 export function createRivhitJournalHandler(dependencies: {
   serviceKey: string;
   enabled: boolean;
+  ingestionEnabled?: boolean;
+  batch?: () => Promise<{ staged: number; processed: number; reconciled: number; blocked: number }>;
+  reconcile?: (entryId: string) => Promise<string>;
   process: (entryId: string) => Promise<string>;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
@@ -26,7 +29,6 @@ export function createRivhitJournalHandler(dependencies: {
     if (!header?.startsWith('Bearer ') || !equalSecret(header.slice(7), dependencies.serviceKey)) {
       return json({ error: 'authentication_required' }, 401);
     }
-    if (!dependencies.enabled) return json({ error: 'journal_posting_disabled' }, 503);
     if (Number(request.headers.get('Content-Length')) > 1024) return json({ error: 'invalid_request' }, 400);
     let input: unknown;
     try {
@@ -34,6 +36,22 @@ export function createRivhitJournalHandler(dependencies: {
       if (body.length > 1024) return json({ error: 'invalid_request' }, 400);
       input = JSON.parse(body);
     } catch { return json({ error: 'invalid_request' }, 400); }
+    if (input && typeof input === 'object' && !Array.isArray(input)
+      && Object.keys(input).length === 1 && 'run' in input && input.run === 'batch') {
+      if (!dependencies.ingestionEnabled && !dependencies.enabled)
+        return json({ error: 'journal_posting_disabled' }, 503);
+      if (!dependencies.batch) return json({ error: 'journal_batch_unavailable' }, 503);
+      try { return json(await dependencies.batch(), 200); }
+      catch { return json({ error: 'journal_batch_failed' }, 500); }
+    }
+    if (input && typeof input === 'object' && !Array.isArray(input)
+      && Object.keys(input).length === 1 && 'reconcileId' in input
+      && typeof input.reconcileId === 'string' && UUID.test(input.reconcileId)) {
+      if (!dependencies.reconcile) return json({ error: 'journal_reconciliation_unavailable' }, 503);
+      try { return json({ result: await dependencies.reconcile(input.reconcileId) }, 200); }
+      catch { return json({ error: 'journal_reconciliation_failed' }, 500); }
+    }
+    if (!dependencies.enabled) return json({ error: 'journal_posting_disabled' }, 503);
     if (!input || typeof input !== 'object' || Array.isArray(input)
       || Object.keys(input).length !== 1 || !('entryId' in input)
       || typeof input.entryId !== 'string' || !UUID.test(input.entryId)) {

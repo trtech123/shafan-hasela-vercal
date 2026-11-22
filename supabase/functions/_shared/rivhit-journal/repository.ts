@@ -1,8 +1,74 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.106.1';
 import type { RivhitJournalDraft, RivhitJournalReportRow, RivhitJournalResult } from '../rivhit/types.ts';
+import type { JournalSourceRow, JournalMapping } from './mapper.ts';
+import { mapJournalSource } from './mapper.ts';
+import type { ReconciliationClaim } from './reconcile.ts';
 
 export class SupabaseRivhitJournalStore {
   constructor(private readonly client: SupabaseClient) {}
+
+  async listUnmapped(limit: number): Promise<JournalSourceRow[]> {
+    const { data, error } = await this.client.from('rivhit_journal_sources')
+      .select('id,payper_document_number,source_facts,captured_at')
+      .eq('state', 'mapping_required')
+      .lte('next_mapping_check_at', new Date().toISOString())
+      .order('next_mapping_check_at', { ascending: true }).limit(limit);
+    if (error) throw new Error('journal_source_list_failed');
+    return (data ?? []) as JournalSourceRow[];
+  }
+
+  async defer(sourceId: string): Promise<void> {
+    await this.transition('defer_rivhit_journal_source', { p_source_id: sourceId });
+  }
+
+  async stage(source: JournalSourceRow, mapping: JournalMapping): Promise<string> {
+    const mapped = await mapJournalSource(source, mapping);
+    const { data, error } = await this.client.rpc('stage_rivhit_journal_entry', {
+      p_source_id: source.id, p_entry_key: mapped.entryKey,
+      p_mapping_version: mapped.mappingVersion,
+      p_request_reference: mapped.requestReference,
+      p_request_payload: mapped.draft, p_payload_hash: mapped.payloadHash,
+      p_expected_vat: mapped.expectedVat,
+    });
+    if (error || typeof data !== 'string') throw new Error('journal_stage_failed');
+    return data;
+  }
+
+  async listReady(limit: number): Promise<string[]> {
+    const { data, error } = await this.client.from('rivhit_journal_entries')
+      .select('id').eq('status', 'ready').order('created_at', { ascending: true }).limit(limit);
+    if (error) throw new Error('journal_queue_list_failed');
+    return (data ?? []).map(row => String(row.id));
+  }
+
+  async listPending(limit: number): Promise<string[]> {
+    const before = new Date(Date.now() - 120_000).toISOString();
+    const { data, error } = await this.client.from('rivhit_journal_entries')
+      .select('id').in('status', ['reserved', 'response_saved', 'reconciliation_required'])
+      .lt('dispatch_reserved_at', before)
+      .lte('next_reconciliation_check_at', new Date().toISOString())
+      .order('next_reconciliation_check_at', { ascending: true }).limit(limit);
+    if (error) throw new Error('journal_reconciliation_list_failed');
+    return (data ?? []).map(row => String(row.id));
+  }
+
+  async inspect(id: string): Promise<ReconciliationClaim | null> {
+    const { data, error } = await this.client.from('rivhit_journal_entries')
+      .select('id,request_payload,expected_vat,status,provider_year,provider_month,provider_line')
+      .eq('id', id).maybeSingle();
+    if (error) throw new Error('journal_read_failed');
+    if (!data) return null;
+    return { id: data.id, draft: data.request_payload as RivhitJournalDraft,
+      expectedVat: Number(data.expected_vat), status: data.status,
+      providerYear: data.provider_year, providerMonth: data.provider_month,
+      providerLine: data.provider_line };
+  }
+
+  noteCandidate(id: string, journalId: number, reason: string): Promise<void> {
+    return this.transition('record_rivhit_journal_reconciliation', {
+      p_entry_id: id, p_report_journal_id: journalId, p_reason: reason,
+    });
+  }
 
   async claim(id: string): Promise<{ id: string; draft: RivhitJournalDraft; expectedVat: number } | null> {
     const { data, error } = await this.client.from('rivhit_journal_entries')

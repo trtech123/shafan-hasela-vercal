@@ -2,7 +2,7 @@ import type {
   RivhitJournalDraft, RivhitJournalReportRow, RivhitJournalResult,
 } from "../rivhit/types.ts";
 
-interface ClaimedJournal {
+export interface ClaimedJournal {
   id: string;
   draft: RivhitJournalDraft;
   expectedVat: number;
@@ -25,7 +25,7 @@ function sameMoney(a: number, b: number): boolean {
   return Number.isFinite(a) && Number.isFinite(b) && Math.round(a * 100) === Math.round(b * 100);
 }
 
-function sameEntry(row: RivhitJournalReportRow, claim: ClaimedJournal): boolean {
+export function sameEntry(row: RivhitJournalReportRow, claim: ClaimedJournal): boolean {
   const { draft, expectedVat } = claim;
   return row.reference1 === draft.reference1
     && row.reference2 === draft.reference2

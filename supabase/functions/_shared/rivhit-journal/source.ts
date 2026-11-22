@@ -1,13 +1,13 @@
 interface SourceInput {
   cutoff: string;
   ledger: {
-    id: string; paymentId: string; saleId: string; orderId: string;
+    id: string; paymentId: string; saleId: string; orderId: string | null;
     state: string; documentOrigin: string;
     sourceType?: string;
     documentNumber: string | null; documentUrl: string | null; updatedAt: string;
   };
   payment: {
-    id: string; saleId: string; orderId: string; status: string; provider: string; currency: string;
+    id: string; saleId: string; orderId: string | null; status: string; provider: string; currency: string;
     amount: number; createdAt: string; verifiedAt: string | null;
   };
   sale: { id: string; total: number; receiptNumber: string };
@@ -62,7 +62,7 @@ export function prepareJournalSource(input: SourceInput) {
   }
   if (!ledger.id || !payment.id || !sale.id || !sale.receiptNumber
     || ledger.paymentId !== payment.id || ledger.saleId !== sale.id
-    || !ledger.orderId || ledger.orderId !== payment.orderId
+    || ledger.orderId !== payment.orderId
     || payment.saleId !== sale.id || paymentMinor === null || saleMinor === null
     || paymentMinor !== saleMinor) {
     throw new Error("journal_source_mismatch");

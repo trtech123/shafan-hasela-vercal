@@ -1,0 +1,49 @@
+import type { RivhitJournalReportRow } from '../rivhit/types.ts';
+
+function json(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), { status,
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+}
+
+/** This handler contains no write operation or general-purpose provider dispatch. */
+export function createRivhitReadOnlyHandler(dependencies: {
+  authorize: (userJwt: string) => Promise<string | null>;
+  provider: {
+    sortCodeList: () => Promise<Array<{ sort_code: number; description: string }>>;
+    journalsReport: (date: string) => Promise<RivhitJournalReportRow[]>;
+  };
+}) {
+  return async (request: Request): Promise<Response> => {
+    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+    const auth = request.headers.get('authorization');
+    if (!auth?.startsWith('Bearer ') || !auth.slice(7).trim())
+      return json({ error: 'authentication_required' }, 401);
+    let role: string | null;
+    try { role = await dependencies.authorize(auth.slice(7)); }
+    catch { return json({ error: 'authentication_required' }, 401); }
+    if (!role) return json({ error: 'authentication_required' }, 401);
+    if (role !== 'admin') return json({ error: 'forbidden' }, 403);
+    let input: unknown;
+    try {
+      const body = await request.text();
+      if (body.length > 256) return json({ error: 'invalid_request' }, 400);
+      input = JSON.parse(body);
+    } catch { return json({ error: 'invalid_request' }, 400); }
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+      return json({ error: 'invalid_request' }, 400);
+    const body = input as Record<string, unknown>;
+    try {
+      if (Object.keys(body).length === 1 && body.operation === 'sort_codes') {
+        const rows = await dependencies.provider.sortCodeList();
+        return json({ rows: rows.slice(0, 500) }, 200);
+      }
+      if (Object.keys(body).length === 2 && body.operation === 'journal_report'
+        && typeof body.date === 'string'
+        && /^(?:\d{8}|\d{2}\/\d{2}\/\d{4})$/.test(body.date)) {
+        const rows = await dependencies.provider.journalsReport(body.date);
+        return json({ rows: rows.slice(0, 2000), truncated: rows.length > 2000 }, 200);
+      }
+    } catch { return json({ error: 'rivhit_read_unavailable' }, 502); }
+    return json({ error: 'invalid_request' }, 400);
+  };
+}
