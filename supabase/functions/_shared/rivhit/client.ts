@@ -230,10 +230,14 @@ export class RivhitClient {
   }
 
   async addJournal(request: RivhitJournalDraft): Promise<RivhitJournalResult> {
-    if (!Number.isSafeInteger(request.sort_code) || !Number.isSafeInteger(request.customer_id_debit)
-      || (request.customer_id_credit !== undefined && !Number.isSafeInteger(request.customer_id_credit))
+    if (!Number.isSafeInteger(request.sort_code) || request.sort_code < 1
+      || !Number.isSafeInteger(request.customer_id_debit) || request.customer_id_debit < 1
+      || (request.customer_id_credit !== undefined
+        && (!Number.isSafeInteger(request.customer_id_credit) || request.customer_id_credit < 1))
       || !Number.isFinite(request.amount) || request.amount <= 0
-      || !request.request_reference?.trim()) {
+      || !request.request_reference?.trim() || !request.reference1?.trim()
+      || !request.reference2?.trim()
+      || !/^(?:\d{8}|\d{2}\/\d{2}\/\d{4})$/.test(request.reference_date ?? '')) {
       throw new RivhitError("Rivhit journal request is invalid");
     }
     let response: RivhitEnvelope;
@@ -262,7 +266,8 @@ export class RivhitClient {
   }
 
   async journalsReport(date: string): Promise<RivhitJournalReportRow[]> {
-    if (!/^\d{8}$/.test(date)) throw new RivhitError("Rivhit journal report date is invalid");
+    if (!/^(?:\d{8}|\d{2}\/\d{2}\/\d{4})$/.test(date))
+      throw new RivhitError("Rivhit journal report date is invalid");
     const response = await this.post("Accounting.JournalsReport", { date });
     const rows = response.data?.journals_report;
     if (!Array.isArray(rows)) {

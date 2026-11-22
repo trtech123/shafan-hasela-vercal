@@ -80,4 +80,22 @@ describe("Rivhit journal dispatch", () => {
     expect(store.hold).toHaveBeenCalledWith("event-1", "existing_reference_conflict");
     expect(provider.addJournal).not.toHaveBeenCalled();
   });
+
+  test("a failed provider response cannot be dispatched again by duplicate delivery", async () => {
+    const { store, provider } = fixture();
+    provider.addJournal.mockRejectedValueOnce(new Error("connection lost after submit"));
+    await expect(processRivhitJournal("event-1", { store, provider })).resolves.toBe("uncertain");
+    store.claim.mockResolvedValueOnce(null);
+    await expect(processRivhitJournal("event-1", { store, provider })).resolves.toBe("already_claimed");
+    expect(provider.addJournal).toHaveBeenCalledTimes(1);
+    expect(store.hold).toHaveBeenCalledWith("event-1", "provider_outcome_uncertain");
+  });
+
+  test("an unavailable preflight report blocks dispatch without reserving", async () => {
+    const { store, provider } = fixture();
+    provider.journalsReport.mockReset().mockRejectedValueOnce(new Error("unavailable"));
+    await expect(processRivhitJournal("event-1", { store, provider })).resolves.toBe("reconciliation_required");
+    expect(store.reserve).not.toHaveBeenCalled();
+    expect(provider.addJournal).not.toHaveBeenCalled();
+  });
 });

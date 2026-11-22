@@ -4,13 +4,13 @@ import { prepareJournalSource } from "./source.ts";
 const source = {
   cutoff: "2026-11-22T12:00:00Z",
   ledger: {
-    id: "ledger-1", paymentId: "payment-1", saleId: "sale-1",
+    id: "ledger-1", paymentId: "payment-1", saleId: "sale-1", orderId: "order-1",
     state: "succeeded", documentOrigin: "automatic",
     documentNumber: "200010", documentUrl: "https://app.payper.co.il/public/invoice_show/3554599?ak=opaque",
     updatedAt: "2026-11-22T12:05:00Z",
   },
   payment: {
-    id: "payment-1", saleId: "sale-1", status: "succeeded",
+    id: "payment-1", saleId: "sale-1", orderId: "order-1", status: "succeeded",
     provider: "pelecard", currency: "ILS",
     amount: 4, createdAt: "2026-11-22T12:01:00Z",
     verifiedAt: "2026-11-22T12:03:00Z",
@@ -36,6 +36,12 @@ describe("future Payper journal source", () => {
   test("rejects an issued document whose payment and sale amounts differ", () => {
     expect(() => prepareJournalSource({
       ...source, sale: { ...source.sale, total: 5 },
+    })).toThrow("journal_source_mismatch");
+  });
+
+  test("rejects a Payper document linked to another order", () => {
+    expect(() => prepareJournalSource({
+      ...source, ledger: { ...source.ledger, orderId: 'other-order' },
     })).toThrow("journal_source_mismatch");
   });
 
@@ -66,5 +72,19 @@ describe("future Payper journal source", () => {
     expect(() => prepareJournalSource({
       ...source, ledger: { ...source.ledger, documentUrl: 'https://example.invalid/fake-pdf' },
     })).toThrow('journal_source_unverified');
+  });
+
+  test("accepts an exact agorot amount despite binary floating-point representation", () => {
+    expect(prepareJournalSource({
+      ...source, payment: { ...source.payment, amount: 0.29 },
+      sale: { ...source.sale, total: 0.29 },
+    }).amountMinor).toBe(29);
+  });
+
+  test("rejects a source amount with fractional agorot", () => {
+    expect(() => prepareJournalSource({
+      ...source, payment: { ...source.payment, amount: 0.291 },
+      sale: { ...source.sale, total: 0.291 },
+    })).toThrow("journal_source_mismatch");
   });
 });

@@ -18,7 +18,7 @@ describe("RivhitClient", () => {
     const client = new RivhitClient({ apiToken: token, fetchImpl });
     const draft = {
       sort_code: 1, customer_id_debit: 100, customer_id_credit: 200,
-      amount: 4, reference_date: "08112026", reference1: "200002",
+      amount: 4, reference_date: "08112026", reference1: "200002", reference2: "RCP-1026",
       request_reference: "payper:200002:journal:1",
     };
 
@@ -35,6 +35,7 @@ describe("RivhitClient", () => {
     await expect(client.addJournal({
       sort_code: 1, customer_id_debit: 100, customer_id_credit: 200,
       amount: 4, request_reference: "payper:200002:journal:1",
+      reference_date: "08112026", reference1: "200002", reference2: "RCP-1026",
     })).rejects.toMatchObject({ reconciliationRequired: true, retryable: false });
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
@@ -47,6 +48,7 @@ describe("RivhitClient", () => {
     await client.addJournal({
       sort_code: 1, customer_id_debit: 100, customer_id_credit: 200,
       amount: 4, request_reference: "payper:200002:journal:1",
+      reference_date: "08112026", reference1: "200002", reference2: "RCP-1026",
       api_token: "untrusted-value",
     } as Parameters<RivhitClient["addJournal"]>[0]);
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body).api_token).toBe(token);
@@ -318,6 +320,31 @@ describe("RivhitClient", () => {
       request_reference: "negative-test",
     })).rejects.toThrow("Rivhit journal request is invalid");
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { sort_code: 0, customer_id_debit: 100, amount: 4, request_reference: 'entry-1', reference1: '200002', reference2: 'RCP-1026', reference_date: '08112026' },
+    { sort_code: 1, customer_id_debit: -2, amount: 4, request_reference: 'entry-1', reference1: '200002', reference2: 'RCP-1026', reference_date: '08112026' },
+    { sort_code: 1, customer_id_debit: 100, amount: 4, request_reference: 'entry-1', reference1: '', reference2: 'RCP-1026', reference_date: '08112026' },
+    { sort_code: 1, customer_id_debit: 100, amount: 4, request_reference: 'entry-1', reference1: '200002', reference2: 'RCP-1026', reference_date: '2026-11-08' },
+  ])('rejects an uncorrelatable journal request before posting', async (draft) => {
+    const fetchImpl = vi.fn();
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+    await expect(client.addJournal(draft)).rejects.toThrow('Rivhit journal request is invalid');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test('accepts the existing Rivhit screen date style while preserving the supplied value', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({
+      error_code: 0, data: { year: 2026, month: 11, line: 42 },
+    }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+    await client.addJournal({
+      sort_code: 1, customer_id_debit: 100, amount: 4,
+      reference_date: '08/11/2026', reference1: '200002', reference2: 'RCP-1026',
+      request_reference: 'entry-1',
+    });
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).reference_date).toBe('08/11/2026');
   });
 
   test("rejects malformed journal report rows before reconciliation", async () => {

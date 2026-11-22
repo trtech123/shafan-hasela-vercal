@@ -109,8 +109,10 @@ BEGIN
   SELECT * INTO s FROM public.sales WHERE id = NEW.sale_id;
   IF p.id IS NULL OR s.id IS NULL OR p.status <> 'succeeded'
     OR p.operation <> 'payment' OR p.sale_id IS DISTINCT FROM s.id
+    OR NEW.order_id IS DISTINCT FROM p.order_id
     OR p.currency <> 'ILS' OR p.amount IS DISTINCT FROM s.total OR p.created_at < cutoff
-    OR (p.provider = 'pelecard' AND (p.verified_at IS NULL OR p.verified_at < cutoff))
+    OR (p.provider = 'pelecard' AND (p.verified_at IS NULL OR p.verified_at < cutoff
+      OR p.provider_transaction_id IS NULL))
     OR (p.provider IN ('manual_cash','manual_check') AND NOT EXISTS (
       SELECT 1 FROM public.payper_noncard_payments n
       WHERE n.payment_id=p.id AND n.sale_id=s.id
@@ -156,16 +158,25 @@ BEGIN
     WHERE s.id = p_source_id AND s.state = 'mapping_required'
       AND l.state='succeeded' AND l.document_origin='automatic'
       AND l.document_number=s.payper_document_number
-      AND p.status='succeeded' AND p.operation='payment') THEN
+      AND l.order_id IS NOT DISTINCT FROM p.order_id
+      AND l.sale_id=s.sale_id AND p.sale_id=s.sale_id
+      AND p.status='succeeded' AND p.operation='payment'
+      AND p.created_at >= (SELECT cutover_at FROM public.rivhit_journal_control WHERE singleton)) THEN
     RAISE EXCEPTION 'rivhit_journal_source_not_ready' USING ERRCODE = '42501'; END IF;
   IF p_request_payload IS NULL OR p_request_payload ? 'api_token'
     OR p_request_payload->>'request_reference' IS DISTINCT FROM p_request_reference
     OR p_request_payload->>'sort_code' IS NULL
     OR p_request_payload->>'customer_id_debit' IS NULL
-    OR p_request_payload->>'amount' IS NULL
+    OR pg_catalog.jsonb_typeof(p_request_payload->'amount') <> 'number'
     OR p_request_payload->>'reference1' IS NULL
     OR p_request_payload->>'reference2' IS NULL
-    OR p_expected_vat IS NULL THEN
+    OR p_expected_vat IS NULL OR p_expected_vat < 0
+    OR NOT EXISTS (SELECT 1 FROM public.rivhit_journal_sources s
+      WHERE s.id=p_source_id
+        AND p_request_payload->>'reference1'=s.payper_document_number
+        AND p_request_payload->>'reference2'=s.source_facts->>'receiptNumber'
+        AND (p_request_payload->>'amount')::numeric=(s.source_facts->>'amount')::numeric
+        AND p_expected_vat <= (s.source_facts->>'amount')::numeric) THEN
     RAISE EXCEPTION 'rivhit_journal_payload_invalid' USING ERRCODE = '22023'; END IF;
   INSERT INTO public.rivhit_journal_entries(source_id,entry_key,mapping_version,
     request_reference,request_payload,payload_hash,expected_vat)
@@ -224,7 +235,8 @@ DECLARE changed integer;
 BEGIN
   IF auth.role() <> 'service_role' THEN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
-  IF p_year IS NULL OR p_month NOT BETWEEN 1 AND 12 OR p_line IS NULL OR p_line < 1 THEN
+  IF p_year IS NULL OR p_year < 1 OR p_month NOT BETWEEN 1 AND 12
+    OR p_line IS NULL OR p_line < 1 THEN
     RAISE EXCEPTION 'rivhit_journal_reference_invalid' USING ERRCODE='22023'; END IF;
   UPDATE public.rivhit_journal_entries SET status='response_saved',
     provider_year=p_year,provider_month=p_month,provider_line=p_line,
