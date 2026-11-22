@@ -22,6 +22,33 @@ function safePayperUrl(value) {
 
 export default function RivhitJournalStatus() {
   const [state, setState] = useState({ loading: true, error: false, control: null, sources: [], entries: [] });
+  const [provider, setProvider] = useState({ loading: false, error: false, rows: [], operation: null });
+  const [reportDate, setReportDate] = useState('');
+  async function inspectProvider(operation) {
+    const date = operation === 'journal_report' && /^\d{4}-\d{2}-\d{2}$/.test(reportDate)
+      ? `${reportDate.slice(8, 10)}${reportDate.slice(5, 7)}${reportDate.slice(0, 4)}` : null;
+    if (operation === 'journal_report' && !date) {
+      setProvider({ loading: false, error: true, rows: [], operation });
+      return;
+    }
+    setProvider({ loading: true, error: false, rows: [], operation });
+    try {
+      const { data, error } = await supabase.functions.invoke('rivhit-journal-readonly', {
+        body: operation === 'sort_codes' ? { operation } : { operation, date },
+      });
+      const rows = Array.isArray(data?.rows) ? data.rows.map(row => operation === 'sort_codes'
+        ? { sort_code: row.sort_code, description: row.description }
+        : { journal_id: row.journal_id, journal_year: row.journal_year,
+          journal_month: row.journal_month, sort_code: row.sort_code,
+          debit_customer_id: row.debit_customer_id,
+          credit_customer_id: row.credit_customer_id, reference1: row.reference1,
+          reference2: row.reference2, reference_date: row.reference_date,
+          total_amount: row.total_amount, total_vat: row.total_vat }) : [];
+      setProvider({ loading: false, error: !!error || !Array.isArray(data?.rows), rows, operation });
+    } catch {
+      setProvider({ loading: false, error: true, rows: [], operation });
+    }
+  }
   useEffect(() => {
     let active = true;
     (async () => {
@@ -58,6 +85,23 @@ export default function RivhitJournalStatus() {
       שידור לריווחית: {state.control.posting_enabled ? 'פעיל' : 'כבוי'}
       {state.control.cutover_at ? ` · מעבר החל מ־${new Date(state.control.cutover_at).toLocaleString('he-IL')}` : ''}
     </p>}
+    <div className="rounded-lg border p-3 space-y-2 text-sm" aria-label="בדיקת ריווחית לקריאה בלבד">
+      <p>בדיקת נתוני ריווחית למנהל בלבד. הפעולות מציגות קודי מיון ופקודות קיימות; הן אינן יוצרות פקודה.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" disabled={provider.loading} onClick={() => inspectProvider('sort_codes')}
+          className="rounded border px-3 py-1">הצג קודי מיון</button>
+        <label htmlFor="rivhit-journal-date">תאריך פקודות</label>
+        <input id="rivhit-journal-date" type="date" value={reportDate}
+          onChange={event => setReportDate(event.target.value)} className="rounded border px-2 py-1" />
+        <button type="button" disabled={provider.loading || !reportDate}
+          onClick={() => inspectProvider('journal_report')} className="rounded border px-3 py-1">הצג פקודות קיימות</button>
+      </div>
+      {provider.error && <p role="alert">לא ניתן לקרוא את נתוני ריווחית.</p>}
+      {provider.operation && !provider.loading && !provider.error &&
+        <p>נמצאו {provider.rows.length} רשומות{provider.rows.length >= 2000 ? ' (ייתכן שהרשימה נקטעה)' : ''}.</p>}
+      {provider.operation && !provider.loading && !provider.error && provider.rows.length > 0 &&
+        <pre className="max-h-64 overflow-auto text-xs" dir="ltr">{JSON.stringify(provider.rows, null, 2)}</pre>}
+    </div>
     {state.loading ? <p>טוען נתוני התאמה…</p> : state.error
       ? <p role="alert">לא ניתן לטעון את מצב פקודות היומן.</p>
       : state.sources.length === 0 ? <p>לא נקלטו מסמכים לסנכרון.</p>
