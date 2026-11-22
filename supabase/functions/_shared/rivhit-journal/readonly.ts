@@ -1,8 +1,14 @@
 import type { RivhitJournalReportRow } from '../rivhit/types.ts';
 
+const corsHeaders = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
+  'access-control-allow-methods': 'POST, OPTIONS',
+};
+
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), { status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+    headers: { ...corsHeaders, 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }
 
 /** This handler contains no write operation or general-purpose provider dispatch. */
@@ -14,6 +20,7 @@ export function createRivhitReadOnlyHandler(dependencies: {
   };
 }) {
   return async (request: Request): Promise<Response> => {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
     if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
     const auth = request.headers.get('authorization');
     if (!auth?.startsWith('Bearer ') || !auth.slice(7).trim())
