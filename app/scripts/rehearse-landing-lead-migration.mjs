@@ -3,7 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import assert from 'node:assert/strict';
 
 const db = new PGlite();
-const migration = new URL('../../supabase/migrations/202611150005_landing_lead_ingestion.sql', import.meta.url);
+const migration = new URL('../../supabase/migrations/202611230005_landing_lead_ingestion.sql', import.meta.url);
 try {
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;

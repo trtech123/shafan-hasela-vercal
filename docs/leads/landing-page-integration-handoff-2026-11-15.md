@@ -1,7 +1,6 @@
 # Landing page leads: read-only findings and activation handoff
 
-> Historical checkpoint. Current findings and the revised Base44 contract are in
-> [landing-page-integration-2026-11-19.md](landing-page-integration-2026-11-19.md).
+> Historical checkpoint. The current contract is in `base44-owner-handoff-he.md`, the current plan is in `landing-page-activation-2026-11-23.md`, and the current migration is `202611230005_landing_lead_ingestion.sql`.
 
 Terminal 1 owns integration and production release. This branch changes only lead ingestion, lead display, tests, and lead-specific schema. No live website, production database, Edge deployment, customer record, or test submission was changed.
 
