@@ -1,5 +1,7 @@
 # Nurit team-building leads: local integration handoff (2026-11-19)
 
+> Historical design record. The 2026-11-23 requirement removes the WhatsApp continuation and changes the displayed source. Use `landing-page-activation-2026-11-23.md` and `base44-owner-handoff-he.md` for the current contract and release plan.
+
 ## Confirmed public route and remaining visibility limit
 
 - `https://www.shafan-hasela.com/he/team-building-day/` currently contains one iframe with `src=https://vegan-climb-the-summit.base44.app/`. The outer page has no HTML form or input in the rendered DOM. The company's separate home/contact Elementor forms described in the 2026-11-15 checkpoint are **not** forms on this campaign page.

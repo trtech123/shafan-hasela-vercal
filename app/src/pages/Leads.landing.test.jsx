@@ -14,7 +14,7 @@ test('shows a landing submission in the existing CRM with source and campaign', 
   const data = [{ id: 'synthetic-lead', full_name: 'Synthetic Customer',
     phone: '0501234567', email: 'synthetic@example.invalid', status: 'פתוח',
     lead_source: 'landing_page', lead_attribution: {
-      sourceLabel: 'דף נחיתה — יום גיבוש', topic: 'יום גיבוש לחברות',
+      sourceLabel: 'קמפיין ממומן — יום גיבוש', topic: 'יום גיבוש לחברות',
       campaign: 'winter', utmSource: 'search' },
     source_text: 'Group activity', created_at: '2026-11-16T10:00:00Z' }];
   const builder = { select: () => builder, order: () => builder,
@@ -22,7 +22,7 @@ test('shows a landing submission in the existing CRM with source and campaign', 
   from.mockReturnValue(builder);
   render(<Leads />);
   expect((await screen.findAllByText('Synthetic Customer')).length).toBeGreaterThan(0);
-  expect(screen.getAllByText('דף נחיתה — יום גיבוש').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('קמפיין ממומן — יום גיבוש').length).toBeGreaterThan(0);
   expect(screen.getAllByText('יום גיבוש לחברות').length).toBeGreaterThan(0);
   expect(screen.getAllByText(/winter/).length).toBeGreaterThan(0);
   expect(from).toHaveBeenCalledWith('leads');

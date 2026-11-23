@@ -62,7 +62,7 @@ try {
   assert.equal(rows[0].source_text, 'Group activity');
   const base44 = { ...base, email: null,
     attribution: { pagePath: '/', pageUrl: 'https://vegan-climb-the-summit.base44.app/',
-      sourceLabel: 'דף נחיתה — יום גיבוש', topic: 'יום גיבוש לחברות' } };
+      sourceLabel: 'קמפיין ממומן — יום גיבוש', topic: 'יום גיבוש לחברות' } };
   const phoneOnly = (await db.query('SELECT public.ingest_landing_lead($1,$2,$3,$4::jsonb) AS result',
     ['nurit-team-building', 'f'.repeat(64), 'c'.repeat(64), JSON.stringify(base44)])).rows[0].result;
   assert.equal(phoneOnly.created, true);
@@ -71,32 +71,8 @@ try {
   assert.equal(stored.email, null);
   assert.equal(stored.status, 'פתוח');
   assert.equal(stored.lead_attribution.topic, 'יום גיבוש לחברות');
-  const contact = (await db.query("INSERT INTO public.bot_contacts(display_name,phone) VALUES ('Synthetic Customer','0501234567') RETURNING id")).rows[0];
-  const conversation = (await db.query('INSERT INTO public.bot_conversations(contact_id) VALUES ($1) RETURNING id',
-    [contact.id])).rows[0];
-  await db.query("INSERT INTO public.bot_messages(conversation_id,direction,body) VALUES ($1,'inbound',$2)",
-    [conversation.id, `Please contact me #SHF-${'f'.repeat(64)}`]);
-  const handoff = (await db.query('SELECT * FROM public.create_bot_handoff($1,$2,$3,$4,$5::jsonb)',
-    [conversation.id, 'requested_agent', 'normal', 'Synthetic handoff', '{}'])).rows[0];
-  assert.equal(handoff.lead_id, phoneOnly.leadId);
-  const linked = (await db.query('SELECT lead_id FROM public.bot_handoffs WHERE id=$1', [handoff.handoff_id])).rows[0];
-  assert.equal(linked.lead_id, phoneOnly.leadId);
+  assert.equal(stored.lead_attribution.sourceLabel, 'קמפיין ממומן — יום גיבוש');
   assert.equal((await db.query('SELECT count(*)::int AS n FROM public.leads')).rows[0].n, 4);
-  const otherConversation = (await db.query('INSERT INTO public.bot_conversations(contact_id) VALUES ($1) RETURNING id',
-    [contact.id])).rows[0];
-  const ordinary = (await db.query('SELECT * FROM public.create_bot_handoff($1,$2,$3,$4,$5::jsonb)',
-    [otherConversation.id, 'requested_agent', 'normal', 'Ordinary handoff', '{}'])).rows[0];
-  assert.notEqual(ordinary.lead_id, phoneOnly.leadId);
-  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.leads')).rows[0].n, 5);
-  const otherContact = (await db.query("INSERT INTO public.bot_contacts(display_name,phone) VALUES ('Other Synthetic','0507654321') RETURNING id")).rows[0];
-  const wrongSender = (await db.query('INSERT INTO public.bot_conversations(contact_id) VALUES ($1) RETURNING id',
-    [otherContact.id])).rows[0];
-  await db.query("INSERT INTO public.bot_messages(conversation_id,direction,body) VALUES ($1,'inbound',$2)",
-    [wrongSender.id, `Forwarded #SHF-${'f'.repeat(64)}`]);
-  const unrelated = (await db.query('SELECT * FROM public.create_bot_handoff($1,$2,$3,$4,$5::jsonb)',
-    [wrongSender.id, 'requested_agent', 'normal', 'Different sender', '{}'])).rows[0];
-  assert.notEqual(unrelated.lead_id, phoneOnly.leadId);
-  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.leads')).rows[0].n, 6);
   await db.query("SELECT set_config('app.test_role','authenticated',false)");
   await assert.rejects(db.query('SELECT public.ingest_landing_lead($1,$2,$3,$4::jsonb)',
     ['10db6ba', 'f'.repeat(64), 'b'.repeat(64), JSON.stringify(base)]), /permission|forbidden/i);

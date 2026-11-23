@@ -75,13 +75,15 @@ function normalizePayload(input, allowedForms, allowedHosts, now) {
   if (!fullName || !phone || (input.fields.email != null && input.fields.email !== '' && !email) ||
     (input.inquiry != null && !inquiry) || (input.fields.company != null && !company) ||
     (input.topic != null && !topic) ||
+    (input.formId === 'nurit-team-building' && !topic) ||
     input.fields.field_46ac48c || input.honeypot)
     return { error: 'invalid_submission', status: 400 };
   const utm = object(input.utm) ? input.utm : {};
   const getUtm = key => utm[key] ?? page.searchParams.get(`utm_${key}`);
   const attribution = { pagePath: page.pathname,
     pageUrl: `${page.origin}${page.pathname}`,
-    sourceLabel: 'דף נחיתה — יום גיבוש', topic,
+    sourceLabel: input.formId === 'nurit-team-building'
+      ? 'קמפיין ממומן — יום גיבוש' : 'דף נחיתה — יום גיבוש', topic,
     campaign: optional(input.campaign, 200),
     utmSource: optional(getUtm('source'), 200), utmMedium: optional(getUtm('medium'), 200),
     utmCampaign: optional(getUtm('campaign'), 200), utmTerm: optional(getUtm('term'), 200),
@@ -131,8 +133,7 @@ export function createLandingLeadHandler({ enabled = false, secret,
           company: lead.company, inquiry: lead.inquiry, source: 'landing_page',
           attribution: lead.attribution } });
       if (result.limited) return json({ error: 'rate_limited' }, 429);
-      return json({ accepted: true, duplicate: !result.created,
-        whatsappReference: `#SHF-${submissionKey}` });
+      return json({ accepted: true, duplicate: !result.created });
     } catch {
       return json({ error: 'processing_failed' }, 500);
     }

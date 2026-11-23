@@ -256,7 +256,7 @@ export default function Leads() {
     // Public form text must not become a spreadsheet formula on export.
     const esc = escapeLeadCsvCell;
     const rows = filtered.map((l, i) =>
-      [i + 1, l.full_name, l.phone, l.email, l.company, l.customer_type, l.site, l.status, l.event_date, l.source_text, l.notes, l.lead_source, l.lead_attribution?.campaign || l.lead_attribution?.utmCampaign]
+      [i + 1, l.full_name, l.phone, l.email, l.company, l.customer_type, l.site, l.status, l.event_date, l.source_text, l.notes, l.lead_attribution?.sourceLabel || l.lead_source, l.lead_attribution?.campaign || l.lead_attribution?.utmCampaign]
         .map(esc).join(",")
     );
     // ﻿ BOM so Excel reads UTF-8 Hebrew correctly. CRLF line endings.
@@ -276,7 +276,8 @@ export default function Leads() {
   const matchesSearch = (l) => {
     if (!q) return true;
     return [l.full_name, l.phone, l.email, l.company, l.notes, l.source_text,
-      l.lead_source, l.lead_attribution?.campaign, l.lead_attribution?.utmCampaign]
+      l.lead_source, l.lead_attribution?.sourceLabel,
+      l.lead_attribution?.campaign, l.lead_attribution?.utmCampaign]
       .some(v => (v || "").toLowerCase().includes(q));
   };
   const matchesCustomerType = (l) =>
