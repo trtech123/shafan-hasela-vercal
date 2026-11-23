@@ -89,6 +89,17 @@ try {
   }
   assert.equal(directLegacyDenied, true,
     'a direct authenticated legacy paid-order RPC call must be denied');
+  current = 'landing lead ingestion with customer classification';
+  const leadKey = 'a'.repeat(64);
+  const leadResult = (await db.query(`SELECT public.ingest_landing_lead($1,$2,$3,$4::jsonb) AS result`,
+    ['customer-type-rehearsal', leadKey, 'b'.repeat(64), JSON.stringify({
+      source: 'landing_page', fullName: 'Synthetic Lead', phone: '0501234567',
+      attribution: { pagePath: '/', pageUrl: 'https://example.invalid/' },
+    })])).rows[0].result;
+  assert.equal(leadResult.created, true, 'the landing lead RPC must still insert a lead');
+  const leadType = (await db.query('SELECT customer_type FROM public.leads WHERE id=$1',
+    [leadResult.leadId])).rows[0].customer_type;
+  assert.equal(leadType, null, 'landing leads must remain unclassified unless explicitly classified');
   current = 'read-only optional-customer production preflight';
   await db.exec(await readFile(new URL('../../scripts/orders/optional-customer-production-preflight.sql',
     import.meta.url), 'utf8'));
