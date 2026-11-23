@@ -45,6 +45,9 @@ verify_jwt = false
 [functions.whatsapp-webhook]
 verify_jwt = false
 
+[functions.landing-lead-webhook]
+verify_jwt = false
+
 [functions.send-whatsapp]
 verify_jwt = true
 
