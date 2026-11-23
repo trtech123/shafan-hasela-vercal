@@ -1,6 +1,6 @@
 # מסירה למפתחת Base44 — טופס יום הגיבוש
 
-אנחנו מטפלים בצד שפן הסלע בלבד. פונקציית הקליטה `landing-lead-webhook` והמיגרציה שלה נפרסו ב־Supabase Production ב־23.11.2026. **הקליטה עדיין כבויה** (`LANDING_LEADS_ENABLED=false`), ולכן כל בקשת `POST` מחזירה כעת `503 integration_disabled` ואינה יוצרת ליד. אפשר להכין את החיבור בפרויקט Base44 המקורי, אך אין לפרסם שליחה חיה לפני שנתאם הפעלה.
+אנחנו מטפלים בצד שפן הסלע בלבד. פונקציית הקליטה `landing-lead-webhook` והמיגרציה שלה נפרסו ב־Supabase Production ב־23.11.2026, וממשק הלידים נפרס ל־Vercel Production בפריסה `dpl_BHr2WGiKSQee36ZNZshcvKBf3EmW`. **הקליטה עדיין כבויה** (`LANDING_LEADS_ENABLED=false`), ולכן כל בקשת `POST` מחזירה כעת `503 integration_disabled` ואינה יוצרת ליד. אפשר להכין את החיבור בפרויקט Base44 המקורי, אך אין לפרסם שליחה חיה לפני שנתאם הפעלה.
 
 ## מה נדרש בפרויקט Base44 המקורי
 
