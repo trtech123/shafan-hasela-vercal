@@ -13,7 +13,7 @@ export interface JournalSourceRow {
 export interface JournalMapping {
   version: string;
   provider: 'pelecard' | 'manual_cash' | 'manual_check';
-  site: 'עכו' | 'טבריה' | 'נוף הגליל' | 'שטח' | null;
+  site: 'עכו' | 'טבריה' | 'נוף הגליל' | 'שטח' | 'פודטראק' | 'קפה אקסטרים' | 'ויה פרטה';
   sortCode: number;
   debitAccount: number;
   creditAccount: number;
@@ -48,12 +48,13 @@ async function sha256(value: unknown): Promise<string> {
 
 /** No default accounts or tax rates: a version approved in the DB is required at staging. */
 export async function mapJournalSource(source: JournalSourceRow, mapping: JournalMapping) {
+  if (!source.source_facts.site?.trim()) throw new Error('journal_mapping_evidence_incomplete');
   if (!mapping.version?.trim() || !['pelecard', 'manual_cash', 'manual_check'].includes(mapping.provider)
     || ![mapping.sortCode, mapping.debitAccount, mapping.creditAccount].every(
       value => Number.isSafeInteger(value) && value > 0)
     || !Number.isSafeInteger(mapping.vatRateBasisPoints)
     || mapping.vatRateBasisPoints < 0 || mapping.vatRateBasisPoints > 10_000
-    || ![null, 'עכו', 'טבריה', 'נוף הגליל', 'שטח'].includes(mapping.site)
+    || !['עכו', 'טבריה', 'נוף הגליל', 'שטח', 'פודטראק', 'קפה אקסטרים', 'ויה פרטה'].includes(mapping.site)
     || (mapping.projectId !== undefined
       && (!Number.isSafeInteger(mapping.projectId) || mapping.projectId < 1))
     || mapping.accountingDate !== 'capture_israel_date') {

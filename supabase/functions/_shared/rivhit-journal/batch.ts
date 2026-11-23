@@ -22,7 +22,8 @@ export async function runRivhitJournalBatch(dependencies: {
     const sources = await dependencies.store.listUnmapped(10);
     for (const source of sources) {
       const applicable = dependencies.mappings.filter(
-        mapping => mapping.provider === source.source_facts.provider
+        mapping => !!source.source_facts.site?.trim()
+          && mapping.provider === source.source_facts.provider
           && mapping.site === (source.source_facts.site ?? null));
       if (applicable.length !== 1) {
         await dependencies.store.defer(source.id);

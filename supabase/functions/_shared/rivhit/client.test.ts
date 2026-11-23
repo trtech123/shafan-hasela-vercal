@@ -363,4 +363,43 @@ describe("RivhitClient", () => {
     expect(fetchImpl.mock.calls[0][0]).toContain('Accounting.SortCodeList');
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body).documents_only).toBe(false);
   });
+
+  test("reads projects and payment types with only documented read operations", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error_code: 0, data: { project_list: [{ project_id: 5, project_name: 'Test project' }] } }))
+      .mockResolvedValueOnce(jsonResponse({ error_code: 0, data: { payment_type_list: [{ payment_type: 2, payment_name: 'Cash', type_code: 1 }] } }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+    await expect(client.projectList()).resolves.toEqual([{ project_id: 5, project_name: 'Test project' }]);
+    await expect(client.paymentTypeList()).resolves.toEqual([{ payment_type: 2, payment_name: 'Cash', type_code: 1 }]);
+    expect(fetchImpl.mock.calls.map(call => call[0])).toEqual([
+      expect.stringContaining('Project.List'), expect.stringContaining('Payment.TypeList'),
+    ]);
+  });
+
+  test("looks up an account id but returns no contact, identity or token fields", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ error_code: 0, data: {
+      customer_id: 1416, first_name: 'Revenue', last_name: 'Account', customer_type: 3,
+      acc_ref: 'REF', project_id: 4, email: 'private@example.test', cc_token: 'secret',
+    } }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+    await expect(client.accountCard(1416)).resolves.toEqual({
+      account_id: 1416, name: 'Revenue Account', account_type: 3, project_id: 4,
+    });
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ customer_id: 1416, api_token: token });
+    await expect(client.accountCard(0)).rejects.toThrow();
+  });
+
+  test("reads profit and loss account names without returning balances", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ error_code: 0, data: {
+      pnl_report: [{ account_id: 1416, account_name: 'Revenue', balance: 100,
+        pnl_code: 2, pnl_name: 'Income' }],
+    } }));
+    const client = new RivhitClient({ apiToken: token, fetchImpl });
+    await expect(client.profitLossAccounts(2026, 1, 11)).resolves.toEqual([{
+      account_id: 1416, account_name: 'Revenue', pnl_code: 2, pnl_name: 'Income',
+    }]);
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
+      year: 2026, from_month: 1, to_month: 11, api_token: token,
+    });
+  });
 });

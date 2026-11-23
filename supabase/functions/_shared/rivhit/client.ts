@@ -300,4 +300,68 @@ export class RivhitClient {
     }
     return rows as Array<{ sort_code: number; description: string }>;
   }
+
+  async projectList(): Promise<Array<{ project_id: number; project_name: string }>> {
+    const response = await this.post("Project.List", {});
+    const rows = response.data?.project_list;
+    if (!Array.isArray(rows) || !rows.every((row) => row && typeof row === 'object'
+      && Number.isSafeInteger(row.project_id) && typeof row.project_name === 'string')) {
+      throw new RivhitError('Rivhit project list response is invalid');
+    }
+    return rows.map(({ project_id, project_name }) => ({ project_id, project_name }));
+  }
+
+  async paymentTypeList(): Promise<Array<{ payment_type: number; payment_name: string; type_code: number }>> {
+    const response = await this.post("Payment.TypeList", {});
+    const rows = response.data?.payment_type_list;
+    if (!Array.isArray(rows) || !rows.every((row) => row && typeof row === 'object'
+      && Number.isSafeInteger(row.payment_type) && typeof row.payment_name === 'string'
+      && Number.isSafeInteger(row.type_code))) {
+      throw new RivhitError('Rivhit payment type list response is invalid');
+    }
+    return rows.map(({ payment_type, payment_name, type_code }) => ({ payment_type, payment_name, type_code }));
+  }
+
+  /** Customer.Get is a card lookup, not a complete chart-of-accounts endpoint. */
+  async accountCard(accountId: number): Promise<{
+    account_id: number; name: string; account_type: number | null; project_id: number | null;
+  }> {
+    if (!Number.isSafeInteger(accountId) || accountId < 1 || accountId > 2147483647)
+      throw new RivhitError('Rivhit account id is invalid');
+    const response = await this.post('Customer.Get', { customer_id: accountId });
+    const data = response.data;
+    if (!data || data.customer_id !== accountId
+      || (data.first_name !== null && data.first_name !== undefined && typeof data.first_name !== 'string')
+      || (data.last_name !== null && data.last_name !== undefined && typeof data.last_name !== 'string')) {
+      throw new RivhitError('Rivhit account card response is invalid');
+    }
+    const name = [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
+    if (!name) throw new RivhitError('Rivhit account card has no name');
+    return {
+      account_id: accountId, name,
+      account_type: Number.isSafeInteger(data.customer_type) ? data.customer_type as number : null,
+      project_id: Number.isSafeInteger(data.project_id) ? data.project_id as number : null,
+    };
+  }
+
+  /** Official P&L report supplies account identities; balances are deliberately discarded. */
+  async profitLossAccounts(year: number, fromMonth: number, toMonth: number): Promise<Array<{
+    account_id: number; account_name: string; pnl_code: number; pnl_name: string;
+  }>> {
+    if (!Number.isSafeInteger(year) || year < 2000 || year > 2100
+      || !Number.isSafeInteger(fromMonth) || !Number.isSafeInteger(toMonth)
+      || fromMonth < 1 || toMonth > 12 || fromMonth > toMonth)
+      throw new RivhitError('Rivhit P&L range is invalid');
+    const response = await this.post('Accounting.PnLReport', {
+      year, from_month: fromMonth, to_month: toMonth,
+    });
+    const rows = response.data?.pnl_report;
+    if (!Array.isArray(rows) || !rows.every(row => row && typeof row === 'object'
+      && Number.isSafeInteger(row.account_id) && typeof row.account_name === 'string'
+      && Number.isSafeInteger(row.pnl_code) && typeof row.pnl_name === 'string'))
+      throw new RivhitError('Rivhit P&L report response is invalid');
+    return rows.map(({ account_id, account_name, pnl_code, pnl_name }) => ({
+      account_id, account_name, pnl_code, pnl_name,
+    }));
+  }
 }
