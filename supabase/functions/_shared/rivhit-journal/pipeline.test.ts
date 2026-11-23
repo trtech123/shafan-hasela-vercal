@@ -6,10 +6,10 @@ import { processRivhitJournal } from './processor.ts';
 const source = {
   id: '00000000-0000-4000-8000-000000000001', payper_document_number: '200010',
   captured_at: '2026-11-22T12:30:00Z',
-  source_facts: { provider: 'pelecard', site: null, amount: 118, currency: 'ILS',
+  source_facts: { provider: 'pelecard', site: 'עכו', amount: 118, currency: 'ILS',
     receiptNumber: 'RCP-2000', vatApplicable: true },
 };
-const mapping = { version: 'synthetic', provider: 'pelecard' as const, site: null,
+const mapping = { version: 'synthetic', provider: 'pelecard' as const, site: 'עכו' as const,
   sortCode: 12, debitAccount: 101, creditAccount: 201,
   vatRateBasisPoints: 1800, accountingDate: 'capture_israel_date' as const };
 

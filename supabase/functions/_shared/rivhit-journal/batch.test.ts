@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from 'vitest';
 import { runRivhitJournalBatch } from './batch.ts';
 
-const source = { id: 'source-1', source_facts: { provider: 'pelecard' } };
-const mapping = { version: 'approved', provider: 'pelecard', site: null };
+const source = { id: 'source-1', source_facts: { provider: 'pelecard', site: 'עכו' } };
+const mapping = { version: 'approved', provider: 'pelecard', site: 'עכו' };
 
 function fixture() {
   const store = {
@@ -35,6 +35,15 @@ describe('scheduled journal batch', () => {
     expect(result.blocked).toBe(1);
     expect(store.stage).not.toHaveBeenCalled();
     expect(store.defer).toHaveBeenCalledWith(source.id);
+  });
+
+  test('a source with no saved site is deferred even if a null mapping exists', async () => {
+    const { store, process, reconcile } = fixture();
+    store.listUnmapped.mockResolvedValue([{ ...source, source_facts: { provider: 'pelecard', site: null } }]);
+    const result = await runRivhitJournalBatch({ store, process, reconcile,
+      mappings: [{ ...mapping, site: null }], ingestionEnabled: true, postingEnabled: false });
+    expect(result.blocked).toBe(1);
+    expect(store.stage).not.toHaveBeenCalled();
   });
 
   test('a mapping failure is deferred so later sources are not starved', async () => {

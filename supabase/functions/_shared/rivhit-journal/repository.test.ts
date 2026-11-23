@@ -22,9 +22,9 @@ describe('Rivhit journal database transitions', () => {
     const id = await store.stage({
       id: '00000000-0000-4000-8000-000000000001',
       payper_document_number: '200010', captured_at: '2026-11-22T12:30:00Z',
-      source_facts: { provider: 'pelecard', site: null, amount: 118, currency: 'ILS',
+      source_facts: { provider: 'pelecard', site: 'עכו', amount: 118, currency: 'ILS',
         receiptNumber: 'RCP-2000', vatApplicable: true },
-    }, { version: 'synthetic', provider: 'pelecard', site: null,
+    }, { version: 'synthetic', provider: 'pelecard', site: 'עכו',
       sortCode: 12, debitAccount: 101, creditAccount: 201,
       vatRateBasisPoints: 1800, accountingDate: 'capture_israel_date' });
     expect(id).toBe('entry-1');

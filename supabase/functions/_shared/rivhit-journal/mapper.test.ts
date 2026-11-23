@@ -4,12 +4,12 @@ import { mapJournalSource } from './mapper.ts';
 const source = {
   id: '00000000-0000-4000-8000-000000000001',
   payper_document_number: '200010',
-  source_facts: { provider: 'pelecard', site: null, amount: 118, currency: 'ILS',
+  source_facts: { provider: 'pelecard', site: 'עכו', amount: 118, currency: 'ILS',
     receiptNumber: 'RCP-2000', vatApplicable: true },
   captured_at: '2026-11-22T12:30:00Z',
 };
 const mapping = {
-  version: 'anat-approved-v1', provider: 'pelecard', site: null, sortCode: 12,
+  version: 'anat-approved-v1', provider: 'pelecard', site: 'עכו', sortCode: 12,
   debitAccount: 101, creditAccount: 201, vatRateBasisPoints: 1800,
   accountingDate: 'capture_israel_date' as const,
 };
@@ -44,5 +44,10 @@ describe('future-only journal mapper', () => {
       .rejects.toThrow('journal_mapping_invalid');
     await expect(mapJournalSource(source, { ...mapping, vatRateBasisPoints: -1 }))
       .rejects.toThrow('journal_mapping_invalid');
+  });
+
+  test('blocks a source without an authoritative site even if a null-site mapping is supplied', async () => {
+    await expect(mapJournalSource({ ...source, source_facts: { ...source.source_facts, site: null } },
+      { ...mapping, site: null })).rejects.toThrow('journal_mapping_evidence_incomplete');
   });
 });
