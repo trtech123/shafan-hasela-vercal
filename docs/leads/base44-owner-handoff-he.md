@@ -1,6 +1,6 @@
 # מסירה למפתחת Base44 — טופס יום הגיבוש
 
-אנחנו מטפלים בצד שפן הסלע בלבד. פונקציית הקליטה `landing-lead-webhook` מוכנה בענף העבודה, אך טרם נפרסה. לכן הכתובת שלהלן **אינה פעילה עדיין**. אין לשלוח אליה פניות עד שנתאם הפעלה.
+אנחנו מטפלים בצד שפן הסלע בלבד. פונקציית הקליטה `landing-lead-webhook` והמיגרציה שלה נפרסו ב־Supabase Production ב־23.11.2026. **הקליטה עדיין כבויה** (`LANDING_LEADS_ENABLED=false`), ולכן כל בקשת `POST` מחזירה כעת `503 integration_disabled` ואינה יוצרת ליד. אפשר להכין את החיבור בפרויקט Base44 המקורי, אך אין לפרסם שליחה חיה לפני שנתאם הפעלה.
 
 ## מה נדרש בפרויקט Base44 המקורי
 
@@ -11,7 +11,7 @@
 
 ## חוזה ה־API
 
-כתובת מתוכננת בפרויקט Supabase Production שאומת: `https://divzxsynczeifkpnpupl.supabase.co/functions/v1/landing-lead-webhook`. הפונקציה עצמה טרם נפרסה ולכן הכתובת אינה קולטת פניות; נוודא שוב את הפרויקט בחלון ההפעלה. שיטת הבקשה: `POST`, כותרת `Content-Type: application/json`.
+כתובת הפונקציה שנפרסה בפרויקט Supabase Production: `https://divzxsynczeifkpnpupl.supabase.co/functions/v1/landing-lead-webhook`. שיטת הבקשה: `POST`, כותרת `Content-Type: application/json`. הקריאה היא **מפונקציית שרת של Base44 בלבד**, ללא מפתח Supabase בדפדפן. גוף הבקשה חייב להיות קטן מ־8 KiB.
 
 ```json
 {
@@ -25,13 +25,13 @@
 }
 ```
 
-אפשר להוסיף `fields.email`, `campaign` ו־`utm` רק אם הנתונים נאספים בפועל. אל תמציאי מזהה קמפיין. אצלנו הליד נשמר עם מקור מוצג **„קמפיין ממומן — יום גיבוש”**, סטטוס **„פתוח”**, כתובת דף המקור, נושא והודעה אם נמסרה.
+חובה לשלוח `formId`, `submissionId`, `submittedAt`, `pageUrl`, `fields.name`, `fields.phone` ו־`topic`. הנושא חייב להיות טקסט לא ריק. `inquiry` אופציונלית; אם ההודעה ריקה, השמיטי את השדה. אפשר להוסיף `fields.email`, `fields.company`, `campaign` ו־`utm` רק אם הנתונים נאספים בפועל; השמיטי שדות אופציונליים ריקים ואל תמציאי מזהה קמפיין. `pageUrl` חייב להיות כתובת HTTPS של `vegan-climb-the-summit.base44.app` גם כשהדף מוטמע באתר החברה; אין לשלוח את כתובת הדף המארח. `submittedAt` צריך לייצג את זמן השליחה בפועל. אצלנו הליד נשמר עם מקור מוצג **„קמפיין ממומן — יום גיבוש”**, סטטוס **„פתוח”**, כתובת דף המקור, נושא והודעה אם נמסרה.
 
-האימות מתבצע בפונקציית השרת בלבד: צרי מחרוזת JSON סופית `rawBody`, זמן Unix בשניות `timestamp`, וחשבי `HMAC-SHA256(secret, timestamp + "." + rawBody)`. הוסיפי כותרות `X-Landing-Timestamp: <timestamp>` ו־`X-Landing-Signature: sha256=<hex>`. חתמי על **אותם בתים בדיוק** שנשלחים בגוף הבקשה; בניסיון חוזר חשבי חתימה חדשה ושמרי את אותו `submissionId`.
+האימות מתבצע בפונקציית השרת בלבד: צרי מחרוזת JSON סופית `rawBody`, זמן Unix בשניות כמחרוזת של 10 ספרות `timestamp`, וחשבי `HMAC-SHA256(secret, timestamp + "." + rawBody)`. הוסיפי כותרות `X-Landing-Timestamp: <timestamp>` ו־`X-Landing-Signature: sha256=<hex של 64 תווים>`. חתמי על **אותם בתים בדיוק** שנשלחים בגוף הבקשה; חותמת הזמן מתקבלת בטווח של חמש דקות. בניסיון חוזר חשבי חתימה וחותמת זמן חדשות, ושמרי את אותו `submissionId`.
 
-הגדירי בצד השרת של Base44 בלבד את `SHAFAN_LANDING_WEBHOOK_URL` לכתובת המאומתת ואת `LANDING_LEADS_WEBHOOK_SECRET` לסוד משותף חדש שיועבר בערוץ מאובטח בזמן ההפעלה. אצלנו אותו סוד יוגדר ב־Supabase Edge secrets, יחד עם `LANDING_LEADS_ALLOWED_FORM_IDS=nurit-team-building`, `LANDING_LEADS_ALLOWED_HOSTS=vegan-climb-the-summit.base44.app` ו־`LANDING_LEADS_ENABLED` שיישאר `false` עד לחלון ההפעלה. אין להעביר ל־Base44 מפתח Supabase, ובפרט לא service role. אין לחשוף את הסוד בדפדפן, ב־HTML, בכתובת URL או בלוגים, ואין לרשום פרטי פונים בלוגים. מקור הליד נקבע אצלנו לפי `formId`; אין צורך לשלוח טקסט מקור מהדפדפן.
+הגדירי בצד השרת של Base44 בלבד את `SHAFAN_LANDING_WEBHOOK_URL` לכתובת שלעיל. `LANDING_LEADS_WEBHOOK_SECRET` יוגדר אצלך **רק כסוד שרת** לאחר תיאום איתנו: הסוד הנוכחי ב־Supabase נוצר לצורך הפריסה הכבויה ואינו נשמר אצלנו מחוץ לשרת, ולכן נסובב אותו לפני החיבור. נייצר יחד סוד אקראי חדש של 32 בתים לפחות, נעביר אותו פעם אחת דרך מנגנון סודות או ערוץ מאובטח מוסכם, ונגדיר אותו בשני השרתים בזמן שהקליטה כבויה. לא נשלח אותו בצ'אט, בדוא״ל רגיל או בקוד מקור. אצלנו `LANDING_LEADS_ALLOWED_FORM_IDS=nurit-team-building`, `LANDING_LEADS_ALLOWED_HOSTS=vegan-climb-the-summit.base44.app` ו־`LANDING_LEADS_ENABLED=false` עד חלון ההפעלה. אין להעביר ל־Base44 מפתח Supabase, ובפרט לא service role. אין לחשוף את הסוד בדפדפן, ב־HTML, בכתובת URL או בלוגים, ואין לרשום פרטי פונים בלוגים. מקור הליד נקבע אצלנו לפי `formId`; אין צורך לשלוח טקסט מקור מהדפדפן.
 
-תשובת הצלחה: `{"accepted":true,"duplicate":false}` או `{"accepted":true,"duplicate":true}`. שגיאות אפשריות כוללות `401` לחתימה לא תקינה, `400` לנתונים שגויים, `403` לטופס או מקור שלא אושרו, `429` להגבלת קצב, `503` כשקליטה מושבתת, ו־`500` לשגיאת עיבוד. שגיאות `429` ו־`5xx` עשויות להצדיק ניסיון חוזר מבוקר עם אותו `submissionId`; אין להניח שהפנייה לא נשמרה רק מפני שהתשובה אבדה.
+תשובת הצלחה (`200`): `{"accepted":true,"duplicate":false}` או `{"accepted":true,"duplicate":true}`. שגיאות: `400 invalid_submission` או `invalid_json`, `401 invalid_signature`, `403 form_not_allowed`, `405 method_not_allowed`, `413 payload_too_large`, `415 invalid_content_type`, `429 rate_limited`, `500 processing_failed`, ו־`503 integration_disabled` כשהקליטה כבויה. שגיאות `429` ו־`5xx` עשויות להצדיק ניסיון חוזר מבוקר עם אותו `submissionId`; אין להניח שהפנייה לא נשמרה רק מפני שהתשובה אבדה. הצלחה מוצגת רק בעקבות `accepted:true`, ולא בעקבות `503`.
 
 ## בדיקה לאחר אישור הפעלה
 
