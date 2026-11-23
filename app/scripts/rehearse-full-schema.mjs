@@ -47,8 +47,48 @@ try {
     basename(filename) === '202611160006_direct_j4_first_response.sql');
   for (const filename of migrations) {
     current = basename(filename);
+    if (current === '202611230001_verified_sale_source_only.sql') {
+      // Mirror the browser/server grants observed in Production before the patch.
+      await db.exec('GRANT INSERT ON public.sales TO authenticated, service_role');
+    }
     await db.exec((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
   }
+  current = 'verified sale source grants';
+  const saleGrants = (await db.query(`SELECT
+    has_table_privilege('authenticated','public.sales','INSERT') AS browser_insert,
+    has_table_privilege('service_role','public.sales','INSERT') AS server_insert,
+    has_function_privilege('authenticated',
+      'public.complete_manual_order_payment(uuid,text,uuid,jsonb)','EXECUTE') AS legacy_rpc`)).rows[0];
+  assert.deepEqual(saleGrants, { browser_insert: false, server_insert: true, legacy_rpc: false },
+    'direct browser sale and legacy paid-order RPC must be closed; verified server finalizers stay available');
+  const salesBeforeBypass = (await db.query('SELECT count(*)::int AS count FROM public.sales')).rows[0].count;
+  let directCreditDenied = false;
+  try {
+    await db.exec('SET ROLE authenticated');
+    await db.query(`INSERT INTO public.sales(items,total,method)
+      VALUES ('[]'::jsonb,1,'אשראי')`);
+  } catch (error) {
+    directCreditDenied = /permission denied/.test(error.message);
+  } finally {
+    await db.exec('RESET ROLE');
+  }
+  assert.equal(directCreditDenied, true,
+    'a direct authenticated SQL/PostgREST sale insert must be denied before any receipt is written');
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM public.sales')).rows[0].count,
+    salesBeforeBypass, 'the denied request must not create a sale');
+  let directLegacyDenied = false;
+  try {
+    await db.exec('SET ROLE authenticated');
+    await db.query(`SELECT public.complete_manual_order_payment(
+      '00000000-0000-4000-8000-000000000001'::uuid,'מזומן',
+      '00000000-0000-4000-8000-000000000002'::uuid,'{}'::jsonb)`);
+  } catch (error) {
+    directLegacyDenied = /permission denied/.test(error.message);
+  } finally {
+    await db.exec('RESET ROLE');
+  }
+  assert.equal(directLegacyDenied, true,
+    'a direct authenticated legacy paid-order RPC call must be denied');
   current = 'read-only optional-customer production preflight';
   await db.exec(await readFile(new URL('../../scripts/orders/optional-customer-production-preflight.sql',
     import.meta.url), 'utf8'));

@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import PhysicalTerminalStatus from './PhysicalTerminalStatus.jsx';
 import { billingReviewIssues } from '@/payments/payperBilling';
+import { isUnverifiedTender } from '@/payments/unverifiedTenders';
 
 const PAYMENT_METHODS = [
   { key: "מזומן",       label: "מזומן",         icon: Banknote,     color: "from-emerald-600 to-emerald-700", hint: "קבל מזומן וסמן ידנית" },
-  { key: "אשראי",      label: "אשראי — חיצוני",  icon: CreditCard,   color: "from-blue-600 to-blue-700",     hint: "תשלום ידני שכבר בוצע במסוף חיצוני" },
   { key: "צ'ק",        label: "צ'ק",            icon: FileText,     color: "from-rose-600 to-rose-700",      hint: "הזנה ידנית של פרטי הצ'ק" },
   { key: "העברה",      label: "העברה בנקאית",  icon: Building2,    color: "from-purple-600 to-purple-700",  hint: "העברה / ביט / פייבוקס" },
   { key: "אפליקציה",   label: "ביט / Paybox",   icon: Smartphone,   color: "from-orange-600 to-orange-700", hint: "סלק דרך אפליקציה" },
@@ -17,7 +17,7 @@ const PAYMENT_METHODS = [
 const CHECK_METHOD = "צ'ק";
 const CASH_METHOD = "מזומן";
 const SPLIT_METHOD = "מפוצל"; // sale.method marker for split payments
-const SPLIT_LINE_METHODS = ["מזומן", "אשראי", "צ'ק"];
+const SPLIT_LINE_METHODS = ["מזומן", "צ'ק"];
 
 const emptyCheck = {
   check_number: "",
@@ -86,12 +86,14 @@ export default function PaymentScreen({
     (selectedMethod === CHECK_METHOD && !noncardEnabled.check) ||
     (selectedMethod === SPLIT_METHOD && !noncardEnabled.cash) ||
     (selectedMethod === 'physical' && !physicalTerminalEnabled) ||
+    isUnverifiedTender(selectedMethod) ||
     (selectedMethod && selectedMethod !== 'digital' && selectedMethod !== 'physical' &&
       !manualMethodsEnabled);
   // Split builder: starts with the full total on a single cash line.
   const [lines, setLines] = useState([makeLine("מזומן", total)]);
 
   const handleMethodClick = (key) => {
+    if (isUnverifiedTender(key)) return;
     if (key === CASH_METHOD) {
       setCashReceived(String(total));
       setDetailFor(CASH_METHOD);
@@ -106,6 +108,7 @@ export default function PaymentScreen({
   };
 
   const paySelected = () => {
+    if (isUnverifiedTender(selectedMethod)) return;
     if (selectedMethod === 'digital') {
       if (billingReviewIssues(checkBilling).length) return setDigitalBillingOpen(true);
       return onPelecard(checkBilling);
@@ -439,7 +442,8 @@ export default function PaymentScreen({
           )}
           {PAYMENT_METHODS.map(method => {
             const Icon = method.icon;
-            const disabled = !manualMethodsEnabled || (method.key === CASH_METHOD && !noncardEnabled.cash) ||
+            const disabled = !manualMethodsEnabled || isUnverifiedTender(method.key) ||
+              (method.key === CASH_METHOD && !noncardEnabled.cash) ||
               (method.key === CHECK_METHOD && !noncardEnabled.check);
             return (
               <button
@@ -454,7 +458,8 @@ export default function PaymentScreen({
                 </div>
                 <div>
                   <p className="font-bold text-lg">{method.label}</p>
-                  <p className="text-white/60 text-sm">{!manualMethodsEnabled ? 'אמצעי תשלום זה אינו זמין לתפקיד זה' : disabled ? method.key === CHECK_METHOD
+                  <p className="text-white/60 text-sm">{!manualMethodsEnabled ? 'אמצעי תשלום זה אינו זמין לתפקיד זה' : isUnverifiedTender(method.key)
+                    ? 'לא פעיל: נדרש אימות תקבול ומסמך Payper' : disabled ? method.key === CHECK_METHOD
                     ? 'תשלום בצ׳ק עדיין לא פעיל: ממתין לאישור פרטי ההמחאה על ידי הספק'
                     : 'אמצעי תשלום זה עדיין לא פעיל בקופה' : method.hint}</p>
                 </div>
@@ -467,7 +472,7 @@ export default function PaymentScreen({
           <button
             onClick={() => setSelectedMethod(SPLIT_METHOD)}
             aria-pressed={selectedMethod === SPLIT_METHOD}
-            disabled={manualSaleSaving || !manualMethodsEnabled || !noncardEnabled.cash}
+            disabled={manualSaleSaving || !manualMethodsEnabled || !noncardEnabled.cash || isUnverifiedTender(SPLIT_METHOD)}
             className={`w-full mt-2 border border-dashed border-slate-600 rounded-2xl p-4 flex items-center gap-4 hover:bg-slate-800 active:scale-[0.98] transition-all text-right ${selectedMethod === SPLIT_METHOD ? 'ring-4 ring-white' : ''}`}
           >
             <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
@@ -475,7 +480,7 @@ export default function PaymentScreen({
             </div>
             <div>
               <p className="font-bold text-lg">תשלום מפוצל</p>
-              <p className="text-white/60 text-sm">{noncardEnabled.cash ? 'חלק את התשלום בין כמה אמצעים' : 'תשלום מפוצל עדיין לא פעיל בקופה'}</p>
+              <p className="text-white/60 text-sm">לא פעיל: נדרש אימות כל חלקי התשלום ומסמך Payper</p>
             </div>
             <div className="mr-auto text-white/40 text-2xl">←</div>
           </button>

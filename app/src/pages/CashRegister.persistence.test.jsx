@@ -14,10 +14,10 @@ vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: failur
 vi.mock('@/components/cashregister/ActivityGrid', () => ({ default: () => null }));
 vi.mock('@/components/cashregister/ProductGrid', () => ({ default: ({ products, onAdd }) => <button onClick={() => onAdd(products[0])}>add product</button> }));
 vi.mock('@/components/cashregister/Cart', () => ({ default: ({ onCheckout }) => <button onClick={onCheckout}>checkout</button> }));
-vi.mock('@/components/cashregister/PaymentScreen', () => ({ default: ({ onConfirm, noncardEnabled }) => <button data-ready={noncardEnabled.cash} onClick={() => onConfirm('מזומן', {
+vi.mock('@/components/cashregister/PaymentScreen', () => ({ default: ({ onConfirm, noncardEnabled }) => <><button data-ready={noncardEnabled.cash} onClick={() => onConfirm('מזומן', {
   billing: { kind: 'organization', name: 'Club', identity: '123456789', email: 'club@example.com' },
   document_type: 'invoice-receipt', reference_document_id: null,
-})}>pay cash</button> }));
+})}>pay cash</button><button onClick={() => onConfirm('אשראי')}>bypass external UI</button><button onClick={() => onConfirm('unknown-credit')}>bypass unknown UI</button></> }));
 vi.mock('@/components/cashregister/ReceiptScreen', () => ({ default: () => <div>receipt shown</div> }));
 import CashRegister from './CashRegister';
 
@@ -56,5 +56,26 @@ test('two rapid confirmations of one cash checkout submit one idempotent collect
   });
   complete({ data: { receiptNumber: 'RCP-1023', accounting: { state: 'source_frozen' } }, error: null });
   expect(await screen.findByText('receipt shown')).toBeInTheDocument();
+  expect(failure.insert).not.toHaveBeenCalled();
+});
+
+test('direct callback cannot create an unverified external credit sale', async () => {
+  failure.invoke.mockResolvedValue({ data: { collectionEnabled: { cash: false, check: false } }, error: null });
+  render(<CashRegister />);
+  fireEvent.click(await screen.findByText('מוצרים'));
+  fireEvent.click(await screen.findByText('add product'));
+  fireEvent.click(screen.getByText('checkout'));
+  fireEvent.click(screen.getByText('bypass external UI'));
+  expect(failure.insert).not.toHaveBeenCalled();
+  expect(screen.queryByText('receipt shown')).not.toBeInTheDocument();
+});
+
+test('unknown tender callback cannot create a receipt-only sale', async () => {
+  failure.invoke.mockResolvedValue({ data: { collectionEnabled: { cash: false, check: false } }, error: null });
+  render(<CashRegister />);
+  fireEvent.click(await screen.findByText('מוצרים'));
+  fireEvent.click(screen.getByText('add product'));
+  fireEvent.click(screen.getByText('checkout'));
+  fireEvent.click(screen.getByText('bypass unknown UI'));
   expect(failure.insert).not.toHaveBeenCalled();
 });

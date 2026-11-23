@@ -46,18 +46,24 @@ describe("PaymentScreen payment-method separation", () => {
       document_type: 'invoice-receipt', billing: expect.objectContaining({ email: 'club@example.com' }),
     }));
   });
-  test("keeps אשראי as an explicitly external/manual payment", () => {
+  test("does not offer external credit as a new payment", () => {
     const props = renderPayment();
-    fireEvent.click(screen.getByRole("button", { name: /אשראי.*חיצוני/s }));
+    expect(screen.queryByRole("button", { name: /אשראי.*חיצוני/s })).not.toBeInTheDocument();
     expect(props.onConfirm).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId('cashier-pay'));
-    expect(props.onConfirm).toHaveBeenCalledWith("אשראי");
     expect(props.onPelecard).not.toHaveBeenCalled();
+  });
+
+  test("keeps other receipt-only tenders unavailable", () => {
+    const props = renderPayment();
+    for (const name of [/העברה בנקאית/s, /ביט \/ Paybox/s, /חשבונית \/ חח״ד/s, /תשלום מפוצל/s]) {
+      expect(screen.getByRole('button', { name })).toBeDisabled();
+    }
+    expect(props.onConfirm).not.toHaveBeenCalled();
   });
 
   test("a role newly admitted for physical payment cannot use legacy manual sale methods", () => {
     const props = renderPayment({ manualMethodsEnabled: false, noncardEnabled: { cash: false, check: false } });
-    expect(screen.getByRole("button", { name: /אשראי.*חיצוני/s })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /אשראי.*חיצוני/s })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /העברה בנקאית/s })).toBeDisabled();
     expect(screen.getByRole("button", { name: /ביט \/ Paybox/s })).toBeDisabled();
     expect(screen.getByRole("button", { name: /חשבונית \/ חח״ד/s })).toBeDisabled();
@@ -103,9 +109,9 @@ describe("PaymentScreen payment-method separation", () => {
     expect(props.onPelecard).not.toHaveBeenCalled();
   });
 
-  test("disables only the verified provider action while initiation is running", () => {
+  test("disables the verified provider action while initiation is running", () => {
     renderPayment({ pelecardBusy: true });
     expect(screen.getByRole("button", { name: /פלאקארד/s })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /אשראי.*חיצוני/s })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /אשראי.*חיצוני/s })).not.toBeInTheDocument();
   });
 });
