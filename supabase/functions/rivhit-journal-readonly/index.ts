@@ -14,6 +14,11 @@ const handler = createRivhitReadOnlyHandler({
   provider: {
     sortCodeList: () => new RivhitClient({ apiToken: token }).sortCodeList(),
     journalsReport: date => new RivhitClient({ apiToken: token }).journalsReport(date),
+    projectList: () => new RivhitClient({ apiToken: token }).projectList(),
+    paymentTypeList: () => new RivhitClient({ apiToken: token }).paymentTypeList(),
+    accountCard: id => new RivhitClient({ apiToken: token }).accountCard(id),
+    profitLossAccounts: (year, fromMonth, toMonth) => new RivhitClient({ apiToken: token })
+      .profitLossAccounts(year, fromMonth, toMonth),
   },
 });
 Deno.serve(handler);
