@@ -131,7 +131,7 @@ export function createPhysicalWorkflow(deps) {
       // atomically lock the register and return true only once for this intent.
       const intent = await deps.reserve({ actorId, workstationId, requestKey, register,
         amountMinor: calculated.amountMinor, items: calculated.items,
-        discount: calculated.discount ?? null, billing });
+        discount: calculated.discount ?? null, billing, site: cart.site });
       if (intent.register !== register || intent.amountMinor !== calculated.amountMinor)
         throw new Error('physical_intent_conflict');
       // The browser request ends after reservation. A separate worker claims

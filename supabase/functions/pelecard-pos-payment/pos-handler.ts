@@ -25,7 +25,7 @@ function validateBilling(billing:Billing):void {
 }
 export interface PosDependencies {
   auth:PaymentAuthenticator;allowedOrigins:readonly string[];read(name:string):string|undefined;
-  reserve(actorId:string,requestKey:string,lines:unknown,discount:unknown,billing:Billing):Promise<{paymentId:string;created:boolean;amountMinor:number}>;
+  reserve(actorId:string,requestKey:string,lines:unknown,discount:unknown,billing:Billing & {site?:string}):Promise<{paymentId:string;created:boolean;amountMinor:number}>;
   view(actorId:string,locator:{requestKey?:string;paymentId?:string}):Promise<View|null>;
   get(paymentId:string):Promise<Attempt|null>;
   observe(paymentId:string,hostedState:string,apiStatus:string|null,transactionStatus:string|null,correlation:boolean):Promise<unknown>;
@@ -89,8 +89,10 @@ export function createPosHandler(deps:PosDependencies){return async(request:Requ
     if(!body||typeof body!=='object'||Array.isArray(body)||!['prepare','initialize','status','verify','cancel'].includes(String(body.action)))
       throw new PaymentHttpError(400,'invalid_input');
     if(body.action==='prepare'){
-      if(Object.keys(body).sort().join(',')!=='action,billing,discount,lines,requestKey'||
+      if(!['action,billing,discount,lines,requestKey',
+        'action,billing,discount,lines,requestKey,site'].includes(Object.keys(body).sort().join(','))||
         !uuid.test(String(body.requestKey))||!Array.isArray(body.lines)||body.lines.length<1||body.lines.length>100||
+        (body.site !== undefined && !['עכו','טבריה','נוף הגליל','שטח','פודטראק','קפה אקסטרים'].includes(String(body.site)))||
         body.lines.some(line=>!line||typeof line!=='object'||Array.isArray(line)||Object.keys(line).sort().join(',')!=='id,kind,qty'||
           !uuid.test(String(line.id))||!['product','service'].includes(line.kind)||!Number.isSafeInteger(line.qty)||line.qty<1||line.qty>1000)||
         !body.billing||typeof body.billing!=='object'||Array.isArray(body.billing)||
@@ -100,7 +102,8 @@ export function createPosHandler(deps:PosDependencies){return async(request:Requ
       if(deps.read('PELECARD_POS_PAYMENTS_ENABLED')!=='true')throw new PaymentHttpError(503,'capability_disabled');
       validateBilling(body.billing as Billing);
       stage='reservation';
-      const reserved=await deps.reserve(actor.identity.id,String(body.requestKey),body.lines,body.discount,body.billing as Billing);
+      const reserved=await deps.reserve(actor.identity.id,String(body.requestKey),body.lines,body.discount,
+        {...(body.billing as Billing),...(body.site === undefined ? {} : {site:String(body.site)})});
       if(!uuid.test(reserved.paymentId)||!Number.isSafeInteger(reserved.amountMinor)||reserved.amountMinor<1)
         throw new PaymentHttpError(502,'reservation_invalid');
       return paymentJson(responseView(await deps.view(actor.identity.id,{paymentId:reserved.paymentId}),deps.now?.()??Date.now()),reserved.created?201:200,cors);

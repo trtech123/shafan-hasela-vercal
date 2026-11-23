@@ -16,6 +16,7 @@ import { buildStandaloneCheckout } from "@/payments/standaloneCart";
 import { useAuth } from "@/lib/AuthContext";
 import { BRAND } from "@/lib/orderDocText";
 import { filterProducts } from "@/lib/productCatalog";
+import { requireAccountingSite } from '@/payments/accountingSite';
 
 function CategorySelector({ label, categories, selected, onSelect }) {
   return <nav aria-label={label} dir="rtl" className="mb-4 flex max-w-full gap-2 overflow-x-auto pb-2">
@@ -45,6 +46,7 @@ export default function CashRegister() {
   const [productSearch, setProductSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [cartItems, setCartItems] = useState([]);
+  const [accountingSite, setAccountingSite] = useState('');
   const [screen, setScreen] = useState("menu");
   const [receiptData, setReceiptData] = useState(null);
   // null = no discount; else { type, mode: 'percentage'|'fixed', value }
@@ -182,6 +184,10 @@ export default function CashRegister() {
       return;
     }
     if (manualSaleSubmitted.current) return;
+    if (!linkedOrder?.id) {
+      try { requireAccountingSite(accountingSite); }
+      catch { toast.error('בחרו אתר מכירה לפני תחילת התשלום'); return; }
+    }
     manualSaleSubmitted.current = true;
     setManualSaleSaving(true);
     if (linkedOrder?.id) {
@@ -190,6 +196,7 @@ export default function CashRegister() {
       navigate(`/cashregister?orderId=${encodeURIComponent(linkedOrder.id)}`);
       return;
     }
+
     if (!(method === "צ'ק" ? noncardEnabled.check : noncardEnabled.cash)) {
       toast.error('אמצעי התשלום הזה עדיין לא הופעל לקופה זו. בחרו אמצעי תשלום זמין.');
       manualSaleSubmitted.current = false;
@@ -203,6 +210,7 @@ export default function CashRegister() {
     try {
       const { data, error } = await supabase.functions.invoke('payper-noncard-collection', { body: {
         action: 'collect', requestKey: checkRequestKey.current, method: isCheck ? 'check' : 'cash',
+        site: accountingSite,
         amountMinor: Math.round(total * 100), check: isCheck ? check : null, billing, documentType,
         referenceDocumentId, lines: cartItems.map(item => ({ kind: item.kind,
           id: item.id, qty: item.qty })),
@@ -225,10 +233,12 @@ export default function CashRegister() {
   const handlePelecardStart = async billing => {
     if (!canPayOrder || digitalInFlight.current) return;
     if (linkedOrder?.id) { navigate(`/cashregister?orderId=${encodeURIComponent(linkedOrder.id)}`); return; }
+    if (!accountingSite) { toast.error('בחרו אתר מכירה לפני תחילת התשלום'); return; }
     if (!canHostedCart) return;
     setPaymentError('');
     digitalInFlight.current = true; setDigitalBusy(true);
     const cart = {
+      site: requireAccountingSite(accountingSite),
       lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
       discount: appliedDiscount ? { type: appliedDiscount.type, mode: appliedDiscount.mode, value: Number(appliedDiscount.value) } : null,
     };
@@ -251,7 +261,7 @@ export default function CashRegister() {
       const safe = ['capability_disabled', 'catalog_item_unavailable', 'cart_invalid',
         'cart_line_invalid', 'cart_amount_invalid', 'discount_invalid', 'pos_payment_forbidden',
         'request_key_conflict', 'pos_payment_in_progress', 'billing_identity_required',
-        'billing_email_required'].includes(reason?.code);
+        'billing_email_required', 'accounting_site_invalid'].includes(reason?.code);
       if (safe) {
         const message = posPaymentErrorMessage(reason.code);
         setPaymentError(message);
@@ -269,8 +279,10 @@ export default function CashRegister() {
   const handlePhysicalStart = async billing => {
     if (!physicalReady || import.meta.env.VITE_PELECARD_PHYSICAL_ENABLED !== 'true' ||
       !canPayPhysical || linkedOrder?.id || !canHostedCart) return;
+    if (!accountingSite) { toast.error('בחרו אתר מכירה לפני תחילת התשלום'); return; }
     physicalCheckoutId.current ||= crypto.randomUUID();
     const cart = {
+      site: requireAccountingSite(accountingSite),
       lines: cartItems.map(item => ({ kind: item.kind, id: item.id, qty: item.qty })),
       discount: appliedDiscount ? { type: appliedDiscount.type, mode: appliedDiscount.mode, value: Number(appliedDiscount.value) } : null,
     };
@@ -306,6 +318,7 @@ export default function CashRegister() {
     physicalCheckoutId.current = null;
     setPhysicalBusy(false);
     setCartItems([]);
+    setAccountingSite('');
     setScreen("menu");
     setReceiptData(null);
     setDiscount(null);
@@ -331,6 +344,8 @@ export default function CashRegister() {
       <PaymentScreen
         total={total}
         cartItems={cartItems}
+        accountingSite={accountingSite}
+        onAccountingSiteChange={setAccountingSite}
         onConfirm={handlePaymentConfirm}
         manualSaleSaving={manualSaleSaving}
         manualMethodsEnabled={canUseLegacyManualSale}

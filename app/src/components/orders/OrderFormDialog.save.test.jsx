@@ -175,6 +175,7 @@ test('new order sends explicitly selected site and end time in the insert payloa
 test('new order saves without customer details and preserves partial details', async () => {
   const view = renderDialog(null);
   fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.click(screen.getByRole('button', { name: 'עכו' }));
   fireEvent.submit(document.querySelector('form'));
   await waitFor(() => expect(state.writes).toHaveLength(1));
   expect(state.writes[0].data).toMatchObject({ client_name: null, client_phone: null, client_email: null });
@@ -182,10 +183,19 @@ test('new order saves without customer details and preserves partial details', a
   state.writes = [];
   renderDialog(null);
   fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.click(screen.getByRole('button', { name: 'עכו' }));
   fireEvent.change(screen.getByLabelText('שם הלקוח (אפשר להשלים בהמשך)'), { target: { value: ' נורית ' } });
   fireEvent.submit(document.querySelector('form'));
   await waitFor(() => expect(state.writes).toHaveLength(1));
   expect(state.writes[0].data).toMatchObject({ client_name: 'נורית', client_phone: null, client_email: null });
+});
+
+test('new order requires an explicit site without changing existing customer requirements', async () => {
+  renderDialog(null);
+  fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.submit(document.querySelector('form'));
+  expect(state.writes).toHaveLength(0);
+  expect(state.error).toHaveBeenCalledWith('בחרו אתר להזמנה לפני השמירה');
 });
 
 test('customer details can be added when editing a guest order', async () => {

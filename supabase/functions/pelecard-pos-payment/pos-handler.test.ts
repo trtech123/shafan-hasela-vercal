@@ -47,6 +47,15 @@ describe('POS Edge payment boundary',()=>{
     expect(s.reserve).toHaveBeenCalledWith(actorId,requestKey,prepared.lines,null,prepared.billing);
     expect(s.call).not.toHaveBeenCalled();
   });
+  test('freezes an explicitly selected site and rejects an invalid one before reservation',async()=>{
+    const s=setup();
+    expect((await s.post({...prepared,site:'עכו'})).status).toBe(201);
+    expect(s.reserve).toHaveBeenCalledWith(actorId,requestKey,prepared.lines,null,
+      {...prepared.billing,site:'עכו'});
+    s.reserve.mockClear();
+    expect((await s.post({...prepared,site:'לא קיים'})).status).toBe(400);
+    expect(s.reserve).not.toHaveBeenCalled();
+  });
   test.each(['operations','instructor'])('%s cannot reserve or see payment status',async role=>{
     const s=setup(role);expect((await s.post(prepared)).status).toBe(403);expect(s.reserve).not.toHaveBeenCalled();
   });

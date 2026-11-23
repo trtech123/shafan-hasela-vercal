@@ -13,7 +13,7 @@ describe('physical database adapter', () => {
     const repository = createPhysicalRepository(database);
     const result = await repository.reserve({ actorId: actor, workstationId: 'FRONT', requestKey,
       register: '004', amountMinor: 2400, items: [{ id: actor, name: 'Ticket', qty: 1, customPrice: 24 }],
-      discount: null, billing: { kind: 'person', name: 'Customer', identity: '123456782', email: 'a@example.com' } });
+      discount: null, site: 'עכו', billing: { kind: 'person', name: 'Customer', identity: '123456782', email: 'a@example.com' } });
     expect(result).toMatchObject({ id: paymentId, register: '004', amountMinor: 2400 });
     const [sql, args] = database.query.mock.calls[0];
     expect(sql).toContain('reserve_physical_payment');
@@ -21,7 +21,16 @@ describe('physical database adapter', () => {
     expect(args[2]).toBe('FRONT');
     expect(args[3]).toBe(2400);
     expect(args[4].items).toHaveLength(1);
+    expect(args[4].site).toBe('עכו');
     expect(JSON.stringify(args)).not.toMatch(/creditCard|track2|cvv2/i);
+  });
+  test('rejects an invented site before reserving a standalone terminal payment', async () => {
+    const database = { query: vi.fn() };
+    await expect(createPhysicalRepository(database).reserve({ actorId: actor, workstationId: 'FRONT', requestKey,
+      register: '004', amountMinor: 2400, items: [{ id: actor, name: 'Ticket', qty: 1, customPrice: 24 }],
+      discount: null, site: 'חנות', billing: { kind: 'person', name: 'Customer', identity: '123456782', email: 'a@example.com' } }))
+      .rejects.toThrow('accounting_site_required');
+    expect(database.query).not.toHaveBeenCalled();
   });
   test('persists a correlated approval before calling the idempotent sale finalizer', async () => {
     const database = { query: vi.fn().mockResolvedValueOnce({ rows: [{ result: { state: 'approved' } }] })

@@ -40,6 +40,7 @@ test('standalone cashier shows a 422 rejection for the reported activity after t
   render(<CashRegister />);
   fireEvent.click(await screen.findByRole('button', { name: /המרוץ למטמון/ }));
   fireEvent.click(screen.getByRole('button', { name: /המשך לתשלום/ }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'אתר המכירה' }), { target: { value: 'עכו' } });
   fireEvent.click(screen.getByRole('button', { name: /פלאקארד — תשלום מאומת/ }));
   fireEvent.click(screen.getByTestId('cashier-pay'));
   completeDigitalBilling();
@@ -68,6 +69,7 @@ test('selected discount type with no amount pays the full ₪180 activity price 
   expect(screen.getByRole('button', { name: 'הנחה כללית' })).toHaveClass('border-amber-500');
   expect(screen.getAllByText('180₪').length).toBeGreaterThan(0);
   fireEvent.click(screen.getByRole('button', { name: /המשך לתשלום/ }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'אתר המכירה' }), { target: { value: 'עכו' } });
   fireEvent.click(screen.getByRole('button', { name: /פלאקארד — תשלום מאומת/ }));
   fireEvent.click(screen.getByTestId('cashier-pay'));
   completeDigitalBilling();
@@ -95,6 +97,7 @@ test('cashier account does not reuse a previous admin checkout reference for the
   render(<CashRegister />);
   fireEvent.click(await screen.findByRole('button', { name: /המרוץ למטמון/ }));
   fireEvent.click(screen.getByRole('button', { name: /המשך לתשלום/ }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'אתר המכירה' }), { target: { value: 'עכו' } });
   fireEvent.click(screen.getByRole('button', { name: /פלאקארד — תשלום מאומת/ }));
   fireEvent.click(screen.getByTestId('cashier-pay'));
   completeDigitalBilling();
@@ -113,6 +116,7 @@ test('a conflicting checkout reference shows a Hebrew error in the cashier witho
   render(<CashRegister />);
   fireEvent.click(await screen.findByRole('button', { name: /המרוץ למטמון/ }));
   fireEvent.click(screen.getByRole('button', { name: /המשך לתשלום/ }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'אתר המכירה' }), { target: { value: 'עכו' } });
   fireEvent.click(screen.getByRole('button', { name: /פלאקארד — תשלום מאומת/ }));
   fireEvent.click(screen.getByTestId('cashier-pay'));
   completeDigitalBilling();
