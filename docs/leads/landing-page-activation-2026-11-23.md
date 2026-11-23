@@ -17,7 +17,17 @@
 
 ## בסיס השילוב ופריסה בטוחה — טרם בוצעו
 
-בדיקת Vercel בקריאה בלבד ב־2026-11-23: ה־alias `shafan-hasela-vercal.vercel.app` מצביע לפריסת Production במצב READY, `dpl_AWXruZJmHvFB5Rm2HWbXzgmNmAdo`. המטא־דאטה שלה מציין Git commit `ee1b82c` מענף `codex/rivhit-journal-mapping-20261122`. הקומיט מכיל את `d31e3fe` של `checkout-safety`, ואינו מכיל את `bc53447` של קליטת הלידים. `origin/main` נמצא ב־`557f8eb` ולכן אינו מייצג לבדו את גרסת הייצור הפעילה. מצב סכמת Supabase החיה והגרסאות הפעילות של Edge Functions טרם אומתו בבדיקה זו.
+בדיקת Vercel בקריאה בלבד ב־2026-11-23: ה־alias `shafan-hasela-vercal.vercel.app` מצביע לפריסת Production במצב READY, `dpl_AWXruZJmHvFB5Rm2HWbXzgmNmAdo`. המטא־דאטה שלה מציין Git commit `ee1b82c` מענף `codex/rivhit-journal-mapping-20261122`. הקומיט מכיל את `d31e3fe` של `checkout-safety`, ואינו מכיל את `bc53447` של קליטת הלידים. `origin/main` נמצא ב־`557f8eb` ולכן אינו מייצג לבדו את גרסת הייצור הפעילה.
+
+### בדיקת קדם־פריסה ב־Supabase Production, 2026-11-23
+
+בדיקות `SELECT` בלבד בפרויקט `divzxsynczeifkpnpupl` אישרו שטבלת `public.leads` קיימת עם `full_name` חובה, `phone`, `email`, `company` ו־`source_text` אופציונליים, `status` חובה עם ברירת מחדל „פתוח”, ו־`created_at` עם `now()`. בדיקת אילוצים אישרה ש„פתוח” מותר וש־`site` יכול להיות `NULL`, כמתוכנן עבור ליד יום גיבוש. `lead_source` ו־`lead_attribution` אינם קיימים עדיין. RLS פעיל, ומדיניות `INSERT`/`SELECT` של הטבלה משתמשת ב־`is_admin_or_ops()`; הרשאת SQL ל־`anon` לבדה אינה עוקפת את המדיניות. `service_role` יכול להכניס, ו־`auth.role()` קיים. טריגר המשתמש היחיד שנמצא על `leads` מעדכן `updated_at` בעת UPDATE בלבד.
+
+רשימת Edge Functions החיה מכילה 34 פונקציות, כולל `whatsapp-webhook`, אך לא `landing-lead-webhook`. גם טבלת `landing_lead_submissions` וה־RPC `ingest_landing_lead` אינם קיימים. לא נמצאה טבלת `supabase_migrations.schema_migrations`, ולכן היסטוריית ה־SQL בפועל מחייבת אימות מול הסכמה ולא הסתמכות על ledger. לא נקראו רשומות לקוחות ולא נכתב דבר לבסיס הנתונים.
+
+הוכן worktree מקומי `codex/landing-leads-prod-integration-20261123` מתוך `ee1b82c`. הוא מכיל רק את רכיבי הלידים ואת שורת הגדרת הפונקציה; קובץ המיגרציה בו נקרא `202611230005_landing_lead_ingestion.sql` כדי לבוא אחרי מיגרציות הייצור המתוארכות ל־2026-11-22. ענף הפיתוח המקורי נשאר ב־`9b63525` עם שם המיגרציה הישן; **לפריסה יש להשתמש בענף האינטגרציה המאומת, לאחר בדיקת diff ובדיקות נוספות**.
+
+**החלטה כעת:** GO להכנת אינטגרציה ובדיקות מקומיות; NO-GO להפעלה חיה. טרם אושרו migration/deploy/בדיקת טופס ציבורי, וחיבור Base44 הפרטי טרם נבדק בידי המפתחת.
 
 1. לפני שילוב, לאמת שוב את פריסת Vercel הפעילה, את ענף/קומיט המקור ואת מצב המיגרציות והפונקציות ב־Supabase. לעבור על גרסת `leads`, `Leads.jsx`, `supabase/config.toml` ומיגרציות שכבר הופעלו. אם המיגרציה עם אותו שם כבר קיימת ב־Production, אין לשנות אותה בדיעבד; להכין migration המשכי ממוקד.
 2. להכין ענף אינטגרציה מבודד מהקומיט המאומת של הייצור, ולהעביר אליו **רק** את שינויי הלידים: migration, Edge Function, הגדרת הפונקציה, תצוגת המקור במסך הלידים ובדיקותיה. לבדוק diff מול `checkout-safety`, הקופה, התשלומים והמסמכים. לא לבצע merge גורף של ענף הלידים הישן. לוודא שאין שינוי בקוד Pelecard, Payper, ההזמנות או WhatsApp.

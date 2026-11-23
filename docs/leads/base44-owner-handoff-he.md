@@ -27,7 +27,9 @@
 
 אפשר להוסיף `fields.email`, `campaign` ו־`utm` רק אם הנתונים נאספים בפועל. אל תמציאי מזהה קמפיין. אצלנו הליד נשמר עם מקור מוצג **„קמפיין ממומן — יום גיבוש”**, סטטוס **„פתוח”**, כתובת דף המקור, נושא והודעה אם נמסרה.
 
-האימות מתבצע בפונקציית השרת בלבד: צרי מחרוזת JSON סופית `rawBody`, זמן Unix בשניות `timestamp`, וחשבי `HMAC-SHA256(secret, timestamp + "." + rawBody)`. הוסיפי כותרות `X-Landing-Timestamp: <timestamp>` ו־`X-Landing-Signature: sha256=<hex>`. חתמי על **אותם בתים בדיוק** שנשלחים בגוף הבקשה; בניסיון חוזר חשבי חתימה חדשה ושמרי את אותו `submissionId`. הגדירי את הסוד ואת כתובת ה־endpoint כ־server secrets ב־Base44. אין לחשוף סוד, מפתח Supabase או service role בדפדפן, בכתובת URL או בלוגים. אין לרשום פרטי פונים בלוגים.
+האימות מתבצע בפונקציית השרת בלבד: צרי מחרוזת JSON סופית `rawBody`, זמן Unix בשניות `timestamp`, וחשבי `HMAC-SHA256(secret, timestamp + "." + rawBody)`. הוסיפי כותרות `X-Landing-Timestamp: <timestamp>` ו־`X-Landing-Signature: sha256=<hex>`. חתמי על **אותם בתים בדיוק** שנשלחים בגוף הבקשה; בניסיון חוזר חשבי חתימה חדשה ושמרי את אותו `submissionId`.
+
+הגדירי בצד השרת של Base44 בלבד את `SHAFAN_LANDING_WEBHOOK_URL` לכתובת המאומתת ואת `LANDING_LEADS_WEBHOOK_SECRET` לסוד משותף חדש שיועבר בערוץ מאובטח בזמן ההפעלה. אצלנו אותו סוד יוגדר ב־Supabase Edge secrets, יחד עם `LANDING_LEADS_ALLOWED_FORM_IDS=nurit-team-building`, `LANDING_LEADS_ALLOWED_HOSTS=vegan-climb-the-summit.base44.app` ו־`LANDING_LEADS_ENABLED` שיישאר `false` עד לחלון ההפעלה. אין להעביר ל־Base44 מפתח Supabase, ובפרט לא service role. אין לחשוף את הסוד בדפדפן, ב־HTML, בכתובת URL או בלוגים, ואין לרשום פרטי פונים בלוגים. מקור הליד נקבע אצלנו לפי `formId`; אין צורך לשלוח טקסט מקור מהדפדפן.
 
 תשובת הצלחה: `{"accepted":true,"duplicate":false}` או `{"accepted":true,"duplicate":true}`. שגיאות אפשריות כוללות `401` לחתימה לא תקינה, `400` לנתונים שגויים, `403` לטופס או מקור שלא אושרו, `429` להגבלת קצב, `503` כשקליטה מושבתת, ו־`500` לשגיאת עיבוד. שגיאות `429` ו־`5xx` עשויות להצדיק ניסיון חוזר מבוקר עם אותו `submissionId`; אין להניח שהפנייה לא נשמרה רק מפני שהתשובה אבדה.
 
