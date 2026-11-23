@@ -14,10 +14,10 @@ vi.mock('@/api/supabaseClient', () => ({ supabase: { functions: { invoke: failur
 vi.mock('@/components/cashregister/ActivityGrid', () => ({ default: () => null }));
 vi.mock('@/components/cashregister/ProductGrid', () => ({ default: ({ products, onAdd }) => <button onClick={() => onAdd(products[0])}>add product</button> }));
 vi.mock('@/components/cashregister/Cart', () => ({ default: ({ onCheckout }) => <button onClick={onCheckout}>checkout</button> }));
-vi.mock('@/components/cashregister/PaymentScreen', () => ({ default: ({ onConfirm, noncardEnabled }) => <button data-ready={noncardEnabled.cash} onClick={() => onConfirm('מזומן', {
+vi.mock('@/components/cashregister/PaymentScreen', () => ({ default: ({ onConfirm, noncardEnabled, onAccountingSiteChange }) => <><button onClick={() => onAccountingSiteChange('עכו')}>choose site</button><button data-ready={noncardEnabled.cash} onClick={() => onConfirm('מזומן', {
   billing: { kind: 'organization', name: 'Club', identity: '123456789', email: 'club@example.com' },
   document_type: 'invoice-receipt', reference_document_id: null,
-})}>pay cash</button> }));
+})}>pay cash</button></> }));
 vi.mock('@/components/cashregister/ReceiptScreen', () => ({ default: () => <div>receipt shown</div> }));
 import CashRegister from './CashRegister';
 
@@ -30,6 +30,7 @@ test('a failed accounting collection never shows a paid receipt or a fabricated 
   fireEvent.click(await screen.findByText('מוצרים'));
   fireEvent.click(await screen.findByText('add product'));
   fireEvent.click(screen.getByText('checkout'));
+  fireEvent.click(screen.getByText('choose site'));
   await waitFor(() => expect(screen.getByText('pay cash')).toHaveAttribute('data-ready', 'true'));
   fireEvent.click(screen.getByText('pay cash'));
   await waitFor(() => expect(failure.toast).toHaveBeenCalledWith(expect.stringContaining('אינה ודאית')));
@@ -46,6 +47,7 @@ test('two rapid confirmations of one cash checkout submit one idempotent collect
   fireEvent.click(await screen.findByText('מוצרים'));
   fireEvent.click(await screen.findByText('add product'));
   fireEvent.click(screen.getByText('checkout'));
+  fireEvent.click(screen.getByText('choose site'));
   await waitFor(() => expect(screen.getByText('pay cash')).toHaveAttribute('data-ready', 'true'));
   fireEvent.click(screen.getByText('pay cash'));
   fireEvent.click(screen.getByText('pay cash'));

@@ -1,6 +1,7 @@
 import { createPhysicalCartCalculator } from './cart.js';
 import { createPhysicalRegisterResolver } from './device-settings.js';
 import { validIsraeliIdentity } from '../../src/payments/payperBilling.js';
+import { requireAccountingSite } from '../../src/payments/accountingSite.js';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const register = /^(003|004|005|006)$/;
@@ -58,7 +59,7 @@ export function createPhysicalRepository(database) {
       return rows;
     },
     calculateCart: (cart, actorRole) => createPhysicalCartCalculator(database, actorRole)(cart),
-    async reserve({ actorId, workstationId, requestKey, register: assigned, amountMinor, items, discount, billing }) {
+    async reserve({ actorId, workstationId, requestKey, register: assigned, amountMinor, items, discount, billing, site }) {
       if (!uuid.test(actorId) || !uuid.test(requestKey) || !register.test(assigned) ||
         !Number.isSafeInteger(amountMinor) || amountMinor < 1 || amountMinor > 2_147_483_647)
         throw new Error('physical_reservation_invalid');
@@ -66,6 +67,7 @@ export function createPhysicalRepository(database) {
         timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit',
       }).formatToParts(new Date()).map(part => [part.type, part.value]));
       const snapshot = { schema_version: 1, items, discount,
+        ...(site == null ? {} : { site: requireAccountingSite(site) }),
         linked_order_info: null,
         sale_date: `${dateParts.year}-${dateParts.month}-${dateParts.day}` };
       const result = single(await database.query(

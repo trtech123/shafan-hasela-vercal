@@ -10,7 +10,7 @@ const { from, rpc } = vi.hoisted(() => ({
       id: 'quote-1', quote_number: 'QUO-1', quotation_version: 1,
       quotation_revision_id: 'revision-1', client_name: 'Synthetic customer',
       event_date: '2026-11-05', num_participants: 2, final_price: 30,
-      status: 'טיוטה', selected_activities: [{
+      status: 'טיוטה', site: 'עכו', selected_activities: [{
         item_type: 'product', product_id: 'product-1', activity_id: null,
         activity_name: 'Synthetic product', price_per_person: 15,
       }],

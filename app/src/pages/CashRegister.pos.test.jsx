@@ -16,7 +16,7 @@ vi.mock('@/api/supabaseClient',()=>({supabase:{from:table=>({select:()=>({eq:asy
 vi.mock('@/components/cashregister/ActivityGrid',()=>({default:({activities,onAdd})=><div>{activities.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add service</button>)}</div>}));
 vi.mock('@/components/cashregister/ProductGrid',()=>({default:({products,onAdd})=><div>{products.map(item=><button key={item.id} onClick={()=>onAdd(item)}>add product</button>)}</div>}));
 vi.mock('@/components/cashregister/Cart',()=>({default:({onCheckout,onLinkOrder})=><div><button onClick={onCheckout}>checkout</button><button onClick={()=>onLinkOrder({id:orderId,order_number:'ORD-1'})}>link order</button></div>}));
-vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalVisible,physicalTerminalEnabled,physicalTerminalSelectable})=><><button disabled={!pelecardEnabled} onClick={()=>onPelecard({kind:'person',name:'Test Customer',identity:'123456782',email:'test@example.com'})}>Pelecard</button>{physicalTerminalVisible&&<button disabled={!physicalTerminalSelectable} onClick={physicalTerminalEnabled?onPhysicalTerminal:()=>{}}>Physical</button>}</>}));
+vi.mock('@/components/cashregister/PaymentScreen',()=>({default:({onPelecard,pelecardEnabled,onPhysicalTerminal,physicalTerminalVisible,physicalTerminalEnabled,physicalTerminalSelectable,onAccountingSiteChange})=><><button onClick={()=>onAccountingSiteChange('עכו')}>choose site</button><button disabled={!pelecardEnabled} onClick={()=>onPelecard({kind:'person',name:'Test Customer',identity:'123456782',email:'test@example.com'})}>Pelecard</button>{physicalTerminalVisible&&<button disabled={!physicalTerminalSelectable} onClick={physicalTerminalEnabled?onPhysicalTerminal:()=>{}}>Physical</button>}</>}));
 vi.mock('@/components/cashregister/ReceiptScreen',()=>({default:()=>null}));
 vi.mock('sonner',()=>({toast:{error:vi.fn()}}));
 vi.mock('@/payments/posPayments',async importOriginal=>({...(await importOriginal()),startPosCheckout:(...args)=>state.start(...args)}));
@@ -28,13 +28,18 @@ beforeEach(()=>state.availability.mockImplementation(async()=>({visible:true,rea
   route:import.meta.env.VITE_PELECARD_PHYSICAL_DIRECT_ENABLED==='true'?'direct':'hosted'})));
 afterEach(()=>{cleanup();state.navigate.mockReset();state.start.mockReset();state.physical.mockReset();state.direct.mockReset();state.availability.mockReset();state.role='admin';vi.unstubAllEnvs();sessionStorage.clear();localStorage.clear()});
 describe('Cash Register hosted routes',()=>{
+  test('does not start a standalone payment before the cashier selects a site',async()=>{
+    render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
+    expect(state.start).not.toHaveBeenCalled();
+  });
   test('all existing cashiers can select physical method while dispatch is off',async()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
     vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
     state.role='קופאי';
     state.availability.mockResolvedValue({visible:true,ready:false,route:'direct'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));
     await waitFor(()=>expect(state.availability).toHaveBeenCalled());
     expect(screen.getByText('Physical')).toBeEnabled();
     fireEvent.click(screen.getByText('Physical'));
@@ -45,7 +50,7 @@ describe('Cash Register hosted routes',()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
     state.availability.mockResolvedValue({visible:true,ready:false,route:'direct'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));
     expect(await screen.findByText('Physical')).toBeEnabled();
     fireEvent.click(screen.getByText('Physical'));
     expect(state.direct).not.toHaveBeenCalled();
@@ -55,14 +60,14 @@ describe('Cash Register hosted routes',()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
     state.role=role;
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));
     expect(await screen.findByText('Physical')).toBeEnabled();
     expect(screen.getByText('Pelecard')).toBeDisabled();
   });
   test('unaccepted physical route is shown disabled while standalone digital remains available',async()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','false');
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));
     expect(screen.getByText('Physical')).toBeDisabled();
     expect(screen.getByText('Pelecard')).toBeEnabled();
     fireEvent.click(screen.getByText('Physical'));
@@ -72,11 +77,11 @@ describe('Cash Register hosted routes',()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_ENABLED','true');
     state.physical.mockResolvedValue({state:'pending',route:'hosted',redirectUrl:'https://gateway21.pelecard.biz/PaymentGW?transactionId=22222222-2222-4222-8222-222222222222'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));
     await waitFor(()=>expect(screen.getByText('Physical')).toBeEnabled());
     fireEvent.click(screen.getByText('Physical'));
     await waitFor(()=>expect(state.physical).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({
-      requestKey:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
+      requestKey:expect.stringMatching(uuid),cart:{site:'עכו',lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
     expect(state.navigate).not.toHaveBeenCalledWith('/payment/physical',expect.anything());
   });
   test('direct activation queues standalone cart without opening hosted EMV',async()=>{
@@ -84,11 +89,11 @@ describe('Cash Register hosted routes',()=>{
     vi.stubEnv('VITE_PELECARD_PHYSICAL_DIRECT_ENABLED','true');
     state.direct.mockResolvedValue({state:'reserved',route:'direct',registerNumber:'004',amountMinor:100,saleId:null});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));
     await waitFor(()=>expect(screen.getByText('Physical')).toBeEnabled());
     fireEvent.click(screen.getByText('Physical'));
     await waitFor(()=>expect(state.direct).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({
-      requestKey:expect.stringMatching(uuid),cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
+      requestKey:expect.stringMatching(uuid),cart:{site:'עכו',lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
     expect(state.physical).not.toHaveBeenCalled();
     expect(JSON.parse(localStorage.getItem('pelecard.physicalPending.v1'))).toMatchObject({mode:'direct',orderId:null});
   });
@@ -96,20 +101,20 @@ describe('Cash Register hosted routes',()=>{
     state.start.mockResolvedValue({canResume:true,redirectUrl:'https://gateway20.pelecard.biz/PaymentGW?transactionId=11111111-1111-4111-8111-111111111111'});
     render(<CashRegister/>);await screen.findByText('add service');
     fireEvent.click(screen.getByText('מוצרים'));fireEvent.click(screen.getByText('add product'));
-    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
-    await waitFor(()=>expect(state.start).toHaveBeenCalledWith(expect.anything(),{requestKey:expect.stringMatching(uuid),cart:{lines:[{kind:'product',id:productId,qty:1}],discount:null},billing:{kind:'person',name:'Test Customer',identity:'123456782',email:'test@example.com'}}));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));fireEvent.click(screen.getByText('Pelecard'));
+    await waitFor(()=>expect(state.start).toHaveBeenCalledWith(expect.anything(),{requestKey:expect.stringMatching(uuid),cart:{site:'עכו',lines:[{kind:'product',id:productId,qty:1}],discount:null},billing:{kind:'person',name:'Test Customer',identity:'123456782',email:'test@example.com'}}));
     expect(state.navigate).not.toHaveBeenCalledWith('/payment/pos',expect.anything());
   });
   test('standalone activity cart starts the same direct checkout',async()=>{
     state.start.mockResolvedValue({canResume:true,redirectUrl:'https://gateway20.pelecard.biz/PaymentGW?transactionId=11111111-1111-4111-8111-111111111111'});
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));
-    await waitFor(()=>expect(state.start).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({cart:{lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));fireEvent.click(screen.getByText('Pelecard'));
+    await waitFor(()=>expect(state.start).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({cart:{site:'עכו',lines:[{kind:'service',id:serviceId,qty:1}],discount:null}})));
   });
   test('repeat click cannot start a second attempt',async()=>{
     state.start.mockImplementation(()=>new Promise(()=>{}));
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('Pelecard'));fireEvent.click(screen.getByText('Pelecard'));
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));fireEvent.click(screen.getByText('Pelecard'));fireEvent.click(screen.getByText('Pelecard'));
     expect(state.start).toHaveBeenCalledTimes(1);
   });
   test('linked order opens cashier collection, and shift manager cannot start hosted checkout',async()=>{
@@ -117,7 +122,7 @@ describe('Cash Register hosted routes',()=>{
     fireEvent.click(screen.getByText('link order'));expect(state.navigate).toHaveBeenCalledWith(`/cashregister?orderId=${orderId}`);
     cleanup();state.navigate.mockReset();state.role='אחמ"ש';
     render(<CashRegister/>);await screen.findByText('add service');fireEvent.click(screen.getByText('add service'));
-    fireEvent.click(screen.getByText('checkout'));expect(screen.getByText('Pelecard')).toBeDisabled();
+    fireEvent.click(screen.getByText('checkout'));fireEvent.click(screen.getByText('choose site'));expect(screen.getByText('Pelecard')).toBeDisabled();
     await waitFor(()=>expect(state.navigate).not.toHaveBeenCalled());
   });
 });

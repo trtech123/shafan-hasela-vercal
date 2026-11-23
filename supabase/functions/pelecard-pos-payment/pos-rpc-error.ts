@@ -9,10 +9,11 @@ const reservationErrors:Record<string,number>={
   discount_invalid:422,
   request_key_conflict:409,
   pos_payment_forbidden:403,
+  accounting_site_invalid:422,
 };
 
 export function classifyPosRpcError(error:unknown,operation:string):PaymentHttpError{
-  if(operation==='reserve_pos_pelecard'&&error&&typeof error==='object'){
+  if(['reserve_pos_pelecard','reserve_pos_pelecard_with_site'].includes(operation)&&error&&typeof error==='object'){
     const row=error as {code?:unknown;message?:unknown};
     const code=String(row.message??'');
     if((row.code==='23514'||row.code==='42501')&&Object.hasOwn(reservationErrors,code))

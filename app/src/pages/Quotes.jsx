@@ -81,6 +81,10 @@ export default function Quotes() {
 
   const handleConvertToOrder = async (quote) => {
     if (conversionInFlight.current || quote.converted_to_order_id || !quote.quotation_revision_id) return;
+    if (!quote.site) {
+      setConversionError('יש לבחור אתר בהצעה ולשמור אותה לפני המרה להזמנה.');
+      return;
+    }
     if (!quote.event_date || !(Number(quote.num_participants) > 0)
       || !quote.selected_activities?.length || quote.final_price == null || Number(quote.final_price) < 0) {
       setConversionError('להמרה להזמנה יש להשלים תאריך אירוע, מספר משתתפים ופריטים, ואז לשמור את ההצעה.');

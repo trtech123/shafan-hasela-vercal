@@ -85,12 +85,19 @@ Deno.serve(async request => {
         p_reference_document_id: body.referenceDocumentId ?? null,
       }) as typeof saved;
     } else if (body.orderId == null) {
-      saved = await rpc("record_payper_noncard_sale", {
+      if (body.site !== undefined &&
+        !['עכו','טבריה','נוף הגליל','שטח','פודטראק','קפה אקסטרים'].includes(String(body.site)))
+        throw new PaymentHttpError(400, 'accounting_site_required');
+      saved = await rpc(body.site === undefined
+        ? "record_payper_noncard_sale" : "record_payper_noncard_sale_with_site", {
         p_actor_id: actorId, p_request_key: body.requestKey, p_method: body.method,
         p_lines: body.lines,
-        p_discount: body.discount ?? null, p_check: body.check, p_billing: body.billing,
+        p_discount: body.discount ?? null, p_check: body.check,
+        p_billing: { ...(body.billing as Record<string, unknown>),
+          ...(body.site === undefined ? {} : { site: body.site }) },
         p_document_type: body.documentType, p_reference_document_id: body.referenceDocumentId ?? null,
         p_expected_minor: body.amountMinor,
+        ...(body.site === undefined ? {} : { p_site: body.site }),
       }) as typeof saved;
     } else throw new PaymentHttpError(400, "order_id_required");
     if (!uuid.test(saved.paymentId) || !uuid.test(saved.saleId))
