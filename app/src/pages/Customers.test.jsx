@@ -38,3 +38,10 @@ test('instructors cannot search or manage customers', () => {
   expect(screen.getByRole('alert')).toHaveTextContent('אין הרשאה');
   expect(rpc).not.toHaveBeenCalled();
 });
+
+test('shows the saved business type on the customer card', async () => {
+  rpc.mockResolvedValue({ data: [{ id: 'c1', display_name: 'בית ספר לדוגמה',
+    customer_type: 'גפ״ן', customer_kind: 'organization', version: 1 }], error: null });
+  render(<Customers />);
+  expect(await screen.findByText('גפ״ן')).toBeInTheDocument();
+});

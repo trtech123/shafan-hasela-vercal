@@ -126,11 +126,30 @@ try {
     VALUES($1,'Test Group','0500000000','billing@example.invalid','Test Group',
       $2,current_date,1,1000,'לא שולם')`, [order, activity]);
   await db.query("SELECT set_config('app.test_uid',$1,false)", [cashier]);
-  await db.query(`INSERT INTO public.customers(id,customer_kind,display_name,contact_name,phone,email,
+  await db.query(`INSERT INTO public.customers(id,customer_kind,customer_type,display_name,contact_name,phone,email,
     organization_name,vat_applicable,billing_name,billing_company_id,billing_accounting_email)
-    VALUES($1,'organization','Test Group','Group Contact','0500000000',
+    VALUES($1,'organization','גפ״ן','Test Group','Group Contact','0500000000',
     'billing@example.invalid','Test Group',true,'Test Group','123456789','')`, [customer]);
   await db.query('SELECT public.link_order_customer($1,$2,0)', [order, customer]);
+  const originalType = (await db.query(`SELECT c.customer_kind,c.customer_type,
+    s.customer_type AS order_type FROM public.customers c JOIN public.orders o ON o.customer_id=c.id
+    JOIN public.customer_snapshots s ON s.id=o.customer_snapshot_id WHERE o.id=$1`, [order])).rows[0];
+  assert.deepEqual(originalType, { customer_kind: 'organization', customer_type: 'גפ״ן', order_type: 'גפ״ן' });
+  await db.query(`UPDATE public.customers SET customer_type='חברה' WHERE id=$1`, [customer]);
+  const frozenType = (await db.query(`SELECT c.customer_type,s.customer_type AS order_type
+    FROM public.customers c JOIN public.orders o ON o.customer_id=c.id
+    JOIN public.customer_snapshots s ON s.id=o.customer_snapshot_id WHERE o.id=$1`, [order])).rows[0];
+  assert.deepEqual(frozenType, { customer_type: 'חברה', order_type: 'גפ״ן' },
+    'changing the card must not reclassify an existing order');
+  const version = (await db.query('SELECT version FROM public.customers WHERE id=$1', [customer])).rows[0].version;
+  const savedCustomer = (await db.query(`SELECT (public.save_customer(
+    jsonb_build_object('customer_kind','organization','customer_type','סוכן/מפיק',
+      'display_name','Test Group','vat_applicable',true),$1,$2)).customer_type AS type`,
+    [customer, version])).rows[0];
+  assert.equal(savedCustomer.type, 'סוכן/מפיק', 'the existing customer RPC must accept the new type');
+  assert.equal((await db.query(`SELECT s.customer_type AS type FROM public.orders o
+    JOIN public.customer_snapshots s ON s.id=o.customer_snapshot_id WHERE o.id=$1`, [order])).rows[0].type,
+    'גפ״ן', 'customer RPC edits must not change the order snapshot');
   const initial = (await db.query('SELECT public.get_payper_order_collection($1,$2) AS value',
     [cashier, order])).rows[0].value;
   assert.equal(initial.balanceMinor, 100000);

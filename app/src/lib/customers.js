@@ -5,6 +5,7 @@ function normalizePhone(raw = '') {
 }
 
 export const ADDRESS_FIELDS = ['billing_address_line', 'billing_city', 'billing_postal_code', 'billing_country_code'];
+export const CUSTOMER_TYPES = ['חינוכית', 'גפ״ן', 'סוכן/מפיק', 'חברה', 'לקוח פרטי'];
 const MASTER_FIELDS = ['customer_kind', 'display_name', 'contact_name', 'phone', 'email', 'organization_name', 'billing_name', 'billing_company_id', 'billing_accounting_email', ...ADDRESS_FIELDS];
 export const canManageCustomers = (role) => ['admin', 'operations', 'cashier', 'אחמ"ש', 'קופאי'].includes(role);
 export const canArchiveCustomers = (role) => ['admin', 'operations', 'אחמ"ש'].includes(role);
@@ -23,7 +24,9 @@ export function customerDraft(source = {}) {
 }
 
 export function customerPayload(source = {}) {
-  return { ...Object.fromEntries(MASTER_FIELDS.map((key) => [key, String(source[key] ?? (key === 'customer_kind' ? 'person' : '')).trim()])), vat_applicable: typeof source.vat_applicable === 'boolean' ? source.vat_applicable : null };
+  const customerType = source.customer_type || null;
+  return { ...Object.fromEntries(MASTER_FIELDS.map((key) => [key, String(source[key] ?? (key === 'customer_kind' ? 'person' : '')).trim()])),
+    customer_type: customerType, vat_applicable: typeof source.vat_applicable === 'boolean' ? source.vat_applicable : null };
 }
 
 export function customerToRecord(customer) {

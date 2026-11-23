@@ -3,7 +3,7 @@ import { supabase } from '@/api/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { customerDraft, customerPayload, customerErrorMessage, isPossibleDuplicate } from '@/lib/customers';
+import { customerDraft, customerPayload, customerErrorMessage, isPossibleDuplicate, CUSTOMER_TYPES } from '@/lib/customers';
 import BillingAddressFields from './BillingAddressFields';
 
 const fields = [['display_name', 'שם לתצוגה'], ['contact_name', 'איש קשר'], ['phone', 'טלפון'], ['email', 'אימייל'], ['organization_name', 'שם ארגון'], ['billing_name', 'שם לחיוב'], ['billing_company_id', 'מספר זיהוי הלקוח לחיוב (ת״ז / ח״פ / ע״מ)'], ['billing_accounting_email', 'אימייל להנהלת חשבונות']];
@@ -59,8 +59,13 @@ export default function CustomerFormDialog({ customer = null, initialValues = {}
       <DialogTitle>{customer ? 'עריכת כרטיס לקוח' : 'לקוח חדש'}</DialogTitle>
       <DialogDescription>פרטי הכרטיס ישמשו כברירת מחדל בבחירת הלקוח. עריכת כרטיס אינה משנה הזמנות או הצעות קיימות.</DialogDescription>
       <form onSubmit={save} className="space-y-4">
-        <label className="block text-sm space-y-1">סוג לקוח
+        <label className="block text-sm space-y-1">אדם או ארגון
           <select className="block w-full rounded-md border p-2 bg-background" value={draft.customer_kind} onChange={(event) => change('customer_kind', event.target.value)}><option value="person">אדם פרטי</option><option value="organization">ארגון</option></select>
+        </label>
+        <label className="block text-sm space-y-1">סיווג עסקי
+          <select className="block w-full rounded-md border p-2 bg-background" value={draft.customer_type || ''} onChange={(event) => change('customer_type', event.target.value || null)}>
+            <option value="">ללא סיווג</option>{CUSTOMER_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+          </select>
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{fields.map(([field, label]) => <div className="space-y-1" key={field}>
           <label htmlFor={`${id}-${field}`} className="text-sm">{label}</label>
