@@ -11,7 +11,7 @@
 
 ## חוזה ה־API
 
-כתובת מתוכננת לפי מזהה הפרויקט בקוד שפן הסלע: `https://divzxsynczeifkpnpupl.supabase.co/functions/v1/landing-lead-webhook`. הכתובת טרם אומתה מול פריסת Supabase החיה והפונקציה טרם נפרסה; נאמת אותה לפני ההפעלה. שיטת הבקשה: `POST`, כותרת `Content-Type: application/json`.
+כתובת מתוכננת בפרויקט Supabase Production שאומת: `https://divzxsynczeifkpnpupl.supabase.co/functions/v1/landing-lead-webhook`. הפונקציה עצמה טרם נפרסה ולכן הכתובת אינה קולטת פניות; נוודא שוב את הפרויקט בחלון ההפעלה. שיטת הבקשה: `POST`, כותרת `Content-Type: application/json`.
 
 ```json
 {
