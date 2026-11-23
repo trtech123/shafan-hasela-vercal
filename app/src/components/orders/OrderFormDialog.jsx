@@ -204,6 +204,12 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving || pendingSave) return;
+    // Historical orders may have no site. New orders must capture the actual
+    // location; an existing site must not be silently cleared during editing.
+    if (!isTaskMode && !form.site && (!order || order.site)) {
+      toast.error('בחרו אתר להזמנה לפני השמירה');
+      return;
+    }
     setSaving(true);
     try {
       const data = {
@@ -230,10 +236,8 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
         activity_date: form.activity_date || null,
         start_time: form.start_time || null,
         end_time: form.end_time || null,
-        // CHECK-constrained TEXT column: empty string is NOT in the allowed set
-        // (orders_site_check IN ('עכו','טבריה','נוף הגליל','שטח')). User can
-        // toggle a site button off → form.site = "" → constraint violation.
-        // Column is nullable, so null passes the check.
+        // Preserve missing site on legacy orders; newly created orders must
+        // have an explicit site before reaching this payload.
         site: form.site || null,
         num_participants: Number(form.num_participants) || 0,
         price_per_person: Number(form.price_per_person) || 0,
@@ -383,7 +387,7 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
           )}
 
           <div>
-            <Label>אתר</Label>
+            <Label>אתר{!isTaskMode && !order ? ' *' : ''}</Label>
             <div className="flex gap-2 flex-wrap mt-1">
               {SITES.map(site => (
                 <button

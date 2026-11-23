@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ rows: [], rpc: vi.fn(), from: vi.fn(), signatureRequest: vi.fn(async body => body.action === 'history' ? {revisions:[]} : {revision:{status:'pending'}}) }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { from: mocks.from, rpc: mocks.rpc } }));
@@ -11,6 +11,12 @@ vi.mock('../components/quotes/QuotePDFDocument', () => ({ default: ({ quote, mod
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import Quotes from './Quotes';
+beforeEach(() => {
+  HTMLElement.prototype.scrollIntoView = () => {};
+  HTMLElement.prototype.hasPointerCapture = () => false;
+  HTMLElement.prototype.setPointerCapture = () => {};
+  HTMLElement.prototype.releasePointerCapture = () => {};
+});
 afterEach(cleanup);
 
 test('creates a quotation and converts that saved revision to one linked order', async () => {
@@ -49,6 +55,8 @@ test('creates a quotation and converts that saved revision to one linked order',
   fireEvent.change(textboxes[0], { target: { value: 'Synthetic customer' } });
   fireEvent.change(textboxes[1], { target: { value: '0500000000' } });
   fireEvent.change(dialog.querySelector('input[type="date"]'), { target: { value: '2026-11-05' } });
+  fireEvent.keyDown(within(dialog).getByRole('combobox'), { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: 'עכו' }));
   fireEvent.change(within(dialog).getByRole('spinbutton'), { target: { value: '2' } });
   fireEvent.click(await within(dialog).findByRole('button', { name: /Synthetic activity/ }));
   fireEvent.click(within(dialog).getByRole('button', { name: 'צור הצעה' }));

@@ -178,6 +178,7 @@ test('new order sends explicitly selected site and end time in the insert payloa
 test('new order saves without customer details and preserves partial details', async () => {
   const view = renderDialog(null);
   fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.click(screen.getByRole('button', { name: 'עכו' }));
   fireEvent.submit(document.querySelector('form'));
   await waitFor(() => expect(state.writes).toHaveLength(1));
   expect(state.writes[0].data).toMatchObject({ client_name: null, client_phone: null, client_email: null });
@@ -185,6 +186,7 @@ test('new order saves without customer details and preserves partial details', a
   state.writes = [];
   renderDialog(null);
   fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.click(screen.getByRole('button', { name: 'עכו' }));
   fireEvent.change(screen.getByLabelText('שם הלקוח (אפשר להשלים בהמשך)'), { target: { value: ' נורית ' } });
   fireEvent.submit(document.querySelector('form'));
   await waitFor(() => expect(state.writes).toHaveLength(1));
@@ -194,6 +196,7 @@ test('new order saves without customer details and preserves partial details', a
 test('new order prepares a private signature revision after insert without delivering it', async () => {
   renderDialog(null);
   fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.click(screen.getByRole('button', { name: 'עכו' }));
   fireEvent.submit(document.querySelector('form'));
   await waitFor(() => expect(state.signatureRequest).toHaveBeenCalledWith({ action: 'create', orderId: 'order-1' }, { staff: true }));
   expect(state.signatureRequest.mock.calls.some(([body]) => body.action === 'deliver')).toBe(false);
@@ -204,11 +207,20 @@ test('reports saved order without pretending the confirmation is ready when prep
   state.signatureRequest.mockReset().mockRejectedValue(Error('signature_unavailable'));
   const { onSaved } = renderDialog(null);
   fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.click(screen.getByRole('button', { name: 'עכו' }));
   fireEvent.submit(document.querySelector('form'));
   await waitFor(() => expect(state.signatureRequest).toHaveBeenCalledTimes(1));
   expect(onSaved).toHaveBeenCalledTimes(1);
   expect(state.error).toHaveBeenCalledWith(expect.stringContaining('נשמרה'));
   expect(state.success).not.toHaveBeenCalled();
+});
+
+test('new order requires an explicit site without changing existing customer requirements', async () => {
+  renderDialog(null);
+  fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.submit(document.querySelector('form'));
+  expect(state.writes).toHaveLength(0);
+  expect(state.error).toHaveBeenCalledWith('בחרו אתר להזמנה לפני השמירה');
 });
 
 test('customer details can be added when editing a guest order', async () => {

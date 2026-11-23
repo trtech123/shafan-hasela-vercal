@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import PhysicalTerminalStatus from './PhysicalTerminalStatus.jsx';
 import { billingReviewIssues } from '@/payments/payperBilling';
 import { isUnverifiedTender } from '@/payments/unverifiedTenders';
+import { ACCOUNTING_SITES } from '@/payments/accountingSite';
 
 const PAYMENT_METHODS = [
   { key: "מזומן",       label: "מזומן",         icon: Banknote,     color: "from-emerald-600 to-emerald-700", hint: "קבל מזומן וסמן ידנית" },
@@ -73,6 +74,8 @@ export default function PaymentScreen({
   manualSaleSaving = false,
   manualMethodsEnabled = true,
   noncardEnabled = { cash: false, check: false },
+  accountingSite = '',
+  onAccountingSiteChange = () => {},
 }) {
   // null = method grid; CHECK_METHOD = single-check form; SPLIT_METHOD = split builder.
   const [detailFor, setDetailFor] = useState(null);
@@ -408,6 +411,16 @@ export default function PaymentScreen({
             {cartItems.map((item, index) => <li key={`${item.id}-${index}`}>{item.name} × {item.qty}</li>)}
           </ul>
         </div>
+
+        <label className="block space-y-2 text-sm font-medium text-slate-200">
+          <span>אתר המכירה *</span>
+          <select aria-label="אתר המכירה" className={inputCls} value={accountingSite}
+            onChange={event => onAccountingSiteChange(event.target.value)}>
+            <option value="">בחרו את האתר שבו מתבצעת המכירה</option>
+            {ACCOUNTING_SITES.map(site => <option key={site} value={site}>{site}</option>)}
+          </select>
+          {!accountingSite && <span className="block text-amber-300">נדרש אתר לפני תחילת תשלום</span>}
+        </label>
 
         <div className="space-y-2">
           <p className="text-slate-400 text-sm font-medium text-center mb-4">בחר אמצעי תשלום</p>

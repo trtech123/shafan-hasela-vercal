@@ -23,8 +23,10 @@ export function posRuntime():PosDependencies{
       return profileError||!data?null:{id:user.id,role:String(data.role)};
     }},
     call:createPosLiveAdapter(read),
-    reserve:(actorId,requestKey,lines,discount,billing)=>rpc('reserve_pos_pelecard',{
-      p_actor_id:actorId,p_request_key:requestKey,p_lines:lines,p_discount:discount,p_billing:billing}),
+    reserve:(actorId,requestKey,lines,discount,billing)=>rpc(billing.site
+      ? 'reserve_pos_pelecard_with_site' : 'reserve_pos_pelecard',{
+      p_actor_id:actorId,p_request_key:requestKey,p_lines:lines,p_discount:discount,p_billing:billing,
+      ...(billing.site ? {p_site:billing.site} : {})}),
     view:(actorId,locator)=>rpc(locator.paymentId?'get_pos_pelecard_view':'get_pos_pelecard_view_by_request',{
       p_actor_id:actorId,...(locator.paymentId?{p_payment_id:locator.paymentId}:{p_request_key:locator.requestKey})}),
     async get(paymentId){const rows=await rpc('get_pos_pelecard_attempt',{p_payment_id:paymentId});return Array.isArray(rows)&&rows.length===1?rows[0]:null;},
