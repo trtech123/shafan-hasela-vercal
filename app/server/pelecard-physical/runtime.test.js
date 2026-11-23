@@ -12,8 +12,16 @@ test('physical runtime authenticates staff without reading digital credentials',
   assert.deepEqual(await runtime.authenticate('token'), { id: 'actor-1', role: 'cashier' });
   assert.deepEqual(seen, ['token']);
   assert.equal(runtime.enabled, true);
+  assert.equal(runtime.posEnabled, false);
   assert.equal(runtime.hostedEnabled, false);
   assert.equal(runtime.workflow, runtime.workflow);
+});
+test('standalone physical collection cannot be enabled by a flag without a persisted sale site', () => {
+  const base = { PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_PHYSICAL_USER: 'physical',
+    PELECARD_PHYSICAL_PASSWORD: 'secret', PELECARD_PHYSICAL_TERMINAL: '2814926015' };
+  const overrides = { authClient: {}, database: { query: async () => ({ rows: [] }) } };
+  assert.equal(createPhysicalRuntime(base, overrides).posEnabled, false);
+  assert.equal(createPhysicalRuntime({ ...base, PELECARD_PHYSICAL_POS_ENABLED: 'true' }, overrides).posEnabled, false);
 });
 test('hosted route requires its own gates and canonical public URLs', () => {
   const env = { PELECARD_PHYSICAL_ENABLED: 'true', PELECARD_PHYSICAL_USER: 'physical',

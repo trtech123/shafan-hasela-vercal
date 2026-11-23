@@ -33,6 +33,7 @@ export function createPhysicalHttpHandler(deps) {
         const registerReady = devices.some(device => device.registerNumber === '004' &&
           device.model === 'CT20' && typeof device.workstationCode === 'string' && device.workstationCode);
         const ready = visible && registerReady &&
+          (body.orderId || deps.posEnabled === true) &&
           (!deps.acceptanceOrderId || body.orderId === deps.acceptanceOrderId) && (direct
           ? directDispatchReady(deps)
           : deps.hostedInitEnabled === true);
@@ -44,6 +45,7 @@ export function createPhysicalHttpHandler(deps) {
       if (body.action === 'prepare') {
         if (!deps.enabled) return json({ error: 'physical_disabled' }, 503);
         if (deps.acceptanceOrderId) return json({ error: 'physical_acceptance_order_only' }, 503);
+        if (deps.posEnabled !== true) return json({ error: 'physical_pos_site_required' }, 503);
         if (deps.directUiEnabled === true && !directDispatchReady(deps))
           return json({ error: 'physical_direct_disabled' }, 503);
         if (Object.keys(body).sort().join(',') !== 'action,billing,cart,requestKey,workstationCode' ||

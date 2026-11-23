@@ -6,11 +6,12 @@ import PaymentScreen from './PaymentScreen';
 
 afterEach(cleanup);
 
-test('physical option is absent by default while digital and manual options remain', () => {
+test('physical and external credit options are absent by default while digital and verified manual options remain', () => {
   render(<PaymentScreen total={24} cartItems={[{ id: 'p1' }]} onConfirm={vi.fn()} onBack={vi.fn()} />);
   expect(screen.queryByRole('button', { name: /תשלום במסופון פיזי/ })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: /פלאקארד/ })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /אשראי.*חיצוני/s })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /אשראי.*חיצוני/s })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /מזומן/ })).toBeInTheDocument();
 });
 
 test('flag exposes separate physical action but cannot dispatch without provider activation', () => {

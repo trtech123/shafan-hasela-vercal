@@ -24,6 +24,9 @@ export function createPhysicalRuntime(env, overrides = {}) {
     : null;
   const cloudWorkerEnabled = env.PELECARD_PHYSICAL_CLOUD_WORKER_ENABLED === 'true';
   const directUiEnabled = env.PELECARD_PHYSICAL_DIRECT_UI_ENABLED === 'true';
+  // No standalone physical intent persists a verified sale site yet. A flag
+  // alone must not bypass that missing accounting correlation.
+  const posEnabled = false;
   const enqueueDirect = createDirectQueuePublisher(overrides.queueSend ?? send);
   const workflow = createPhysicalWorkflow({ ...repository, provider,
     hostedProvider, hostedEnabled: config.hostedEnabled,
@@ -36,7 +39,7 @@ export function createPhysicalRuntime(env, overrides = {}) {
     merchantTerminal: config.terminalNumber });
   return {
     enabled: config.enabled, dispatchEnabled: config.dispatchEnabled,
-    payperEnabled: config.payperEnabled, cloudWorkerEnabled, directUiEnabled, enqueueDirect,
+    payperEnabled: config.payperEnabled, cloudWorkerEnabled, directUiEnabled, posEnabled, enqueueDirect,
     acceptanceOrderId: config.acceptanceOrderId,
     acceptanceAmountMinor: config.acceptanceAmountMinor,
     hostedEnabled: config.hostedEnabled, hostedInitEnabled: config.hostedInitEnabled,

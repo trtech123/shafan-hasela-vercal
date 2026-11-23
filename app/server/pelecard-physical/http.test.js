@@ -28,6 +28,7 @@ function setup() {
 }
 test('authenticated prepare reserves a server-priced physical intent without dispatch', async () => {
   const s = setup();
+  s.deps.posEnabled = true;
   const response = await createPhysicalHttpHandler(s.deps)(s.request({ action: 'prepare', requestKey,
     workstationCode: 'FRONT_DESK', cart: { lines: [{ kind: 'product', id: paymentId, qty: 1 }] },
     billing: { kind: 'person', name: 'Customer', identity: '123456789', email: 'test@example.com' } }));
@@ -36,6 +37,28 @@ test('authenticated prepare reserves a server-priced physical intent without dis
   assert.equal(s.calls.length, 1);
   assert.equal(s.calls[0][0], 'start');
   assert.equal(s.calls[0][1].actorId, actor.id);
+});
+test('standalone CT20 is blocked without a verified sale site while order collection remains available', async () => {
+  const s = setup();
+  s.deps.directUiEnabled = true;
+  s.deps.dispatchEnabled = true;
+  s.deps.payperEnabled = true;
+  s.deps.cloudWorkerEnabled = true;
+  s.deps.workerMaxMs = 360_000;
+  const handler = createPhysicalHttpHandler(s.deps);
+  assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
+    { visible: true, ready: false, route: 'direct', registerReady: true });
+  const blocked = await handler(s.request({ action: 'prepare', requestKey,
+    workstationCode: 'FRONT_DESK', cart: { lines: [{ kind: 'product', id: paymentId, qty: 1 }] },
+    billing: { kind: 'person', name: 'Customer', identity: '123456789', email: 'test@example.com' } }));
+  assert.equal(blocked.status, 503);
+  assert.deepEqual(await blocked.json(), { error: 'physical_pos_site_required' });
+  assert.deepEqual(s.calls, []);
+  assert.deepEqual(await (await handler(s.request({ action: 'capability', orderId: paymentId }))).json(),
+    { visible: true, ready: true, route: 'direct', registerReady: true });
+  assert.equal((await handler(s.request({ action: 'prepareOrder', requestKey,
+    workstationCode: 'FRONT_DESK', orderId: paymentId, amountMinor: 100 }))).status, 201);
+  assert.equal(s.calls[0][0], 'startOrder');
 });
 test('physical actions admit every authenticated application role', async () => {
   const s = setup();
@@ -148,6 +171,7 @@ test('direct capability is visible to every authenticated role and stays disable
   s.deps.payperEnabled = true;
   s.deps.cloudWorkerEnabled = true;
   s.deps.workerMaxMs = 360000;
+  s.deps.posEnabled = true;
   assert.deepEqual(await (await handler(s.request({ action: 'capability' }))).json(),
     { visible: true, ready: true, route: 'direct', registerReady: true });
   s.deps.repository.listDevices = async () => [];

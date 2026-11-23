@@ -19,9 +19,11 @@ describe("CashRegister hosted Pelecard wiring", () => {
     expect(cashRegister).not.toContain("pelecard-initiate");
   });
 
-  test("retains the existing sales insert only for manual payment confirmation", () => {
+  test("routes manual cash and cheque through guarded collection without browser sale insertion", () => {
     expect(cashRegister).toContain("const handlePaymentConfirm = async");
-    expect(cashRegister).toMatch(/\.from\(['"]sales['"]\)\s*\.insert\(/s);
+    expect(cashRegister).toContain("if (method !== \"מזומן\" && method !== \"צ'ק\")");
+    expect(cashRegister).toContain("supabase.functions.invoke('payper-noncard-collection'");
+    expect(cashRegister).not.toMatch(/\.from\(['"]sales['"]\)\s*\.insert\(/s);
     expect(cashRegister).not.toMatch(/handlePaymentConfirm\s*\(\s*["']פלאקארד["']/);
   });
 
