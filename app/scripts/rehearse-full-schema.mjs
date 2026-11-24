@@ -821,6 +821,9 @@ try {
       RETURNING id,payper_document_number,source_facts,captured_at`,
     [collected.paymentId])).rows[0];
     assert.equal(sourceRow.source_facts.site, 'עכו');
+    assert.equal((await db.query(`SELECT defer_reason FROM public.rivhit_journal_sources
+      WHERE id=$1`,[sourceRow.id])).rows[0].defer_reason,'late_after_cutoff',
+    'a document finalized after the closing time must record its carry-forward reason');
     assert.equal((await db.query(`SELECT public.rivhit_source_activity_site_resolved(
       $1::uuid,'עכו') AS resolved`,[collected.paymentId])).rows[0].resolved,true);
     await db.query(`UPDATE public.activities SET site='טבריה' WHERE id=$1`,[activity]);
