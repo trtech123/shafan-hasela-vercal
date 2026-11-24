@@ -5,9 +5,34 @@ BEGIN;
 
 ALTER TABLE public.rivhit_journal_sources
   ADD COLUMN defer_reason text CHECK (defer_reason IN
-    ('site_mapping_unapproved','activity_site_unresolved','source_evidence_incomplete','daily_group_closed',
+    ('site_mapping_unapproved','activity_site_unresolved','source_evidence_incomplete',
+     'late_after_cutoff','daily_group_closed',
      'daily_stage_failed','capacity_exceeded')),
   ADD COLUMN deferred_at timestamptz;
+
+-- A finalized document captured after today's close is explicitly marked for
+-- tomorrow, even though it never enters today's eligible source page.
+CREATE FUNCTION public.mark_rivhit_late_source() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE close_time time;
+BEGIN
+  SELECT posting_time_israel INTO close_time FROM public.rivhit_journal_control
+    WHERE singleton AND capture_enabled AND posting_cadence='daily';
+  IF close_time IS NOT NULL AND
+    (NEW.captured_at AT TIME ZONE 'Asia/Jerusalem')::time > close_time THEN
+    NEW.defer_reason:='late_after_cutoff';
+    NEW.deferred_at:=NEW.captured_at;
+    NEW.next_mapping_check_at:=
+      (((NEW.captured_at AT TIME ZONE 'Asia/Jerusalem')::date+1)+close_time)
+        AT TIME ZONE 'Asia/Jerusalem';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER trg_mark_rivhit_late_source BEFORE INSERT
+  ON public.rivhit_journal_sources FOR EACH ROW
+  EXECUTE FUNCTION public.mark_rivhit_late_source();
+REVOKE ALL ON FUNCTION public.mark_rivhit_late_source()
+  FROM PUBLIC,anon,authenticated,service_role;
 
 -- Every defer records a bounded operational reason. Late documents are not
 -- eligible for the closed day and are selected in the next daily window.
