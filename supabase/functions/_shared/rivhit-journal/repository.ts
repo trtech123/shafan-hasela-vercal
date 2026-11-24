@@ -2,10 +2,52 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.106.1';
 import type { RivhitJournalDraft, RivhitJournalReportRow, RivhitJournalResult } from '../rivhit/types.ts';
 import type { JournalSourceRow, JournalMapping } from './mapper.ts';
 import { mapJournalSource } from './mapper.ts';
+import { mapDailyJournalBatch } from './daily.ts';
 import type { ReconciliationClaim } from './reconcile.ts';
 
 export class SupabaseRivhitJournalStore {
   constructor(private readonly client: SupabaseClient) {}
+
+  async overdueCounts(): Promise<{ unbatched: number; unverified: number }> {
+    const { data, error } = await this.client.rpc('rivhit_journal_overdue_counts');
+    const row = data?.[0];
+    const unbatched = Number(row?.unbatched), unverified = Number(row?.unverified);
+    if (error || !Number.isSafeInteger(unbatched) || unbatched < 0
+      || !Number.isSafeInteger(unverified) || unverified < 0)
+      throw new Error('journal_overdue_check_failed');
+    return { unbatched, unverified };
+  }
+
+  async closingWindowOpen(): Promise<string | null> {
+    const { data, error } = await this.client.from('rivhit_journal_control')
+      .select('capture_enabled,posting_cadence,posting_time_israel,cutover_at')
+      .eq('singleton', true).single();
+    if (error) throw new Error('journal_control_unavailable');
+    if (!data?.capture_enabled || data.posting_cadence !== 'daily'
+      || !data.posting_time_israel || !data.cutover_at) return null;
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit',
+      day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date());
+    const part = (key: string) => parts.find(item => item.type === key)?.value;
+    const localTime = `${part('hour')}:${part('minute')}:${part('second')}`;
+    if (localTime < data.posting_time_israel) return null;
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  }
+
+  async stageDaily(sources: JournalSourceRow[], mapping: JournalMapping,
+    batchId: string, postingDay: string): Promise<string> {
+    const mapped = await mapDailyJournalBatch(sources, mapping, batchId, postingDay);
+    const { data, error } = await this.client.rpc('stage_rivhit_daily_batch', {
+      p_batch_id: mapped.batchId, p_posting_day: mapped.postingDay,
+      p_source_ids: mapped.sourceIds, p_mapping_version: mapped.mappingVersion,
+      p_request_payload: mapped.draft, p_payload_hash: mapped.payloadHash,
+      p_expected_vat: mapped.expectedVat,
+    });
+    if (error || typeof data !== 'string') throw new Error('journal_daily_stage_failed');
+    return data;
+  }
 
   async listUnmapped(limit: number): Promise<JournalSourceRow[]> {
     const { data, error } = await this.client.from('rivhit_journal_sources')
@@ -36,7 +78,8 @@ export class SupabaseRivhitJournalStore {
 
   async listReady(limit: number): Promise<string[]> {
     const { data, error } = await this.client.from('rivhit_journal_entries')
-      .select('id').eq('status', 'ready').order('created_at', { ascending: true }).limit(limit);
+      .select('id').eq('status', 'ready').not('batch_id', 'is', null)
+      .order('created_at', { ascending: true }).limit(limit);
     if (error) throw new Error('journal_queue_list_failed');
     return (data ?? []).map(row => String(row.id));
   }
@@ -44,7 +87,8 @@ export class SupabaseRivhitJournalStore {
   async listPending(limit: number): Promise<string[]> {
     const before = new Date(Date.now() - 120_000).toISOString();
     const { data, error } = await this.client.from('rivhit_journal_entries')
-      .select('id').in('status', ['reserved', 'response_saved', 'reconciliation_required'])
+      .select('id').not('batch_id', 'is', null)
+      .in('status', ['reserved', 'response_saved', 'reconciliation_required'])
       .lt('dispatch_reserved_at', before)
       .lte('next_reconciliation_check_at', new Date().toISOString())
       .order('next_reconciliation_check_at', { ascending: true }).limit(limit);
@@ -72,9 +116,9 @@ export class SupabaseRivhitJournalStore {
 
   async claim(id: string): Promise<{ id: string; draft: RivhitJournalDraft; expectedVat: number } | null> {
     const { data, error } = await this.client.from('rivhit_journal_entries')
-      .select('id,request_payload,expected_vat,status').eq('id', id).maybeSingle();
+      .select('id,batch_id,request_payload,expected_vat,status').eq('id', id).maybeSingle();
     if (error) throw new Error('journal_read_failed');
-    if (!data || data.status !== 'ready') return null;
+    if (!data || !data.batch_id || data.status !== 'ready') return null;
     return { id: data.id, draft: data.request_payload as RivhitJournalDraft,
       expectedVat: Number(data.expected_vat) };
   }

@@ -19,7 +19,8 @@ export function createRivhitJournalHandler(dependencies: {
   serviceKey: string;
   enabled: boolean;
   ingestionEnabled?: boolean;
-  batch?: () => Promise<{ staged: number; processed: number; reconciled: number; blocked: number }>;
+  batch?: () => Promise<{ staged: number; processed: number; reconciled: number;
+    blocked: number; overdue?: { unbatched: number; unverified: number } }>;
   reconcile?: (entryId: string) => Promise<string>;
   process: (entryId: string) => Promise<string>;
 }): (request: Request) => Promise<Response> {

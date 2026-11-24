@@ -12,6 +12,7 @@ const { pg_trgm } = await import(pgliteBase ? new URL('dist/contrib/pg_trgm.js',
 import { buildNoncardPayperRequest, dispatchNoncardPayper } from
   '../../supabase/functions/_shared/payper/noncard.ts';
 import { buildCreatePayperInvoice } from '../../supabase/functions/_shared/payper/provider.ts';
+import { mapDailyJournalBatch } from '../../supabase/functions/_shared/rivhit-journal/daily.ts';
 
 const directory = fileURLToPath(new URL('../../supabase/migrations/', import.meta.url));
 const optional = process.argv.slice(2).filter(arg => arg.endsWith('.sql')).map(arg => resolve(arg));
@@ -53,6 +54,31 @@ try {
     }
     await db.exec((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
   }
+  current = 'Anat reference and disabled daily journal gates';
+  assert.equal((await db.query(`SELECT count(*)::int AS groups
+    FROM public.rivhit_accountant_account_groups`)).rows[0].groups, 0,
+  'real chart-of-accounts values must never be published in the public repository');
+  if (process.env.ANAT_PRIVATE_SEED) {
+    await db.exec(await readFile(resolve(process.env.ANAT_PRIVATE_SEED), 'utf8'));
+    const accountant = (await db.query(`SELECT count(*)::int AS groups,
+      count(*) FILTER (WHERE sort_code=118)::int AS nof_code
+      FROM public.rivhit_accountant_account_groups`)).rows[0];
+    assert.deepEqual(accountant, { groups: 6, nof_code: 1 });
+  }
+  const journalControl = (await db.query(`SELECT capture_enabled,posting_enabled,
+    posting_cadence FROM public.rivhit_journal_control WHERE singleton`)).rows[0];
+  assert.deepEqual(journalControl, { capture_enabled: false,
+    posting_enabled: false, posting_cadence: 'manual' });
+  assert.equal((await db.query(`SELECT count(*)::int AS count
+    FROM public.rivhit_daily_journal_batches`)).rows[0].count, 0);
+  let disabledDailyStage = false;
+  try {
+    await db.query(`SELECT public.stage_rivhit_daily_batch(
+      '00000000-0000-4000-8000-000000009999'::uuid,DATE '2026-11-24',
+      ARRAY['00000000-0000-4000-8000-000000000001'::uuid],
+      'v1-${'a'.repeat(64)}','{}'::jsonb,'${'b'.repeat(64)}',0)`);
+  } catch (error) { disabledDailyStage = /rivhit_daily_batch_invalid/.test(error.message); }
+  assert.equal(disabledDailyStage, true, 'daily staging must remain disabled');
   current = 'verified sale source grants';
   const saleGrants = (await db.query(`SELECT
     has_table_privilege('authenticated','public.sales','INSERT') AS browser_insert,
@@ -694,7 +720,16 @@ try {
       [new Date().getFullYear(), new Date().getMonth() + 1]);
   } catch (error) { reportForbidden = /admin_required/.test(error.message); }
   assert.equal(reportForbidden, true, 'cashier must not read financial monthly report');
+  let dailyReconciliationForbidden = false;
+  try { await db.query('SELECT * FROM public.rivhit_daily_reconciliation($1::date)',
+    ['2026-11-24']); }
+  catch (error) { dailyReconciliationForbidden = /admin_required/.test(error.message); }
+  assert.equal(dailyReconciliationForbidden,true,
+    'cashier must not read daily accounting reconciliation');
   await db.query("UPDATE public.profiles SET role='admin' WHERE id=$1", [cashier]);
+  assert.ok(Array.isArray((await db.query(
+    'SELECT * FROM public.rivhit_daily_reconciliation($1::date)',
+    ['2026-11-24'])).rows),'admin must read daily accounting reconciliation');
   const reportRows = (await db.query('SELECT * FROM public.monthly_payment_report($1,$2)',
     [new Date().getFullYear(), new Date().getMonth() + 1])).rows;
   assert.ok(reportRows.some(row => Number(row.completed_count) > 0),
@@ -704,6 +739,109 @@ try {
     .rows[0].open, false, 'journal dispatch must remain disabled');
   assert.equal((await db.query('SELECT count(*)::int AS count FROM public.rivhit_journal_approved_mappings WHERE enabled'))
     .rows[0].count, 0, 'no accounting mapping may become active during preparation');
+  const dailyPrivileges = (await db.query(`SELECT
+    has_function_privilege('authenticated',
+      'public.stage_rivhit_daily_batch(uuid,date,uuid[],text,jsonb,text,numeric)','EXECUTE') AS user_can_stage,
+    has_function_privilege('service_role',
+      'public.stage_rivhit_journal_entry(uuid,text,text,text,jsonb,text,numeric)','EXECUTE') AS old_per_document_stage`)).rows[0];
+  assert.deepEqual(dailyPrivileges,{ user_can_stage:false,old_per_document_stage:false },
+    'daily staging must be service-only and old per-document staging unavailable');
+
+  current = 'Anat reference account guards on isolated synthetic approval';
+  await db.exec('BEGIN');
+  try {
+    await db.exec(`INSERT INTO public.rivhit_accountant_account_groups
+      (sort_code,group_name,revenue_account,cash_account,cheque_account,
+        card_account,vat_rate_basis_points,source_row)
+      VALUES (901,'synthetic-only',201,301,302,303,1800,1)`);
+    await db.query(`INSERT INTO public.rivhit_journal_approved_mappings
+      (provider,site,mapping_version,sort_code,debit_account,credit_account,
+        vat_rate_basis_points,accountant_sort_code,enabled)
+      VALUES ('pelecard','נוף הגליל',$1,901,303,201,1800,901,true)`,
+    [`v1-${'a'.repeat(64)}`]);
+    await db.exec('SAVEPOINT invalid_account');
+    let wrongAccountRejected = false;
+    try { await db.exec(`UPDATE public.rivhit_journal_approved_mappings
+      SET debit_account=304 WHERE provider='pelecard' AND site='נוף הגליל'`); }
+    catch (error) { wrongAccountRejected = /rivhit_accountant_mapping_mismatch/.test(error.message); }
+    assert.equal(wrongAccountRejected, true, 'wrong site/payment account must fail closed');
+    await db.exec('ROLLBACK TO SAVEPOINT invalid_account');
+  } finally { await db.exec('ROLLBACK'); }
+
+  current = 'synthetic daily batch atomic claim and duplicate prevention';
+  await db.exec('BEGIN');
+  try {
+    // Local rehearsal opens the clock window only inside this disposable DB.
+    await db.exec('ALTER TABLE public.rivhit_journal_control DROP CONSTRAINT rivhit_daily_close_time');
+    await db.exec(`UPDATE public.rivhit_journal_control SET capture_enabled=true,
+      posting_cadence='daily',posting_time_israel='00:00',
+      cutover_at=pg_catalog.clock_timestamp()-INTERVAL '1 day' WHERE singleton`);
+    await db.exec(`INSERT INTO public.rivhit_accountant_account_groups
+      (sort_code,group_name,revenue_account,cash_account,cheque_account,
+        card_account,vat_rate_basis_points,source_row)
+      VALUES (901,'synthetic-only',201,301,302,303,1800,1)`);
+    const sourceRow = (await db.query(`INSERT INTO public.rivhit_journal_sources
+      (payper_ledger_id,payment_id,sale_id,payper_document_number,
+        payper_document_url,source_facts)
+      SELECT l.id,p.id,p.sale_id,l.document_number,l.document_url,
+        jsonb_build_object('provider',p.provider,'site',p.checkout_snapshot->>'site',
+          'amount',p.amount,'currency',p.currency,'vatApplicable',true,
+          'receiptNumber',s.receipt_number)
+      FROM public.payper_document_ledger l
+      JOIN public.payment_transactions p ON p.id=l.payment_id
+      JOIN public.sales s ON s.id=p.sale_id WHERE p.id=$1
+      RETURNING id,payper_document_number,source_facts,captured_at`,
+    [collected.paymentId])).rows[0];
+    assert.equal(sourceRow.source_facts.site, 'עכו');
+    const localParts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Jerusalem',year: 'numeric',month: '2-digit',day: '2-digit',
+    }).formatToParts(new Date());
+    const part = key => localParts.find(item => item.type === key).value;
+    const postingDay = `${part('year')}-${part('month')}-${part('day')}`;
+    const syntheticMapping = { version: 'synthetic',provider: 'manual_cash',site: 'עכו',
+      sortCode: 901,debitAccount: 301,creditAccount: 201,
+      vatRateBasisPoints: 1800,accountingDate: 'capture_israel_date' };
+    const batch = await mapDailyJournalBatch([{
+      id: sourceRow.id,payper_document_number: sourceRow.payper_document_number,
+      source_facts: sourceRow.source_facts,captured_at: sourceRow.captured_at.toISOString(),
+    }],syntheticMapping,'00000000-0000-4000-8000-000000009999',postingDay);
+    await db.query(`INSERT INTO public.rivhit_journal_approved_mappings
+      (provider,site,mapping_version,sort_code,debit_account,credit_account,
+        vat_rate_basis_points,accountant_sort_code,enabled)
+      VALUES ('manual_cash','עכו',$1,901,301,201,1800,901,true)`,
+    [batch.mappingVersion]);
+    const staged = (await db.query(`SELECT public.stage_rivhit_daily_batch(
+      $1::uuid,$2::date,$3::uuid[],$4,$5::jsonb,$6,$7) AS id`,
+    [batch.batchId,batch.postingDay,batch.sourceIds,batch.mappingVersion,
+      JSON.stringify(batch.draft),batch.payloadHash,batch.expectedVat])).rows[0].id;
+    assert.ok(staged);
+    assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.rivhit_daily_journal_members
+      WHERE batch_id=$1`,[batch.batchId])).rows[0].n,1);
+    await db.exec('SAVEPOINT duplicate_daily_group');
+    let duplicateGroupDenied = false;
+    try { await db.query(`INSERT INTO public.rivhit_daily_journal_batches
+      (id,posting_day,provider,site,mapping_version,source_count,gross_amount,vat_amount)
+      VALUES ('00000000-0000-4000-8000-000000009998',$1,'manual_cash','עכו',$2,1,1,0)`,
+    [postingDay,batch.mappingVersion]); }
+    catch (error) { duplicateGroupDenied = /rivhit_one_daily_group/.test(error.message); }
+    assert.equal(duplicateGroupDenied,true,'daily site and method group must be unique');
+    await db.exec('ROLLBACK TO SAVEPOINT duplicate_daily_group');
+    await db.exec('SAVEPOINT duplicate_daily');
+    let duplicateStageDenied = false;
+    try { await db.query(`SELECT public.stage_rivhit_daily_batch(
+      $1::uuid,$2::date,$3::uuid[],$4,$5::jsonb,$6,$7)`,
+    [batch.batchId,batch.postingDay,batch.sourceIds,batch.mappingVersion,
+      JSON.stringify(batch.draft),batch.payloadHash,batch.expectedVat]); }
+    catch (error) { duplicateStageDenied = /rivhit_daily_source_not_ready/.test(error.message); }
+    assert.equal(duplicateStageDenied,true);
+    await db.exec('ROLLBACK TO SAVEPOINT duplicate_daily');
+    await db.exec(`UPDATE public.rivhit_journal_control SET posting_enabled=true WHERE singleton`);
+    const claim = (await db.query(`SELECT public.reserve_rivhit_journal_entry($1::uuid) AS value`,
+      [staged])).rows[0].value;
+    assert.equal(claim.id,staged);
+    assert.equal((await db.query(`SELECT public.reserve_rivhit_journal_entry($1::uuid) AS value`,
+      [staged])).rows[0].value,null,'second trigger delivery must not reserve twice');
+  } finally { await db.exec('ROLLBACK'); }
 
   const installed = (await db.query(`SELECT count(*)::int AS tables FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relkind='r'`)).rows[0].tables;
@@ -750,7 +888,8 @@ try {
       criticalFunctionHashes, policyNames, triggerNames }));
   }
 } catch (error) {
-  console.error(`Full-schema rehearsal failed at ${current}: ${error.message}`);
+  console.error(`Full-schema rehearsal failed at ${current}: ${error.message}`,
+    error.position ? `position=${error.position}` : '');
   process.exitCode = 1;
 } finally {
   await db.close();

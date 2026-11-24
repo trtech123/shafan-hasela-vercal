@@ -27,10 +27,22 @@ test('journal cron calls only the private Edge batch with server credentials', a
     assert.equal(options.method, 'POST');
     assert.equal(options.headers.authorization, `Bearer ${env.SUPABASE_EDGE_SERVICE_ROLE_JWT}`);
     assert.equal(options.body, JSON.stringify({ run: 'batch' }));
-    return new Response(JSON.stringify({ staged: 1, processed: 0, reconciled: 0, blocked: 0 }), { status: 200 });
+    return new Response(JSON.stringify({ staged: 1, processed: 0, reconciled: 0,
+      blocked: 0, overdue: { unbatched: 0, unverified: 0 } }), { status: 200 });
   });
   const response = await handler(request('Bearer test-cron-secret'));
   assert.equal(response.status, 200);
   assert.equal(called, 1);
-  assert.deepEqual(await response.json(), { staged: 1, processed: 0, reconciled: 0, blocked: 0 });
+  assert.deepEqual(await response.json(), { staged: 1, processed: 0, reconciled: 0,
+    blocked: 0, overdue: { unbatched: 0, unverified: 0 } });
+});
+
+test('journal cron marks prior-day unfinished work as overdue without retrying a journal', async () => {
+  const handler = createRivhitJournalCron(env, async () => new Response(JSON.stringify({
+    staged: 0, processed: 0, reconciled: 1, blocked: 0,
+    overdue: { unbatched: 1, unverified: 1 },
+  }), { status: 200 }));
+  const response = await handler(request('Bearer test-cron-secret'));
+  assert.equal(response.status, 409);
+  assert.deepEqual((await response.json()).overdue, { unbatched: 1, unverified: 1 });
 });
