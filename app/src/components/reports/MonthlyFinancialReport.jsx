@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { ACCOUNTING_SITES } from '@/payments/accountingSite';
-import { monthlyReportCsv, summarizeMonthlyPayments } from '@/reports/monthlyFinancial';
+import { accountantMonthlyRows, summarizeMonthlyPayments } from '@/reports/monthlyFinancial';
+import { monthlyReportXlsx } from '@/reports/monthlyExcel';
 
 const money = agorot => new Intl.NumberFormat('he-IL', {
   style: 'currency', currency: 'ILS', minimumFractionDigits: 2,
@@ -38,24 +39,27 @@ export default function MonthlyFinancialReport() {
   }, [user?.role, year, month, site, register]);
 
   const summary = useMemo(() => summarizeMonthlyPayments(rows), [rows]);
+  const accountantRows = useMemo(() => accountantMonthlyRows(summary), [summary]);
   if (user?.role !== 'admin') return null;
 
   const exportExcel = () => {
-    const csv = monthlyReportCsv(rows, year, month);
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const xlsx = monthlyReportXlsx(rows, year, month, payers);
+    const url = URL.createObjectURL(new Blob([xlsx], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }));
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `shafan-payments-${year}-${String(month).padStart(2, '0')}.csv`;
+    anchor.download = `shafan-payments-${year}-${String(month).padStart(2, '0')}.xlsx`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
   return <section dir="rtl" className="space-y-4 rounded-2xl border bg-card p-5 print:border-0">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="text-xl font-bold">סיכום תשלומים חודשי</h2>
-        <p className="text-sm text-muted-foreground">דוח תפעולי מתשלומים שהושלמו; אינו דוח Z מאושר. מכירות ישנות ללא תנועת תשלום מאומתת אינן נכללות.</p></div>
+        <p className="text-sm text-muted-foreground">דוח תפעולי מתשלומים שהושלמו בשקלים; אינו דוח Z מאושר. מכירות ישנות ללא תנועת תשלום מאומתת אינן נכללות.</p></div>
       <div className="flex gap-2 print:hidden">
         <button type="button" onClick={exportExcel} disabled={state !== 'ready'}
-          className="rounded border px-3 py-2 text-sm disabled:opacity-50">ייצוא לאקסל (CSV)</button>
+          className="rounded border px-3 py-2 text-sm disabled:opacity-50">ייצוא לאקסל</button>
         <button type="button" onClick={() => window.print()} disabled={state !== 'ready'}
           className="rounded border px-3 py-2 text-sm disabled:opacity-50">הדפסה / PDF</button>
       </div>
@@ -89,7 +93,18 @@ export default function MonthlyFinancialReport() {
       </div>
       <p className="text-sm">מסמכי Payper שהונפקו: <strong>{summary.total.documents}</strong> מתוך {summary.total.payments} תשלומים שהושלמו.</p>
       <p className="text-sm text-muted-foreground">לקוחות משלמים מזוהים: {payers ? `${payers.identified_customers} (תשלומים ללא זיהוי שמור: ${payers.unidentified_payments})` : 'לא זמין'}.
-        זיכויים רשמיים: אין במקורות הקיימים מספר וסכום מלאים ומהימנים; אינם נספרים כאפס.</p>
+        זיכויים רשמיים: אין במקורות הקיימים מספר וסכום מלאים ומהימנים; אינם נספרים כאפס. גם מנפיקי כרטיס ושוברי מימוש אינם מזוהים במקור התשלומים המאומת.</p>
+      <div className="overflow-x-auto"><table className="w-full text-sm">
+        <thead><tr><th className="p-2 text-right">סוג</th><th>תת סוג</th><th>כמות עסקאות</th>
+          <th>סכום במטבע מקור</th><th>סכום בשקלים</th><th>ממוצע לעסקה</th></tr></thead>
+        <tbody>{accountantRows.map(row => <tr key={row.type} className="border-t">
+          <td className="p-2">{row.type}</td><td>{row.subtype}</td>
+          <td>{row.count ?? 'לא זמין'}</td>
+          <td>{row.original === null ? 'לא זמין' : money(Math.round(row.original * 100))}</td>
+          <td>{row.ils === null ? 'לא זמין' : money(Math.round(row.ils * 100))}</td>
+          <td>{row.average === null ? 'לא זמין' : money(Math.round(row.average * 100))}</td>
+        </tr>)}</tbody>
+      </table></div>
       <div className="overflow-x-auto"><table className="w-full text-sm">
         <thead><tr><th className="p-2 text-right">אמצעי תשלום</th><th>תשלומים</th><th>ברוטו</th><th>החזרים</th><th>נטו</th></tr></thead>
         <tbody>{summary.byMethod.map(([method, value]) => <tr key={method} className="border-t">

@@ -41,9 +41,15 @@ export function createRivhitJournalCron(env, fetchImpl = fetch) {
         value => Number.isSafeInteger(value) && value >= 0 && value <= 10)) {
         return json({ error: 'journal_worker_invalid_response' }, 502);
       }
+      const overdue = result.overdue;
+      if (!overdue || ![overdue.unbatched, overdue.unverified].every(
+        value => Number.isSafeInteger(value) && value >= 0)) {
+        return json({ error: 'journal_overdue_check_unavailable' }, 502);
+      }
       return json({ staged: result.staged, processed: result.processed,
         reconciled: result.reconciled,
-        blocked: result.blocked }, 200);
+        blocked: result.blocked, overdue },
+      overdue.unbatched || overdue.unverified ? 409 : 200);
     } catch { return json({ error: 'journal_worker_unavailable' }, 502); }
   };
 }

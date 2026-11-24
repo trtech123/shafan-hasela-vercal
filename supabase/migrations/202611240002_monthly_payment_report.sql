@@ -30,9 +30,10 @@ BEGIN
       CASE WHEN p.operation='refund' THEN parent.id ELSE p.id END AS original_payment_id
     FROM public.payment_transactions p
     LEFT JOIN public.payment_transactions parent ON parent.id=p.parent_transaction_id
-    WHERE (p.operation='payment' AND p.status='succeeded' AND p.sale_id IS NOT NULL)
+    WHERE (p.operation='payment' AND p.status='succeeded' AND p.sale_id IS NOT NULL
+        AND p.currency='ILS')
       OR (p.operation='refund' AND p.status='refunded' AND parent.status='succeeded'
-        AND parent.sale_id IS NOT NULL)
+        AND parent.sale_id IS NOT NULL AND p.currency='ILS' AND parent.currency='ILS')
   ), scoped AS (
     SELECT (f.completed_at AT TIME ZONE 'Asia/Jerusalem')::date AS local_day,
       coalesce(nullif(f.saved_site,''),'לא ידוע') AS saved_site,
@@ -40,11 +41,12 @@ BEGIN
       CASE f.provider WHEN 'pelecard' THEN 'אשראי'
         WHEN 'manual_cash' THEN 'מזומן' WHEN 'manual_check' THEN 'צ׳ק'
         ELSE 'אחר' END AS method,
-      f.operation,f.amount,l.id AS issued_document_id
+      f.operation,f.amount,
+      CASE WHEN f.operation='payment' THEN (SELECT count(*)
+        FROM public.payper_document_ledger l
+        WHERE l.payment_id=f.id AND l.state='succeeded') ELSE 0 END AS issued_document_count
     FROM facts f LEFT JOIN public.physical_payment_intents i
       ON i.payment_id=f.original_payment_id
-    LEFT JOIN public.payper_document_ledger l
-      ON l.payment_id=f.id AND l.state='succeeded' AND f.operation='payment'
     WHERE f.completed_at >= (month_start::timestamp AT TIME ZONE 'Asia/Jerusalem')
       AND f.completed_at < (month_end::timestamp AT TIME ZONE 'Asia/Jerusalem')
   )
@@ -53,7 +55,7 @@ BEGIN
     coalesce(sum(s.amount) FILTER (WHERE s.operation='payment'),0),
     count(*) FILTER (WHERE s.operation='refund')::bigint,
     coalesce(sum(s.amount) FILTER (WHERE s.operation='refund'),0),
-    count(s.issued_document_id)::bigint
+    sum(s.issued_document_count)::bigint
   FROM scoped s
   WHERE (p_site IS NULL OR s.saved_site=p_site)
     AND (p_register IS NULL OR s.register_id=p_register)
@@ -90,6 +92,7 @@ BEGIN
     LEFT JOIN public.customer_snapshots cs ON cs.id=b.source_customer_snapshot_id
     LEFT JOIN public.physical_payment_intents i ON i.payment_id=p.id
     WHERE p.operation='payment' AND p.status='succeeded' AND p.sale_id IS NOT NULL
+      AND p.currency='ILS'
       AND coalesce(p.verified_at,p.updated_at) >=
         (month_start::timestamp AT TIME ZONE 'Asia/Jerusalem')
       AND coalesce(p.verified_at,p.updated_at) <

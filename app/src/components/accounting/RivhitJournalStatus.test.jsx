@@ -13,6 +13,7 @@ afterEach(() => { cleanup(); from.mockReset(); invoke.mockReset(); });
 
 function query(data, error = null) {
   return { select: () => ({ order: () => ({ limit: () => Promise.resolve({ data, error }) }),
+    limit: () => Promise.resolve({ data, error }),
     single: () => Promise.resolve({ data, error }) }) };
 }
 const control = { capture_enabled: false, posting_enabled: false, cutover_at: null };
@@ -21,8 +22,9 @@ test('shows Payper and Rivhit references without posting or retry controls', asy
   from.mockImplementation((table) => table === 'rivhit_journal_control' ? query(control)
     : table === 'rivhit_journal_sources'
     ? query([{ id: 'source-1', payper_document_number: '200010', state: 'mapped', payper_document_url: 'https://app.payper.co.il/public/invoice_show/3554599?ak=opaque' }])
-    : query([{ id: 'entry-1', source_id: 'source-1', status: 'verified', provider_year: 2026,
-      provider_month: 11, provider_line: 42, hold_reason: null }]));
+    : table === 'rivhit_journal_entries' ? query([{ id: 'entry-1', source_id: 'source-1', status: 'verified', provider_year: 2026,
+      provider_month: 11, provider_line: 42, hold_reason: null }])
+    : query([]));
   render(<RivhitJournalStatus />);
   expect(await screen.findByText(/200010/)).toBeInTheDocument();
   expect(screen.getByText(/2026\/11\/42/)).toBeInTheDocument();
@@ -41,13 +43,34 @@ test('shows each journal line when an accounting document needs multiple entries
   from.mockImplementation((table) => table === 'rivhit_journal_control' ? query(control)
     : table === 'rivhit_journal_sources'
     ? query([{ id: 'source-1', payper_document_number: '200010', state: 'mapped' }])
-    : query([
+    : table === 'rivhit_journal_entries' ? query([
       { id: 'entry-1', source_id: 'source-1', status: 'verified', provider_year: 2026, provider_month: 11, provider_line: 42 },
       { id: 'entry-2', source_id: 'source-1', status: 'reconciliation_required', hold_reason: 'readback_missing' },
-    ]));
+    ]) : query([]));
   render(<RivhitJournalStatus />);
   expect(await screen.findByText(/2026\/11\/42/)).toBeInTheDocument();
   expect(screen.getByText(/readback_missing/)).toBeInTheDocument();
+});
+
+test('links each Payper document to its immutable daily batch', async () => {
+  from.mockImplementation(table => table === 'rivhit_journal_control' ? query(control)
+    : table === 'rivhit_journal_sources' ? query([
+      { id: 'source-1', payper_document_number: '200011', state: 'mapped' },
+      { id: 'source-2', payper_document_number: '200012', state: 'mapped' },
+    ]) : table === 'rivhit_journal_entries' ? query([
+      { id: 'entry-1', source_id: 'source-1', batch_id: 'batch-1',
+        status: 'verified', provider_year: 2026, provider_month: 11, provider_line: 43 },
+    ]) : table === 'rivhit_daily_journal_batches' ? query([
+      { id: 'batch-1', posting_day: '2026-11-24', site: 'נוף הגליל',
+        provider: 'pelecard', source_count: 2, gross_amount: 354 },
+    ]) : table === 'rivhit_daily_journal_members' ? query([
+      { batch_id: 'batch-1', source_id: 'source-1' },
+      { batch_id: 'batch-1', source_id: 'source-2' },
+    ]) : query([]));
+  render(<RivhitJournalStatus />);
+  expect(await screen.findByText(/200011/)).toBeInTheDocument();
+  expect(screen.getByText(/200012/)).toBeInTheDocument();
+  expect(screen.getAllByText(/2026\/11\/43/)).toHaveLength(2);
 });
 
 test('reads sort codes through the authenticated function without a write control or token', async () => {

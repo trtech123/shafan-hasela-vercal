@@ -3,7 +3,7 @@ import { RivhitClient } from '../_shared/rivhit/client.ts';
 import { createRivhitJournalHandler } from '../_shared/rivhit-journal/handler.ts';
 import { processRivhitJournal } from '../_shared/rivhit-journal/processor.ts';
 import { SupabaseRivhitJournalStore } from '../_shared/rivhit-journal/repository.ts';
-import { runRivhitJournalBatch } from '../_shared/rivhit-journal/batch.ts';
+import { runDailyRivhitBatch } from '../_shared/rivhit-journal/daily.ts';
 import type { JournalMapping } from '../_shared/rivhit-journal/mapper.ts';
 import { reconcileRivhitJournal } from '../_shared/rivhit-journal/reconcile.ts';
 
@@ -44,9 +44,10 @@ const handler = createRivhitJournalHandler({
   reconcile,
   async batch() {
     const store = runtime();
-    return runRivhitJournalBatch({ store, process: id => process(id, store),
+    const result = await runDailyRivhitBatch({ store, process: id => process(id, store),
       reconcile: id => reconcile(id, store),
       mappings: mappings(), ingestionEnabled, postingEnabled });
+    return { ...result, overdue: await store.overdueCounts() };
   },
 });
 

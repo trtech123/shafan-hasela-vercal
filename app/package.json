@@ -17,6 +17,7 @@
     "physical:check": "node scripts/physical-terminal-worker.mjs --check"
   },
   "dependencies": {
+    "fflate": "^0.8.2",
     "@base44/sdk": "^0.8.29",
     "@base44/vite-plugin": "^1.0.18",
     "@hello-pangea/dnd": "^17.0.0",
