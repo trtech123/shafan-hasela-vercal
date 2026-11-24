@@ -171,6 +171,7 @@ export default function DailySalesReport() {
   return (
     <div className="space-y-6" dir="rtl">
       <MonthlyFinancialReport />
+      <div className="space-y-6 print:hidden">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">דוח סיכום יומי — קופה</h1>
@@ -349,6 +350,7 @@ export default function DailySalesReport() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

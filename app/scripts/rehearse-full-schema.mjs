@@ -112,6 +112,15 @@ try {
   await db.query('INSERT INTO auth.users(id,email) VALUES($1,$2)', [cashier, 'cashier@example.invalid']);
   await db.query("UPDATE public.profiles SET role='cashier' WHERE id=$1", [cashier]);
   await db.query("INSERT INTO public.activities(id,name,price_per_person,site) VALUES($1,'Group activity',1000,'עכו')", [activity]);
+  let activitySiteRejected = false;
+  try { await db.query("INSERT INTO public.activities(name,price_per_person) VALUES('Unclassified test',10)"); }
+  catch (error) { activitySiteRejected = /activity_site_required/.test(error.message); }
+  assert.equal(activitySiteRejected, true, 'new activities require an authoritative site');
+  let mismatchedOrderRejected = false;
+  try { await db.query(`INSERT INTO public.orders(activity_id,activity_date,site,num_participants,
+    price_per_person) VALUES($1,current_date,'טבריה',1,1000)`, [activity]); }
+  catch (error) { mismatchedOrderRejected = /order_activity_site_mismatch/.test(error.message); }
+  assert.equal(mismatchedOrderRejected, true, 'new orders cannot change activity revenue site');
   current = 'optional order customer details';
   const customerColumns = (await db.query(`SELECT attname,attnotnull FROM pg_attribute
     WHERE attrelid='public.orders'::regclass AND attname IN ('client_name','client_phone')

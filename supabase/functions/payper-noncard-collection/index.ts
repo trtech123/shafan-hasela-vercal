@@ -36,7 +36,13 @@ Deno.serve(async request => {
     const actorId = identity.user.id;
     const rpc = async (name: string, args: Record<string, unknown>) => {
       const result = await client.rpc(name, args);
-      if (result.error) throw new PaymentHttpError(409, "collection_review_required");
+      if (result.error) {
+        if (name === 'record_payper_noncard_sale_with_site'
+          && result.error.code === '23514'
+          && ['accounting_site_invalid', 'accounting_site_mismatch'].includes(result.error.message))
+          throw new PaymentHttpError(422, result.error.message);
+        throw new PaymentHttpError(409, "collection_review_required");
+      }
       return result.data;
     };
     if (body.action === "capabilities")

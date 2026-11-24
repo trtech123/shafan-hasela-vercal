@@ -217,15 +217,22 @@ export default function CashRegister() {
         discount: appliedDiscount ? { type: appliedDiscount.type, mode: appliedDiscount.mode,
           value: Number(appliedDiscount.value) } : null,
       } });
-      if (error || data?.error || !data?.receiptNumber) throw new Error('check_collection_unresolved');
+      if (error) throw error;
+      if (data?.error || !data?.receiptNumber) throw new Error('check_collection_unresolved');
       setReceiptData({ items: cartItems, total, method, paymentDetails: isCheck ? check : null,
         discount: appliedDiscount ? { type: appliedDiscount.type, amount: discountAmount,
           original_total: subtotal } : null,
         linkedOrder: null, timestamp: new Date(), receiptNumber: data.receiptNumber,
         accounting: data.accounting });
       setScreen('receipt');
-    } catch {
-      toast.error('תוצאת שמירת התשלום אינה ודאית. יש לבדוק את דוח המכירות והנהלת החשבונות לפני ניסיון נוסף.');
+    } catch (failure) {
+      let code = null;
+      try { code = (await failure?.context?.json())?.error?.code; } catch { /* Unknown outcome stays blocked. */ }
+      if (code === 'accounting_site_invalid' || code === 'accounting_site_mismatch') {
+        toast.error('אתר המכירה אינו תואם לאתר הפריט. תקנו את הסל לפני ניסיון תשלום.');
+      } else {
+        toast.error('תוצאת שמירת התשלום אינה ודאית. יש לבדוק את דוח המכירות והנהלת החשבונות לפני ניסיון נוסף.');
+      }
       manualSaleSubmitted.current = false;
     } finally { setManualSaleSaving(false); }
   };
@@ -261,7 +268,8 @@ export default function CashRegister() {
       const safe = ['capability_disabled', 'catalog_item_unavailable', 'cart_invalid',
         'cart_line_invalid', 'cart_amount_invalid', 'discount_invalid', 'pos_payment_forbidden',
         'request_key_conflict', 'pos_payment_in_progress', 'billing_identity_required',
-        'billing_email_required', 'accounting_site_invalid'].includes(reason?.code);
+        'billing_email_required', 'accounting_site_invalid',
+        'accounting_site_mismatch'].includes(reason?.code);
       if (safe) {
         const message = posPaymentErrorMessage(reason.code);
         setPaymentError(message);

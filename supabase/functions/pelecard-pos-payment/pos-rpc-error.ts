@@ -10,6 +10,7 @@ const reservationErrors:Record<string,number>={
   request_key_conflict:409,
   pos_payment_forbidden:403,
   accounting_site_invalid:422,
+  accounting_site_mismatch:422,
 };
 
 export function classifyPosRpcError(error:unknown,operation:string):PaymentHttpError{

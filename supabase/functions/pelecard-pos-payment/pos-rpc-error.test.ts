@@ -11,3 +11,9 @@ test('does not disclose unexpected database messages or customer data',()=>{
   expect(error).toMatchObject({status:502,code:'payment_database_unavailable'});
   expect(JSON.stringify(error)).not.toContain('123456789');
 });
+
+test('rejects a site mismatch before hosted payment initialization',()=>{
+  const error=classifyPosRpcError({code:'23514',message:'accounting_site_mismatch'},
+    'reserve_pos_pelecard_with_site');
+  expect(error).toMatchObject({status:422,code:'accounting_site_mismatch'});
+});
