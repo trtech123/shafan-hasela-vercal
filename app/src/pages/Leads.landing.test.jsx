@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, test, vi } from 'vitest';
 import Leads from './Leads';
@@ -7,6 +7,7 @@ import Leads from './Leads';
 const from = vi.fn();
 vi.mock('@/api/supabaseClient', () => ({ supabase: { from: (...args) => from(...args) } }));
 vi.mock('@/components/quotes/QuoteFormDialog', () => ({ default: () => null }));
+vi.mock('@/components/customers/SignedContactHistory', () => ({ default: ({leadId}) => <section aria-label="פרטי חתימות מקושרות">{leadId}</section> }));
 
 afterEach(() => { cleanup(); from.mockReset(); });
 
@@ -26,4 +27,7 @@ test('shows a landing submission in the existing CRM with source and campaign', 
   expect(screen.getAllByText('יום גיבוש לחברות').length).toBeGreaterThan(0);
   expect(screen.getAllByText(/winter/).length).toBeGreaterThan(0);
   expect(from).toHaveBeenCalledWith('leads');
+  fireEvent.click(screen.getByRole('button',{name:'פרטי חתימות הזמנה — Synthetic Customer'}));
+  expect(screen.getByRole('dialog')).toHaveTextContent('Synthetic Customer');
+  expect(screen.getByLabelText('פרטי חתימות מקושרות')).toHaveTextContent('synthetic-lead');
 });

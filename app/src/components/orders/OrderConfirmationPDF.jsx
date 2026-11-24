@@ -149,6 +149,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
   const [waSending, setWaSending] = useState(false);
   const [waSendStep, setWaSendStep] = useState(null); // null | "מייצר PDF..." | "שולח..."
   const [waResult, setWaResult] = useState(null); // null | { type: "success" | "error", message: string }
+  const [waConfirmation, setWaConfirmation] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState(order?.client_email || "");
   const [emailError, setEmailError] = useState(() => getEmailError(order?.client_email || ""));
   const [isEditingEmail, setIsEditingEmail] = useState(() =>
@@ -243,8 +244,8 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
     }
   };
 
-  // The deployed send-order-doc function requires a saved version and request ID.
-  // Open the versioned panel instead of sending this unsaved browser PDF.
+  // The toolbar only navigates to the versioned signing panel. Sending remains
+  // a separate staff action bound to a saved revision and request ID.
   const handleEmail = async () => {
     const normalizedRecipientEmail = recipientEmail.trim();
     const validationError = getEmailError(normalizedRecipientEmail);
@@ -349,24 +350,24 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
         {/* Toolbar — not captured into the PDF */}
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex gap-2">
-            <Button onClick={handleDownload} disabled={busy || signatureBusy} className="gap-2 bg-primary">
+            <Button onClick={handleDownload} disabled={busy || signatureBusy} variant="outline" className="gap-2">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {busy ? "מפיק PDF..." : "הורד PDF"}
             </Button>
             {!order.archived_at && canSendOrderConfirmation(user?.role) && <Button
               onClick={handleEmail}
               disabled={signatureBusy}
-              variant="outline"
-              title="פתח שליחה של גרסת אישור שמורה"
-              className="gap-2 border-blue-500 text-blue-700 hover:bg-blue-50"
+              variant="default"
+              title="פתח שליחת קישור לטופס חתימה"
+              className="gap-2"
             >
               <Mail className="w-4 h-4" />
-              שליחה במייל — גרסה שמורה
+              מעבר לשליחת קישור חתימה במייל
             </Button>}
-            {!order.archived_at && <Button
+            {!order.archived_at && canSendOrderConfirmation(user?.role) && <details className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-sm"><summary className="cursor-pointer">מסלול PDF ישן — ללא טופס חתימה</summary><Button
               variant="outline"
-              className="gap-2 border-green-700 text-green-800 hover:bg-green-50"
-              onClick={handleWhatsAppAPI}
+              className="mt-2 gap-2"
+              onClick={() => setWaConfirmation(true)}
               disabled={waSending || signatureBusy || !order.client_phone}
               title={!order.client_phone ? "אין מספר טלפון ללקוח" : "שלח PDF דרך Meta WhatsApp Cloud API"}
             >
@@ -376,12 +377,13 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
                 : waResult?.type === "error"
                   ? "נסה לשלוח שוב בוואטסאפ"
                   : "שלח PDF בוואטסאפ (מסלול ישן)")}
-            </Button>}
+            </Button></details>}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
           </Button>
         </div>
+        {waConfirmation&&<div role="alertdialog" aria-label="אישור שליחת PDF ישן" className="mb-3 space-y-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm"><p>פעולה זו שולחת PDF בוואטסאפ ללא קישור לטופס החתימה. להמשיך?</p><Button onClick={()=>{setWaConfirmation(false);handleWhatsAppAPI();}}>אישור שליחת PDF</Button><Button variant="outline" onClick={()=>setWaConfirmation(false)}>חזרה לקישור החתימה</Button></div>}
 
         {waResult && (
           <p

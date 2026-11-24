@@ -7,6 +7,7 @@ import OrderSignaturePanel from './OrderSignaturePanel';
 import {signatureRequest,downloadConfirmation} from '@/lib/orderSignatureClient';
 vi.mock('@/lib/orderSignatureClient',()=>({signatureRequest:vi.fn(),downloadConfirmation:vi.fn(),signatureStateText:{signed:'חתום',expired:'פג תוקף',revoked:'בוטל',superseded:'הוחלף בגרסה חדשה',awaiting_signature:'ממתין לחתימה'}}));
 vi.mock('../customers/CustomerSelector',()=>({default:()=>null}));
+vi.mock('../customers/SignedContactHistory',()=>({default:({orderId})=><section aria-label="פרטי חתימה בהזמנה">{orderId}</section>}));
 vi.mock('@/api/supabaseClient',()=>({supabase:{from:()=>({select:()=>({eq:()=>({order:async()=>({data:[{id:'old',channel:'email',destination:'qa@example.test',state:'accepted',created_at:'2026-10-01'}]})})})})}}));
 beforeEach(()=>{vi.clearAllMocks();HTMLElement.prototype.scrollIntoView=vi.fn();URL.createObjectURL=vi.fn(()=>`blob:protected-${URL.createObjectURL.mock.calls.length}`);URL.revokeObjectURL=vi.fn();signatureRequest.mockResolvedValue({revisions:[{id:'signed',revision_number:1,status:'signed',full_name:'ישראל ישראלי',signed_at:'2026-10-11T10:00:00Z',current_differs:true},{id:'pending',revision_number:2,status:'awaiting_signature',expires_at:'2026-10-18'}],deliveries:[]});});
 afterEach(cleanup);
@@ -27,15 +28,23 @@ it('shows old signed revision, difference warning, protected download and legacy
  expect(signatureRequest).toHaveBeenCalledWith({action:'pdf',revisionId:'signed',signed:true},{staff:true});
 });
 it('binds delivery to revision and never supplies browser PDF data',async()=>{
- render(<OrderSignaturePanel orderId="order" email="qa@example.test"/>);await screen.findByRole('button',{name:'שליחת האישור בוואטסאפ כ־PDF'});
- fireEvent.click(screen.getByRole('button',{name:'שליחת האישור בוואטסאפ כ־PDF'}));
+ render(<OrderSignaturePanel orderId="order" email="qa@example.test"/>);await screen.findByRole('button',{name:'שליחת קישור לטופס החתימה במייל'});
+ expect(screen.getByLabelText('פרטי חתימה בהזמנה').textContent).toBe('order');
+ expect(screen.getByRole('button',{name:'שליחת קישור לטופס החתימה במייל'})).toBeTruthy();
+ fireEvent.click(screen.getByText('מסלול PDF ישן בוואטסאפ — ללא טופס חתימה'));
+ fireEvent.click(screen.getByRole('button',{name:'שליחת PDF בוואטסאפ'}));
+ expect(signatureRequest.mock.calls.some(([body])=>body.action==='deliver')).toBe(false);
+ expect(screen.getByRole('alertdialog').textContent).toContain('ללא קישור לטופס החתימה');
+ fireEvent.click(screen.getByRole('button',{name:'אישור',exact:true}));
  await waitFor(()=>expect(signatureRequest).toHaveBeenCalledWith(expect.objectContaining({action:'deliver',revisionId:'pending',channel:'whatsapp'}),{staff:true}));
  const body=signatureRequest.mock.calls.map(([body])=>body).find(body=>body.action==='deliver');expect(body.pdfBase64).toBeUndefined();expect(body.token).toBeUndefined();
 });
 it('offers explicit recovery after an old dispatched attempt, never an automatic resend',async()=>{
  signatureRequest.mockResolvedValue({revisions:[{id:'pending',revision_number:2,status:'pending',expires_at:'2026-10-18'}],deliveries:[{id:'attempt',revision_id:'pending',channel:'whatsapp',state:'dispatched',created_at:new Date(Date.now()-180000).toISOString()}]});
  render(<OrderSignaturePanel orderId="order" email="qa@example.test"/>);
- const resend=await screen.findByRole('button',{name:'שליחה חוזרת בוואטסאפ כ־PDF'});expect(resend.disabled).toBe(false);
+ await screen.findByRole('button',{name:'שליחת קישור לטופס החתימה במייל'});
+ fireEvent.click(screen.getByText('מסלול PDF ישן בוואטסאפ — ללא טופס חתימה'));
+ const resend=screen.getByRole('button',{name:'שליחה חוזרת של PDF בוואטסאפ'});expect(resend.disabled).toBe(false);
  fireEvent.click(resend);expect(screen.getByRole('alertdialog')).toBeTruthy();
  expect(signatureRequest.mock.calls.some(([body])=>body.action==='deliver')).toBe(false);
  fireEvent.click(screen.getByRole('button',{name:'אישור',exact:true}));

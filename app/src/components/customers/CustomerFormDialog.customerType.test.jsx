@@ -5,7 +5,10 @@ import { afterEach, expect, test, vi } from 'vitest';
 import CustomerFormDialog from './CustomerFormDialog';
 
 const rpc = vi.fn();
-vi.mock('@/api/supabaseClient', () => ({ supabase: { rpc: (...args) => rpc(...args) } }));
+vi.mock('@/api/supabaseClient', () => ({ supabase: {
+  rpc: (...args) => rpc(...args),
+  from: () => ({ select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
+} }));
 
 afterEach(() => { cleanup(); rpc.mockReset(); });
 

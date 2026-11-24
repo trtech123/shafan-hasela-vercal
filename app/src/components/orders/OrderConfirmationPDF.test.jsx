@@ -177,7 +177,7 @@ describe("OrderConfirmationPDF recipient email", () => {
     fireEvent.change(screen.getByLabelText("כתובת אימייל לשליחה"), {
       target: { value: "invalid-email" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "שליחה במייל — גרסה שמורה" }));
+    fireEvent.click(screen.getByRole("button", { name: "מעבר לשליחת קישור חתימה במייל" }));
 
     expect(screen.getByLabelText("כתובת אימייל לשליחה")).toHaveValue("invalid-email");
     expect(await screen.findByRole("alert")).toHaveTextContent("כתובת האימייל אינה תקינה");
@@ -192,25 +192,40 @@ describe("OrderConfirmationPDF recipient email", () => {
       target: { value: "  new@example.com  " },
     });
     fireEvent.click(screen.getByRole("button", { name: "סיום" }));
-    fireEvent.click(screen.getByRole("button", { name: "שליחה במייל — גרסה שמורה" }));
+    fireEvent.click(screen.getByRole("button", { name: "מעבר לשליחת קישור חתימה במייל" }));
     expect(screen.getByLabelText('ניהול חתימות')).toHaveTextContent('new@example.com');
     expect(invokeMock).not.toHaveBeenCalled();
   });
 });
 
 describe("OrderConfirmationPDF WhatsApp Utility template", () => {
+  const chooseLegacyPdf = () => {
+    fireEvent.click(screen.getByText('מסלול PDF ישן — ללא טופס חתימה'));
+    fireEvent.click(screen.getByRole("button", { name: "שלח PDF בוואטסאפ (מסלול ישן)" }));
+  };
   test("exposes one clearly named WhatsApp order action", () => {
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
-
-    expect(screen.getAllByRole("button", { name: /וואטסאפ|WA PDF/i })).toHaveLength(1);
+    expect(screen.getByRole('button',{name:'מעבר לשליחת קישור חתימה במייל'})).toBeInTheDocument();
+    expect(screen.getByText('מסלול PDF ישן — ללא טופס חתימה').closest('details').open).toBe(false);
+    fireEvent.click(screen.getByText('מסלול PDF ישן — ללא טופס חתימה'));
     expect(screen.getByRole("button", { name: "שלח PDF בוואטסאפ (מסלול ישן)" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /וואטסאפ/i })).not.toBeInTheDocument();
+  });
+  test('does not expose customer delivery to an unauthorized instructor',()=>{
+    authState.role='מדריך';
+    render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
+    expect(screen.queryByText('מסלול PDF ישן — ללא טופס חתימה')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'מעבר לשליחת קישור חתימה במייל'})).not.toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   test("the single WhatsApp action sends the approved template contract with the order PDF", async () => {
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "שלח PDF בוואטסאפ (מסלול ישן)" }));
+    chooseLegacyPdf();
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('ללא קישור לטופס החתימה');
+    fireEvent.click(screen.getByRole('button',{name:'אישור שליחת PDF'}));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("send-whatsapp", expect.objectContaining({
@@ -246,7 +261,8 @@ describe("OrderConfirmationPDF WhatsApp Utility template", () => {
     });
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "שלח PDF בוואטסאפ (מסלול ישן)" }));
+    chooseLegacyPdf();
+    fireEvent.click(screen.getByRole('button',{name:'אישור שליחת PDF'}));
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith("תבנית WhatsApp עדיין ממתינה לאישור Meta");
@@ -259,7 +275,8 @@ describe("OrderConfirmationPDF WhatsApp Utility template", () => {
     invokeMock.mockImplementationOnce(() => new Promise(() => {}));
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "שלח PDF בוואטסאפ (מסלול ישן)" }));
+    chooseLegacyPdf();
+    fireEvent.click(screen.getByRole('button',{name:'אישור שליחת PDF'}));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
 
     await act(async () => {

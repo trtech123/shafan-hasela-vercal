@@ -3,8 +3,10 @@ import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Loader2, Wand2, Trash2, Pencil, Check, X, Plus, Copy, FileText, Download } from "lucide-react";
+import { Loader2, Wand2, Trash2, Pencil, Check, X, Plus, Copy, FileText, Download, PenLine } from "lucide-react";
 import QuoteFormDialog from "@/components/quotes/QuoteFormDialog";
+import SignedContactHistory from "@/components/customers/SignedContactHistory";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { escapeLeadCsvCell } from "@/lib/leadCsv";
@@ -114,6 +116,7 @@ export default function Leads() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [quoteLeadData, setQuoteLeadData] = useState(null);
+  const [signatureLead, setSignatureLead] = useState(null);
 
   useEffect(() => { loadLeads(); }, []);
 
@@ -616,6 +619,7 @@ export default function Leads() {
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
                           <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-700" title="צור הצעת מחיר" onClick={() => openQuoteFromLead(lead)}><FileText className="w-3.5 h-3.5" /></Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title="פרטי חתימות הזמנה" aria-label={`פרטי חתימות הזמנה — ${lead.full_name || 'ליד'}`} onClick={() => setSignatureLead(lead)}><PenLine className="w-3.5 h-3.5" /></Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(lead)}><Pencil className="w-3.5 h-3.5" /></Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(lead.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </div>
@@ -717,6 +721,7 @@ export default function Leads() {
                 )}
                 <div className="flex gap-2 pt-1">
                   <Button variant="outline" className="flex-1 gap-2 h-10 text-blue-600" onClick={() => openQuoteFromLead(lead)}><FileText className="w-4 h-4" /> הצעה</Button>
+                  <Button variant="outline" className="flex-1 gap-2 h-10" onClick={() => setSignatureLead(lead)}>חתימות</Button>
                   <Button variant="outline" className="flex-1 gap-2 h-10" onClick={() => startEdit(lead)}><Pencil className="w-4 h-4" /> ערוך</Button>
                   <Button variant="outline" className="gap-2 h-10 text-destructive" onClick={() => handleDelete(lead.id)}><Trash2 className="w-4 h-4" /></Button>
                 </div>
@@ -735,6 +740,12 @@ export default function Leads() {
           onSaved={() => setQuoteLeadData(null)}
         />
       )}
+      <Dialog open={Boolean(signatureLead)} onOpenChange={open => { if (!open) setSignatureLead(null); }}>
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogTitle>פרטי חתימות הזמנה — {signatureLead?.full_name || 'ליד'}</DialogTitle>
+          {signatureLead&&<SignedContactHistory key={signatureLead.id} leadId={signatureLead.id}/>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
