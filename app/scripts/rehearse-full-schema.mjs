@@ -111,7 +111,7 @@ try {
   const customer = '00000000-0000-4000-8000-000000000006';
   await db.query('INSERT INTO auth.users(id,email) VALUES($1,$2)', [cashier, 'cashier@example.invalid']);
   await db.query("UPDATE public.profiles SET role='cashier' WHERE id=$1", [cashier]);
-  await db.query("INSERT INTO public.activities(id,name,price_per_person) VALUES($1,'Group activity',1000)", [activity]);
+  await db.query("INSERT INTO public.activities(id,name,price_per_person,site) VALUES($1,'Group activity',1000,'עכו')", [activity]);
   current = 'optional order customer details';
   const customerColumns = (await db.query(`SELECT attname,attnotnull FROM pg_attribute
     WHERE attrelid='public.orders'::regclass AND attname IN ('client_name','client_phone')
@@ -122,7 +122,7 @@ try {
   ]);
   const guestOrder = '00000000-0000-4000-8000-000000000100';
   await db.query(`INSERT INTO public.orders(id,activity_id,activity_date,num_participants,
-    price_per_person,total_price) VALUES($1,$2,current_date,1,1000,1000)`, [guestOrder, activity]);
+    price_per_person,total_price,site) VALUES($1,$2,current_date,1,1000,1000,'עכו')`, [guestOrder, activity]);
   assert.deepEqual((await db.query(`SELECT client_name,client_phone,client_email,customer_id
     FROM public.orders WHERE id=$1`, [guestOrder])).rows[0],
     { client_name: null, client_phone: null, client_email: null, customer_id: null });
@@ -133,9 +133,9 @@ try {
     { client_name: 'Guest Name', client_phone: '0500000000', client_email: null, customer_id: null });
   current = 'order collection on full schema';
   await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
-    activity_id,activity_date,num_participants,price_per_person,payment_status)
+    activity_id,activity_date,num_participants,price_per_person,payment_status,site)
     VALUES($1,'Test Group','0500000000','billing@example.invalid','Test Group',
-      $2,current_date,1,1000,'לא שולם')`, [order, activity]);
+      $2,current_date,1,1000,'לא שולם','עכו')`, [order, activity]);
   await db.query("SELECT set_config('app.test_uid',$1,false)", [cashier]);
   await db.query(`INSERT INTO public.customers(id,customer_kind,customer_type,display_name,contact_name,phone,email,
     organization_name,vat_applicable,billing_name,billing_company_id,billing_accounting_email)
@@ -220,9 +220,9 @@ try {
   const digitalOrder = '00000000-0000-4000-8000-000000000010';
   await db.query('UPDATE public.payper_dispatch_control SET activation_cutoff_utc=statement_timestamp() WHERE singleton');
   await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
-    activity_id,activity_date,num_participants,price_per_person,payment_status)
+    activity_id,activity_date,num_participants,price_per_person,payment_status,site)
     VALUES($1,'Test Group','0500000000','billing@example.invalid','Test Group',
-      $2,current_date,1,1000,'לא שולם')`, [digitalOrder, activity]);
+      $2,current_date,1,1000,'לא שולם','עכו')`, [digitalOrder, activity]);
   await db.query('SELECT public.link_order_customer($1,$2,0)', [digitalOrder, customer]);
   const linkedDigitalBilling = (await db.query(
     'SELECT public.get_payper_billing_defaults($1,$2) AS value',
@@ -379,9 +379,9 @@ try {
   assert.equal(rejected, true, 'second full-balance collection must fail');
   const unknownVatOrder = '00000000-0000-4000-8000-000000000009';
   await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
-    activity_id,activity_date,num_participants,price_per_person,payment_status)
+    activity_id,activity_date,num_participants,price_per_person,payment_status,site)
     VALUES($1,'Legacy Group','0500000000','billing@example.invalid','Test Group',
-      $2,current_date,1,1000,'לא שולם')`, [unknownVatOrder, activity]);
+      $2,current_date,1,1000,'לא שולם','עכו')`, [unknownVatOrder, activity]);
   const vatIssues = (await db.query('SELECT public.digital_order_payment_issues($1,$2,$3) AS value',
     [unknownVatOrder, cashier, JSON.stringify(billing)])).rows[0].value;
   assert.ok(vatIssues.includes('vat_required'));
@@ -403,9 +403,9 @@ try {
     const physicalOrder = '00000000-0000-4000-8000-000000000005';
     const priorPayment = '00000000-0000-4000-8000-000000000007';
     await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
-      activity_id,activity_date,num_participants,price_per_person,payment_status)
+      activity_id,activity_date,num_participants,price_per_person,payment_status,site)
       VALUES($1,'Group Contact','0500000000','billing@example.invalid','Test Group',
-        $2,current_date,1,1000,'לא שולם')`, [physicalOrder, activity]);
+        $2,current_date,1,1000,'לא שולם','עכו')`, [physicalOrder, activity]);
     await db.query('SELECT public.link_order_customer($1,$2,0)', [physicalOrder, customer]);
     await db.query(`INSERT INTO public.payment_transactions(id,provider,operation,order_id,amount,currency,
       status,idempotency_key,checkout_snapshot,created_by)
@@ -455,9 +455,9 @@ try {
       current = 'hosted EMV exact payment and document association on combined schema';
       const hostedOrder = '00000000-0000-4000-8000-000000000012';
       await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
-        activity_id,activity_date,num_participants,price_per_person,payment_status)
+        activity_id,activity_date,num_participants,price_per_person,payment_status,site)
         VALUES($1,'Synthetic Hosted','0500000000','billing@example.invalid','Test Group',
-          $2,current_date,1,1000,'לא שולם')`, [hostedOrder, activity]);
+          $2,current_date,1,1000,'לא שולם','עכו')`, [hostedOrder, activity]);
       await db.query('SELECT public.link_order_customer($1,$2,0)', [hostedOrder, customer]);
       await db.query("UPDATE public.physical_terminal_devices SET enabled=false,cash_register_code=NULL WHERE register_number='003'");
       await db.query("UPDATE public.physical_terminal_devices SET enabled=true,cash_register_code='GENERAL' WHERE register_number='004'");
@@ -488,9 +488,9 @@ try {
         current = 'direct J4 first response and invoice association on combined schema';
         const directOrder = '00000000-0000-4000-8000-000000000016';
         await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,organization,
-          activity_id,activity_date,num_participants,price_per_person,payment_status)
+          activity_id,activity_date,num_participants,price_per_person,payment_status,site)
           VALUES($1,'Synthetic Direct','0500000000','billing@example.invalid','Test Group',
-            $2,current_date,1,15,'לא שולם')`, [directOrder, activity]);
+            $2,current_date,1,15,'לא שולם','עכו')`, [directOrder, activity]);
         await db.query('SELECT public.link_order_customer($1,$2,0)', [directOrder, customer]);
         const direct = (await db.query(`SELECT public.reserve_physical_order_payment(
           $1,gen_random_uuid(),'GENERAL',$2,1500) AS value`, [cashier, directOrder])).rows[0].value;
@@ -556,8 +556,8 @@ try {
   current = 'read-only order financial badges on full schema';
   const badgeOrder = '00000000-0000-4000-8000-000000000091';
   await db.query(`INSERT INTO public.orders(id,client_name,client_phone,client_email,
-    activity_id,activity_date,num_participants,price_per_person,payment_status)
-    VALUES($1,'Badge fixture','0500000000','badge@example.invalid',$2,current_date,1,1000,'לא שולם')`,
+    activity_id,activity_date,num_participants,price_per_person,payment_status,site)
+    VALUES($1,'Badge fixture','0500000000','badge@example.invalid',$2,current_date,1,1000,'לא שולם','עכו')`,
   [badgeOrder, activity]);
   const badge = async () => {
     await db.query("SELECT set_config('app.test_role','authenticated',false)");
@@ -676,6 +676,26 @@ try {
     assert.deepEqual(privileges, { user_can_reserve: false, anon_can_stage: false },
       'only the service role may use journal transitions');
   }
+  current = 'monthly financial report authorization and completed-payment totals';
+  await db.query("SELECT set_config('app.test_uid',$1,false)", [cashier]);
+  await db.query("UPDATE public.profiles SET role='cashier' WHERE id=$1", [cashier]);
+  let reportForbidden = false;
+  try {
+    await db.query('SELECT * FROM public.monthly_payment_report($1,$2)',
+      [new Date().getFullYear(), new Date().getMonth() + 1]);
+  } catch (error) { reportForbidden = /admin_required/.test(error.message); }
+  assert.equal(reportForbidden, true, 'cashier must not read financial monthly report');
+  await db.query("UPDATE public.profiles SET role='admin' WHERE id=$1", [cashier]);
+  const reportRows = (await db.query('SELECT * FROM public.monthly_payment_report($1,$2)',
+    [new Date().getFullYear(), new Date().getMonth() + 1])).rows;
+  assert.ok(reportRows.some(row => Number(row.completed_count) > 0),
+    'report must include provider-verified synthetic payments');
+  assert.ok(reportRows.every(row => Number(row.refund_count) >= 0));
+  assert.equal((await db.query('SELECT public.rivhit_journal_posting_window_open() AS open'))
+    .rows[0].open, false, 'journal dispatch must remain disabled');
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM public.rivhit_journal_approved_mappings WHERE enabled'))
+    .rows[0].count, 0, 'no accounting mapping may become active during preparation');
+
   const installed = (await db.query(`SELECT count(*)::int AS tables FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relkind='r'`)).rows[0].tables;
   const functions = (await db.query(`SELECT count(*)::int AS functions FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace

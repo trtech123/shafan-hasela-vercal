@@ -155,6 +155,7 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
       // Auto-fill price_per_person from activity default
       if (field === "activity_id" && value) {
         const act = activities.find(a => a.id === value);
+        if (act?.site) updated.site = act.site;
         if (act?.price_per_person) {
           updated.price_per_person = act.price_per_person;
           const num = Number(updated.num_participants);
@@ -208,6 +209,14 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
     // location; an existing site must not be silently cleared during editing.
     if (!isTaskMode && !form.site && (!order || order.site)) {
       toast.error('בחרו אתר להזמנה לפני השמירה');
+      return;
+    }
+    const sourceActivity = activities.find(a => a.id === form.activity_id);
+    const historicalSiteUnchanged = order && form.activity_id === (order.activity_id || '')
+      && form.site === (order.site || '');
+    if (!isTaskMode && !historicalSiteUnchanged && form.activity_id
+      && (!sourceActivity?.site || form.site !== sourceActivity.site)) {
+      toast.error('יש להגדיר אתר בפעילות ולהשתמש באותו אתר בהזמנה');
       return;
     }
     setSaving(true);
