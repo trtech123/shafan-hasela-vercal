@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { X, ImagePlus, Loader2 } from "lucide-react";
+import { ACCOUNTING_SITES } from '@/payments/accountingSite';
 
 const STORAGE_BUCKET = "activity-images";
 // Must match the `file_size_limit` set on the bucket in supabase/migrations/004_storage.sql.
@@ -29,7 +30,7 @@ function formatMB(bytes) {
 const categories = ["הפעלת פארק", "יום גיבוש", "חוג טיפוס", "סדנת שטח", "מזון"];
 
 const emptyForm = {
-  name: "", category: "", description: "", duration_hours: "",
+  name: "", category: "", site: "", description: "", duration_hours: "",
   max_participants: "", price_per_person: "", image_url: "", images: [], status: "פעיל",
 };
 
@@ -44,6 +45,7 @@ export default function ActivityFormDialog({ open, onClose, activity, onSaved })
       setForm({
         name: activity.name || "",
         category: activity.category || "",
+        site: activity.site || "",
         description: activity.description || "",
         duration_hours: activity.duration_hours || "",
         max_participants: activity.max_participants || "",
@@ -137,6 +139,10 @@ export default function ActivityFormDialog({ open, onClose, activity, onSaved })
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!ACCOUNTING_SITES.includes(form.site)) {
+      toast.error('יש לבחור אתר קבוע לפעילות');
+      return;
+    }
     setSaving(true);
     const data = {
       ...form,
@@ -183,6 +189,15 @@ export default function ActivityFormDialog({ open, onClose, activity, onSaved })
                 {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label htmlFor="activity-site">אתר הפעילות *</Label>
+            <select id="activity-site" value={form.site}
+              onChange={e => setForm(p => ({ ...p, site: e.target.value }))}
+              className="flex h-10 w-full rounded-md border bg-background px-3">
+              <option value="">בחרו אתר</option>
+              {ACCOUNTING_SITES.map(site => <option key={site} value={site}>{site}</option>)}
+            </select>
           </div>
           <div>
             <Label>תיאור</Label>

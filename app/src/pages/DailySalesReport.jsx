@@ -5,6 +5,7 @@ import moment from "moment";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { TrendingUp, ShoppingBag, CreditCard, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import MonthlyFinancialReport from '@/components/reports/MonthlyFinancialReport';
 
 const METHOD_COLORS = {
   "מזומן":      "bg-emerald-100 text-emerald-800",
@@ -169,6 +170,7 @@ export default function DailySalesReport() {
 
   return (
     <div className="space-y-6" dir="rtl">
+      <MonthlyFinancialReport />
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">דוח סיכום יומי — קופה</h1>

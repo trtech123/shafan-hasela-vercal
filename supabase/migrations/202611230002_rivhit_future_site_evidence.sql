@@ -11,6 +11,26 @@ DO $$ BEGIN
   THEN RAISE EXCEPTION 'unexpected_site_evidence_baseline' USING ERRCODE='23514'; END IF;
 END $$;
 
+-- Keep every existing snapshot validation, including the physical order
+-- compatibility shape. Only a known site may be added as one new top-level
+-- field; all other fields are validated by the original safe predicates.
+ALTER TABLE public.payment_transactions
+  DROP CONSTRAINT payment_transactions_checkout_snapshot_check;
+ALTER TABLE public.payment_transactions
+  ADD CONSTRAINT payment_transactions_checkout_snapshot_check CHECK (
+    pg_catalog.jsonb_typeof(checkout_snapshot)='object'
+    AND (NOT checkout_snapshot ? 'site' OR
+      (pg_catalog.jsonb_typeof(checkout_snapshot->'site')='string'
+       AND checkout_snapshot->>'site' IN
+         ('עכו','טבריה','נוף הגליל','שטח','פודטראק','קפה אקסטרים')))
+    AND (public.payment_checkout_snapshot_is_safe(checkout_snapshot-'site') OR
+      (provider='pelecard' AND operation='payment' AND order_id IS NOT NULL
+       AND idempotency_key LIKE 'physical-%' AND checkout_snapshot ? 'source_order'
+       AND public.payment_checkout_snapshot_is_safe(checkout_snapshot-'site'-'source_order')
+       AND public.physical_order_source_is_safe(checkout_snapshot->'source_order')
+       AND checkout_snapshot #>> '{source_order,orderId}'=order_id::text
+       AND (checkout_snapshot #>> '{source_order,collected}')::numeric=amount)));
+
 -- Quotations can be converted directly by RPC, outside the order form. A
 -- quotation with no site needs an explicit correction before conversion.
 CREATE FUNCTION public.require_site_for_quoted_order() RETURNS trigger
