@@ -27,13 +27,15 @@ function mappings(): JournalMapping[] {
 async function process(entryId: string, store = runtime()) {
   const token = Deno.env.get('RIVHIT_API_TOKEN');
   if (!token) throw new Error('journal_configuration_missing');
-  return processRivhitJournal(entryId, { store, provider: new RivhitClient({ apiToken: token }) });
+  return processRivhitJournal(entryId, { store, provider: new RivhitClient({
+    apiToken: token, timeoutMs: 12_000,
+  }) });
 }
 async function reconcile(entryId: string, store = runtime()) {
   const token = Deno.env.get('RIVHIT_API_TOKEN');
   if (!token) throw new Error('journal_configuration_missing');
   return reconcileRivhitJournal(entryId, {
-    store, provider: new RivhitClient({ apiToken: token }),
+    store, provider: new RivhitClient({ apiToken: token, timeoutMs: 12_000 }),
   });
 }
 const handler = createRivhitJournalHandler({

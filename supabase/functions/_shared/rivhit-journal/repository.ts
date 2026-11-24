@@ -49,6 +49,42 @@ export class SupabaseRivhitJournalStore {
     return data;
   }
 
+  async listDailyEligible(limit: number, postingDay: string): Promise<JournalSourceRow[]> {
+    const { data, error } = await this.client.rpc('rivhit_daily_eligible_sources', {
+      p_day: postingDay, p_limit: limit,
+    });
+    if (error) throw new Error('journal_source_list_failed');
+    return (data ?? []) as JournalSourceRow[];
+  }
+
+  async deferMany(ids: string[], reason: string): Promise<number> {
+    const { data, error } = await this.client.rpc('defer_rivhit_daily_sources', {
+      p_source_ids: ids, p_reason: reason,
+    });
+    if (error || !Number.isSafeInteger(data) || data < 0 || data > ids.length)
+      throw new Error('journal_defer_failed');
+    return data;
+  }
+
+  async batchForSources(ids: string[]): Promise<string | null> {
+    const { data, error } = await this.client.rpc('rivhit_daily_batch_for_sources', {
+      p_source_ids: ids,
+    });
+    if (error || (data !== null && typeof data !== 'string'))
+      throw new Error('journal_batch_lookup_failed');
+    return data;
+  }
+
+  async dailyGroupExists(postingDay: string, mapping: JournalMapping,
+    mappingVersion: string): Promise<boolean> {
+    const { data, error } = await this.client.from('rivhit_daily_journal_batches')
+      .select('id').eq('posting_day', postingDay)
+      .eq('provider', mapping.provider).eq('site', mapping.site)
+      .eq('mapping_version', mappingVersion).limit(1);
+    if (error) throw new Error('journal_group_lookup_failed');
+    return (data ?? []).length > 0;
+  }
+
   async listUnmapped(limit: number): Promise<JournalSourceRow[]> {
     const { data, error } = await this.client.from('rivhit_journal_sources')
       .select('id,payper_document_number,source_facts,captured_at')

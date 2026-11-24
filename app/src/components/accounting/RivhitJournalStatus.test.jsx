@@ -94,3 +94,15 @@ test('reads a date-scoped report through the authenticated function', async () =
     body: { operation: 'journal_report', date: '19112026' },
   });
 });
+
+test('shows an explicit reason for a deferred source without a retry control', async () => {
+  from.mockImplementation(table => table === 'rivhit_journal_control' ? query(control)
+    : table === 'rivhit_journal_sources' ? query([{
+      id: 'source-1', payper_document_number: '200099', state: 'mapping_required',
+      defer_reason: 'site_mapping_unapproved', deferred_at: '2026-11-25T10:00:00Z',
+    }]) : query([]));
+  render(<RivhitJournalStatus />);
+  expect(await screen.findByText(/200099/)).toBeInTheDocument();
+  expect(screen.getByText(/מיפוי האתר או אמצעי התשלום טרם אושר/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /שדר|נסה שוב/ })).not.toBeInTheDocument();
+});

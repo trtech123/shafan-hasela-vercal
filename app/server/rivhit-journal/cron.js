@@ -38,7 +38,9 @@ export function createRivhitJournalCron(env, fetchImpl = fetch) {
       if (!response.ok) return json({ error: 'journal_worker_unavailable' }, 502);
       const result = await response.json();
       if (![result?.staged, result?.processed, result?.reconciled, result?.blocked].every(
-        value => Number.isSafeInteger(value) && value >= 0 && value <= 10)) {
+        value => Number.isSafeInteger(value) && value >= 0)
+        || result.staged > 20 || result.processed > 1
+        || result.reconciled > 1 || result.blocked > 502) {
         return json({ error: 'journal_worker_invalid_response' }, 502);
       }
       const overdue = result.overdue;
@@ -49,7 +51,7 @@ export function createRivhitJournalCron(env, fetchImpl = fetch) {
       return json({ staged: result.staged, processed: result.processed,
         reconciled: result.reconciled,
         blocked: result.blocked, overdue },
-      overdue.unbatched || overdue.unverified ? 409 : 200);
+      overdue.unbatched || overdue.unverified || result.blocked ? 409 : 200);
     } catch { return json({ error: 'journal_worker_unavailable' }, 502); }
   };
 }

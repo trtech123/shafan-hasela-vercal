@@ -7,13 +7,14 @@ export interface JournalSourceRow {
   source_facts: {
     provider?: string; amount?: number; currency?: string; receiptNumber?: string;
     site?: string | null; vatApplicable?: boolean | null;
+    activitySiteResolved?: boolean;
   };
 }
 
 export interface JournalMapping {
   version: string;
   provider: 'pelecard' | 'manual_cash' | 'manual_check';
-  site: 'עכו' | 'טבריה' | 'נוף הגליל' | 'שטח' | 'פודטראק' | 'קפה אקסטרים' | 'ויה פרטה';
+  site: 'עכו' | 'טבריה' | 'נוף הגליל' | 'שטח' | 'פודטראק' | 'קפה אקסטרים';
   sortCode: number;
   debitAccount: number;
   creditAccount: number;
@@ -54,7 +55,7 @@ export async function mapJournalSource(source: JournalSourceRow, mapping: Journa
       value => Number.isSafeInteger(value) && value > 0)
     || !Number.isSafeInteger(mapping.vatRateBasisPoints)
     || mapping.vatRateBasisPoints < 0 || mapping.vatRateBasisPoints > 10_000
-    || !['עכו', 'טבריה', 'נוף הגליל', 'שטח', 'פודטראק', 'קפה אקסטרים', 'ויה פרטה'].includes(mapping.site)
+    || !['עכו', 'טבריה', 'נוף הגליל', 'שטח', 'פודטראק', 'קפה אקסטרים'].includes(mapping.site)
     || (mapping.projectId !== undefined
       && (!Number.isSafeInteger(mapping.projectId) || mapping.projectId < 1))
     || mapping.accountingDate !== 'capture_israel_date') {

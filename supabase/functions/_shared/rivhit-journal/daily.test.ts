@@ -44,7 +44,8 @@ describe('daily aggregated Rivhit posting', () => {
 
   test('does not stage or post outside the Israel-time closing window', async () => {
     const store = { closingWindowOpen: vi.fn().mockResolvedValue(null),
-      listUnmapped: vi.fn(), stageDaily: vi.fn(), defer: vi.fn(),
+      listDailyEligible: vi.fn(), stageDaily: vi.fn(), deferMany: vi.fn(),
+      batchForSources: vi.fn(), dailyGroupExists: vi.fn(),
       listReady: vi.fn(), listPending: vi.fn().mockResolvedValue([]) };
     const process = vi.fn();
     const result = await runDailyRivhitBatch({ store, process,
@@ -60,8 +61,9 @@ describe('daily aggregated Rivhit posting', () => {
       ...source(3, 118).source_facts, provider: 'manual_cash' } };
     const cashMapping = { ...mapping, provider: 'manual_cash', debitAccount: 301 };
     const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
-      listUnmapped: vi.fn().mockResolvedValue([source(1, 118), source(2, 236), cash]),
-      stageDaily: vi.fn().mockResolvedValue('entry'), defer: vi.fn(),
+      listDailyEligible: vi.fn().mockResolvedValue([source(1, 118), source(2, 236), cash]),
+      stageDaily: vi.fn().mockResolvedValue('entry'), deferMany: vi.fn(),
+      batchForSources: vi.fn(), dailyGroupExists: vi.fn(),
       listReady: vi.fn().mockResolvedValue(['entry-1']),
       listPending: vi.fn().mockResolvedValue([]) };
     const process = vi.fn().mockResolvedValue('uncertain');
@@ -69,23 +71,42 @@ describe('daily aggregated Rivhit posting', () => {
       reconcile: vi.fn(), mappings: [mapping, cashMapping],
       ingestionEnabled: true, postingEnabled: true, uuid: () => batchId });
     expect(result).toEqual({ staged: 2, processed: 1, reconciled: 0, blocked: 0 });
+    expect(store.listDailyEligible).toHaveBeenCalledWith(501, '2026-11-24');
     expect(store.stageDaily.mock.calls[0][0]).toHaveLength(2);
     expect(store.stageDaily.mock.calls[1][0]).toHaveLength(1);
     expect(process).toHaveBeenCalledTimes(1);
+    expect(store.listReady).toHaveBeenCalledWith(1);
+    expect(store.listPending).not.toHaveBeenCalled();
+  });
+
+  test('uses a later cron run for readback without another provider submission', async () => {
+    const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
+      listDailyEligible: vi.fn().mockResolvedValue([]), stageDaily: vi.fn(),
+      deferMany: vi.fn(), batchForSources: vi.fn(), dailyGroupExists: vi.fn(),
+      listReady: vi.fn().mockResolvedValue([]),
+      listPending: vi.fn().mockResolvedValue(['held-entry']) };
+    const process = vi.fn();
+    const reconcile = vi.fn().mockResolvedValue('no_match');
+    const result = await runDailyRivhitBatch({ store, process, reconcile,
+      mappings: [mapping], ingestionEnabled: true, postingEnabled: true });
+    expect(result).toEqual({ staged: 0, processed: 0, reconciled: 1, blocked: 0 });
+    expect(store.listPending).toHaveBeenCalledWith(1);
+    expect(process).not.toHaveBeenCalled();
   });
 
   test('an unresolved site is deferred and never assigned to a convenient account', async () => {
     const unknown = { ...source(1, 118), source_facts: {
       ...source(1, 118).source_facts, site: 'עכו' } };
     const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
-      listUnmapped: vi.fn().mockResolvedValue([unknown]),
-      stageDaily: vi.fn(), defer: vi.fn().mockResolvedValue(undefined),
+      listDailyEligible: vi.fn().mockResolvedValue([unknown]),
+      stageDaily: vi.fn(), deferMany: vi.fn().mockResolvedValue(1),
+      batchForSources: vi.fn(), dailyGroupExists: vi.fn(),
       listReady: vi.fn().mockResolvedValue([]), listPending: vi.fn().mockResolvedValue([]) };
     const result = await runDailyRivhitBatch({ store, process: vi.fn(),
       reconcile: vi.fn(), mappings: [mapping],
       ingestionEnabled: true, postingEnabled: false });
     expect(result.blocked).toBe(1);
-    expect(store.defer).toHaveBeenCalledWith(unknown.id);
+    expect(store.deferMany).toHaveBeenCalledWith([unknown.id], 'site_mapping_unapproved');
     expect(store.stageDaily).not.toHaveBeenCalled();
   });
 
@@ -93,16 +114,81 @@ describe('daily aggregated Rivhit posting', () => {
     const invalid = { ...source(1, 118), source_facts: {
       ...source(1, 118).source_facts, vatApplicable: null } };
     const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
-      listUnmapped: vi.fn().mockResolvedValue([invalid, source(2, 236)]),
+      listDailyEligible: vi.fn().mockResolvedValue([invalid, source(2, 236)]),
       stageDaily: vi.fn().mockResolvedValue('entry-1'),
-      defer: vi.fn().mockResolvedValue(undefined),
+      deferMany: vi.fn().mockResolvedValue(1),
+      batchForSources: vi.fn(), dailyGroupExists: vi.fn(),
       listReady: vi.fn().mockResolvedValue([]),
       listPending: vi.fn().mockResolvedValue([]) };
     const result = await runDailyRivhitBatch({ store, process: vi.fn(),
       reconcile: vi.fn(), mappings: [mapping],
       ingestionEnabled: true, postingEnabled: false, uuid: () => batchId });
     expect(result).toEqual({ staged: 1, processed: 0, reconciled: 0, blocked: 1 });
-    expect(store.defer).toHaveBeenCalledWith(invalid.id);
+    expect(store.deferMany).toHaveBeenCalledWith([invalid.id], 'source_evidence_incomplete');
     expect(store.stageDaily.mock.calls[0][0]).toEqual([source(2, 236)]);
+  });
+
+  test('an unclassified historical activity cannot delay a classified source', async () => {
+    const unresolved = { ...source(1, 118), source_facts: {
+      ...source(1, 118).source_facts, activitySiteResolved: false } };
+    const resolved = { ...source(2, 118), source_facts: {
+      ...source(2, 118).source_facts, activitySiteResolved: true } };
+    const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
+      listDailyEligible: vi.fn().mockResolvedValue([unresolved, resolved]),
+      stageDaily: vi.fn().mockResolvedValue('entry-1'),
+      deferMany: vi.fn().mockResolvedValue(1), batchForSources: vi.fn(),
+      dailyGroupExists: vi.fn(), listReady: vi.fn().mockResolvedValue([]),
+      listPending: vi.fn().mockResolvedValue([]) };
+    const result = await runDailyRivhitBatch({ store, process: vi.fn(),
+      reconcile: vi.fn(), mappings: [mapping], ingestionEnabled: true,
+      postingEnabled: false, uuid: () => batchId });
+    expect(result).toEqual({ staged: 1, processed: 0, reconciled: 0, blocked: 1 });
+    expect(store.deferMany).toHaveBeenCalledWith([unresolved.id], 'activity_site_unresolved');
+    expect(store.stageDaily.mock.calls[0][0]).toEqual([resolved]);
+  });
+
+  test('resolves a lost staging response from committed source membership', async () => {
+    const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
+      listDailyEligible: vi.fn().mockResolvedValue([source(1, 118)]),
+      stageDaily: vi.fn().mockRejectedValue(new Error('connection_lost')),
+      deferMany: vi.fn(), batchForSources: vi.fn().mockResolvedValue(batchId),
+      dailyGroupExists: vi.fn(), listReady: vi.fn().mockResolvedValue([]),
+      listPending: vi.fn().mockResolvedValue([]) };
+    const result = await runDailyRivhitBatch({ store, process: vi.fn(),
+      reconcile: vi.fn(), mappings: [mapping], ingestionEnabled: true,
+      postingEnabled: false });
+    expect(result).toEqual({ staged: 1, processed: 0, reconciled: 0, blocked: 0 });
+    expect(store.deferMany).not.toHaveBeenCalled();
+  });
+
+  test('records why documents arriving after a group closes await the next day', async () => {
+    const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
+      listDailyEligible: vi.fn().mockResolvedValue([source(1, 118)]),
+      stageDaily: vi.fn().mockRejectedValue(new Error('daily_group_unique')),
+      deferMany: vi.fn().mockResolvedValue(1),
+      batchForSources: vi.fn().mockResolvedValue(null),
+      dailyGroupExists: vi.fn().mockResolvedValue(true),
+      listReady: vi.fn().mockResolvedValue([]), listPending: vi.fn().mockResolvedValue([]) };
+    const result = await runDailyRivhitBatch({ store, process: vi.fn(),
+      reconcile: vi.fn(), mappings: [mapping], ingestionEnabled: true,
+      postingEnabled: false });
+    expect(result.blocked).toBe(1);
+    expect(store.deferMany).toHaveBeenCalledWith([source(1, 118).id], 'daily_group_closed');
+  });
+
+  test('reports an oversized daily group rather than posting only its first sources', async () => {
+    const many = Array.from({ length: 501 }, (_, index) => source(index + 1, 1));
+    const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
+      listDailyEligible: vi.fn().mockResolvedValue(many),
+      stageDaily: vi.fn(), deferMany: vi.fn().mockResolvedValue(501),
+      batchForSources: vi.fn(), dailyGroupExists: vi.fn(),
+      listReady: vi.fn().mockResolvedValue([]), listPending: vi.fn().mockResolvedValue([]) };
+    const result = await runDailyRivhitBatch({ store, process: vi.fn(),
+      reconcile: vi.fn(), mappings: [mapping], ingestionEnabled: true,
+      postingEnabled: false });
+    expect(result.blocked).toBe(501);
+    expect(store.deferMany).toHaveBeenCalledWith(many.map(item => item.id),
+      'capacity_exceeded');
+    expect(store.stageDaily).not.toHaveBeenCalled();
   });
 });
