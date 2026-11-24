@@ -41,8 +41,11 @@ export async function mapDailyJournalBatch(sources: JournalSourceRow[],
 
 interface DailyStore {
   closingWindowOpen(): Promise<string | null>;
-  listUnmapped(limit: number): Promise<JournalSourceRow[]>;
-  defer(sourceId: string): Promise<void>;
+  listDailyEligible(limit: number, postingDay: string): Promise<JournalSourceRow[]>;
+  deferMany(sourceIds: string[], reason: string): Promise<number>;
+  batchForSources(sourceIds: string[]): Promise<string | null>;
+  dailyGroupExists(postingDay: string, mapping: JournalMapping,
+    mappingVersion: string): Promise<boolean>;
   stageDaily(sources: JournalSourceRow[], mapping: JournalMapping,
     batchId: string, postingDay: string): Promise<string>;
   listReady(limit: number): Promise<string[]>;
@@ -64,48 +67,70 @@ export async function runDailyRivhitBatch(dependencies: {
   const postingDay = dependencies.ingestionEnabled || dependencies.postingEnabled
     ? await dependencies.store.closingWindowOpen() : null;
   if (dependencies.ingestionEnabled && postingDay) {
-    const sources = await dependencies.store.listUnmapped(500);
-    const groups = new Map<string, { mapping: JournalMapping; sources: JournalSourceRow[] }>();
+    const sources = await dependencies.store.listDailyEligible(501, postingDay);
+    const groups = new Map<string, { mapping: JournalMapping; mappingVersion: string;
+      sources: JournalSourceRow[] }>();
+    const rejected = new Map<string, string[]>();
+    const reject = (id: string, reason: string) => rejected.set(reason,
+      [...(rejected.get(reason) ?? []), id]);
     for (const source of sources) {
+      if (source.source_facts.activitySiteResolved === false) {
+        reject(source.id, 'activity_site_unresolved');
+        continue;
+      }
       const candidates = dependencies.mappings.filter(mapping =>
         mapping.site === source.source_facts.site
           && mapping.provider === source.source_facts.provider);
       if (candidates.length !== 1) {
-        await dependencies.store.defer(source.id);
-        result.blocked++;
+        reject(source.id, 'site_mapping_unapproved');
         continue;
       }
-      try { await mapJournalSource(source, candidates[0]); }
+      let mapped: Awaited<ReturnType<typeof mapJournalSource>>;
+      try { mapped = await mapJournalSource(source, candidates[0]); }
       catch {
-        await dependencies.store.defer(source.id);
-        result.blocked++;
+        reject(source.id, 'source_evidence_incomplete');
         continue;
       }
-      const key = `${candidates[0].provider}:${candidates[0].site}`;
-      if (!groups.has(key)) groups.set(key, { mapping: candidates[0], sources: [] });
+      const key = `${candidates[0].provider}:${candidates[0].site}:${mapped.mappingVersion}`;
+      if (!groups.has(key)) groups.set(key, { mapping: candidates[0],
+        mappingVersion: mapped.mappingVersion, sources: [] });
       groups.get(key)!.sources.push(source);
     }
-    for (const group of [...groups.values()].slice(0, 10)) {
+    for (const [reason, ids] of rejected) {
+      result.blocked += await dependencies.store.deferMany(ids, reason);
+    }
+    for (const group of groups.values()) {
+      const ids = group.sources.map(source => source.id);
+      if (ids.length > 500) {
+        result.blocked += await dependencies.store.deferMany(ids, 'capacity_exceeded');
+        continue;
+      }
       try {
         await dependencies.store.stageDaily(group.sources, group.mapping,
           (dependencies.uuid ?? crypto.randomUUID)(), postingDay);
         result.staged++;
       } catch {
-        // No retry of an unknown provider result occurs here. A lost staging
-        // response is resolved by source membership on the next scheduled run.
-        for (const source of group.sources) await dependencies.store.defer(source.id);
-        result.blocked++;
+        const committed = await dependencies.store.batchForSources(ids);
+        if (committed) { result.staged++; continue; }
+        const closed = await dependencies.store.dailyGroupExists(postingDay,
+          group.mapping, group.mappingVersion);
+        result.blocked += await dependencies.store.deferMany(ids,
+          closed ? 'daily_group_closed' : 'daily_stage_failed');
       }
     }
   }
+  let providerAttempted = false;
   if (dependencies.postingEnabled && postingDay) {
-    for (const id of await dependencies.store.listReady(10)) {
+    for (const id of await dependencies.store.listReady(1)) {
+      providerAttempted = true;
       try { await dependencies.process(id); result.processed++; }
       catch { result.blocked++; }
     }
   }
-  if (dependencies.ingestionEnabled || dependencies.postingEnabled) {
-    for (const id of await dependencies.store.listPending(10)) {
+  // One provider path per cron invocation fits the 45-second Vercel timeout.
+  // A pending readback is handled on the next minute; it never reissues AddJournal.
+  if ((dependencies.ingestionEnabled || dependencies.postingEnabled) && !providerAttempted) {
+    for (const id of await dependencies.store.listPending(1)) {
       try { await dependencies.reconcile(id); result.reconciled++; }
       catch { result.blocked++; }
     }

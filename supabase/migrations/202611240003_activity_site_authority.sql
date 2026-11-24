@@ -32,7 +32,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_catalog.jsonb_array_elements(
       coalesce(NEW.checkout_snapshot->'items','[]'::jsonb)) line
       JOIN public.activities a ON a.id::text=line.value->>'id'
-      WHERE a.site IS DISTINCT FROM site_value)
+      WHERE a.site IS NOT NULL AND a.site IS DISTINCT FROM site_value)
     OR EXISTS (SELECT 1 FROM pg_catalog.jsonb_array_elements(
       coalesce(NEW.checkout_snapshot->'items','[]'::jsonb)) line
       JOIN public.products product ON product.id::text=line.value->>'id'

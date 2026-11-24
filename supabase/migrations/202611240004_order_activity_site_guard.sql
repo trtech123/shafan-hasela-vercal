@@ -1,11 +1,8 @@
--- Apply only after classifying every active activity. A failed preflight
--- leaves historical orders and the operational application untouched.
+-- Existing shared activities have no authoritative single site yet. Preserve
+-- them while requiring an explicit order site. New activities must carry a
+-- site under migration 003; once legacy activities are classified, the same
+-- guard enforces their exact site without rewriting historical orders.
 BEGIN;
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM public.activities WHERE status='פעיל' AND site IS NULL) THEN
-    RAISE EXCEPTION 'active_activity_site_review_required' USING ERRCODE='23514';
-  END IF;
-END $$;
 
 CREATE FUNCTION public.enforce_order_activity_site() RETURNS trigger
 LANGUAGE plpgsql SET search_path = '' AS $$
@@ -17,7 +14,7 @@ BEGIN
   END IF;
   IF NEW.activity_id IS NOT NULL THEN
     SELECT a.site INTO activity_site FROM public.activities a WHERE a.id=NEW.activity_id;
-    IF activity_site IS NULL OR NEW.site IS DISTINCT FROM activity_site THEN
+    IF NEW.site IS NULL OR (activity_site IS NOT NULL AND NEW.site IS DISTINCT FROM activity_site) THEN
       RAISE EXCEPTION 'order_activity_site_mismatch' USING ERRCODE='23514'; END IF;
   END IF;
   IF NEW.quote_id IS NOT NULL AND pg_catalog.jsonb_typeof(
@@ -27,7 +24,7 @@ BEGIN
       IF nullif(item->>'activity_id','') IS NOT NULL THEN
         SELECT a.site INTO activity_site FROM public.activities a
           WHERE a.id=(item->>'activity_id')::uuid;
-        IF activity_site IS NULL OR NEW.site IS DISTINCT FROM activity_site THEN
+        IF NEW.site IS NULL OR (activity_site IS NOT NULL AND NEW.site IS DISTINCT FROM activity_site) THEN
           RAISE EXCEPTION 'order_activity_site_mismatch' USING ERRCODE='23514'; END IF;
       END IF;
     END LOOP;

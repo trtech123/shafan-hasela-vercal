@@ -9,6 +9,14 @@ const LABELS = {
   verified: 'אומת בריווחית', reconciliation_required: 'נדרשת התאמה ידנית',
   definitive_rejection: 'נדחה על ידי ריווחית',
 };
+const DEFER_REASONS = {
+  site_mapping_unapproved: 'מיפוי האתר או אמצעי התשלום טרם אושר',
+  activity_site_unresolved: 'אתר הפעילות ההיסטורית טרם אומת',
+  source_evidence_incomplete: 'חסרה אסמכתה תקינה במסמך המקור',
+  daily_group_closed: 'האצווה היומית נסגרה; ייבדק בחלון הבא',
+  daily_stage_failed: 'יצירת האצווה נכשלה; נדרשת בדיקה',
+  capacity_exceeded: 'מגבלת גודל האצווה נחצתה; נדרשת בדיקה',
+};
 
 function safePayperUrl(value) {
   try {
@@ -70,7 +78,7 @@ export default function RivhitJournalStatus() {
           supabase.from('rivhit_journal_control')
             .select('capture_enabled,posting_enabled,posting_cadence,posting_time_israel,cutover_at').single(),
           supabase.from('rivhit_journal_sources')
-            .select('id,payper_document_number,payper_document_url,state,captured_at,next_mapping_check_at')
+            .select('id,payper_document_number,payper_document_url,state,captured_at,next_mapping_check_at,defer_reason,deferred_at')
             .order('captured_at', { ascending: false }).limit(100),
           supabase.from('rivhit_journal_entries')
             .select('id,source_id,batch_id,status,provider_year,provider_month,provider_line,report_journal_id,hold_reason,reconciliation_evidence,created_at')
@@ -179,6 +187,10 @@ export default function RivhitJournalStatus() {
           const url = safePayperUrl(source.payper_document_url);
           return <li key={source.id} className="rounded-lg border p-3 text-sm">
             <span className="block">מסמך Payper {source.payper_document_number} · {entries.length ? `${entries.length} פקודות` : LABELS[source.state] ?? 'מצב לא מוכר'}</span>
+            {source.defer_reason && <span className="block" role="status">
+              עוכב: {DEFER_REASONS[source.defer_reason] ?? 'נדרשת בדיקה ידנית'}
+              {source.deferred_at ? ` · ${new Date(source.deferred_at).toLocaleString('he-IL')}` : ''}
+            </span>}
             {source.state === 'mapping_required' && source.next_mapping_check_at
               && new Date(source.next_mapping_check_at) > new Date()
               ? <span className="block">בדיקת המיפוי הבאה: {new Date(source.next_mapping_check_at).toLocaleString('he-IL')}</span> : null}

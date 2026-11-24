@@ -46,3 +46,13 @@ test('journal cron marks prior-day unfinished work as overdue without retrying a
   assert.equal(response.status, 409);
   assert.deepEqual((await response.json()).overdue, { unbatched: 1, unverified: 1 });
 });
+
+test('journal cron exposes a blocked daily source as an operational alert', async () => {
+  const handler = createRivhitJournalCron(env, async () => new Response(JSON.stringify({
+    staged: 0, processed: 0, reconciled: 0, blocked: 1,
+    overdue: { unbatched: 0, unverified: 0 },
+  }), { status: 200 }));
+  const response = await handler(request('Bearer test-cron-secret'));
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).blocked, 1);
+});

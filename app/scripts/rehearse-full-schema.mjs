@@ -58,6 +58,11 @@ try {
   assert.equal((await db.query(`SELECT count(*)::int AS groups
     FROM public.rivhit_accountant_account_groups`)).rows[0].groups, 0,
   'real chart-of-accounts values must never be published in the public repository');
+  const siteGroups = (await db.query(`SELECT count(*)::int AS total,
+    count(*) FILTER (WHERE approved)::int AS verified,
+    count(*) FILTER (WHERE NOT approved)::int AS awaiting_management
+    FROM public.rivhit_accounting_site_groups`)).rows[0];
+  assert.deepEqual(siteGroups,{ total:6,verified:4,awaiting_management:2 });
   if (process.env.ANAT_PRIVATE_SEED) {
     await db.exec(await readFile(resolve(process.env.ANAT_PRIVATE_SEED), 'utf8'));
     const accountant = (await db.query(`SELECT count(*)::int AS groups,
@@ -742,9 +747,12 @@ try {
   const dailyPrivileges = (await db.query(`SELECT
     has_function_privilege('authenticated',
       'public.stage_rivhit_daily_batch(uuid,date,uuid[],text,jsonb,text,numeric)','EXECUTE') AS user_can_stage,
+    has_function_privilege('authenticated',
+      'public.defer_rivhit_daily_sources(uuid[],text)','EXECUTE') AS user_can_defer,
     has_function_privilege('service_role',
       'public.stage_rivhit_journal_entry(uuid,text,text,text,jsonb,text,numeric)','EXECUTE') AS old_per_document_stage`)).rows[0];
-  assert.deepEqual(dailyPrivileges,{ user_can_stage:false,old_per_document_stage:false },
+  assert.deepEqual(dailyPrivileges,{ user_can_stage:false,user_can_defer:false,
+    old_per_document_stage:false },
     'daily staging must be service-only and old per-document staging unavailable');
 
   current = 'Anat reference account guards on isolated synthetic approval';
@@ -754,6 +762,22 @@ try {
       (sort_code,group_name,revenue_account,cash_account,cheque_account,
         card_account,vat_rate_basis_points,source_row)
       VALUES (901,'synthetic-only',201,301,302,303,1800,1)`);
+    await db.exec(`UPDATE public.rivhit_accounting_site_groups
+      SET accountant_sort_code=901 WHERE site='נוף הגליל'`);
+    await db.query(`INSERT INTO public.rivhit_journal_approved_mappings
+      (provider,site,mapping_version,enabled)
+      VALUES ('manual_cash','קפה אקסטרים',$1,false)`,
+    [`v1-${'b'.repeat(64)}`]);
+    await db.exec('SAVEPOINT unapproved_site');
+    let unapprovedSiteRejected = false;
+    try { await db.query(`INSERT INTO public.rivhit_journal_approved_mappings
+      (provider,site,mapping_version,sort_code,debit_account,credit_account,
+        vat_rate_basis_points,accountant_sort_code,enabled)
+      VALUES ('manual_cash','פודטראק',$1,901,301,201,1800,901,true)`,
+    [`v1-${'c'.repeat(64)}`]); }
+    catch (error) { unapprovedSiteRejected = /rivhit_accounting_site_unapproved/.test(error.message); }
+    assert.equal(unapprovedSiteRejected,true,'ambiguous site may not be activated');
+    await db.exec('ROLLBACK TO SAVEPOINT unapproved_site');
     await db.query(`INSERT INTO public.rivhit_journal_approved_mappings
       (provider,site,mapping_version,sort_code,debit_account,credit_account,
         vat_rate_basis_points,accountant_sort_code,enabled)
@@ -775,29 +799,59 @@ try {
     await db.exec('ALTER TABLE public.rivhit_journal_control DROP CONSTRAINT rivhit_daily_close_time');
     await db.exec(`UPDATE public.rivhit_journal_control SET capture_enabled=true,
       posting_cadence='daily',posting_time_israel='00:00',
-      cutover_at=pg_catalog.clock_timestamp()-INTERVAL '1 day' WHERE singleton`);
+      cutover_at=pg_catalog.clock_timestamp()-INTERVAL '2 days' WHERE singleton`);
     await db.exec(`INSERT INTO public.rivhit_accountant_account_groups
       (sort_code,group_name,revenue_account,cash_account,cheque_account,
         card_account,vat_rate_basis_points,source_row)
       VALUES (901,'synthetic-only',201,301,302,303,1800,1)`);
+    await db.exec(`UPDATE public.rivhit_accounting_site_groups
+      SET accountant_sort_code=901 WHERE site='עכו'`);
     const sourceRow = (await db.query(`INSERT INTO public.rivhit_journal_sources
       (payper_ledger_id,payment_id,sale_id,payper_document_number,
-        payper_document_url,source_facts)
+        payper_document_url,source_facts,captured_at)
       SELECT l.id,p.id,p.sale_id,l.document_number,l.document_url,
         jsonb_build_object('provider',p.provider,'site',p.checkout_snapshot->>'site',
           'amount',p.amount,'currency',p.currency,'vatApplicable',true,
-          'receiptNumber',s.receipt_number)
+          'receiptNumber',s.receipt_number),
+        (((pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date-1)
+          + TIME '23:00') AT TIME ZONE 'Asia/Jerusalem'
       FROM public.payper_document_ledger l
       JOIN public.payment_transactions p ON p.id=l.payment_id
       JOIN public.sales s ON s.id=p.sale_id WHERE p.id=$1
       RETURNING id,payper_document_number,source_facts,captured_at`,
     [collected.paymentId])).rows[0];
     assert.equal(sourceRow.source_facts.site, 'עכו');
+    assert.equal((await db.query(`SELECT public.rivhit_source_activity_site_resolved(
+      $1::uuid,'עכו') AS resolved`,[collected.paymentId])).rows[0].resolved,true);
+    await db.query(`UPDATE public.activities SET site='טבריה' WHERE id=$1`,[activity]);
+    assert.equal((await db.query(`SELECT public.rivhit_source_activity_site_resolved(
+      $1::uuid,'עכו') AS resolved`,[collected.paymentId])).rows[0].resolved,false,
+    'a changed or shared catalog activity cannot silently change the saved journal site');
+    await db.query(`UPDATE public.activities SET site='עכו' WHERE id=$1`,[activity]);
     const localParts = new Intl.DateTimeFormat('en-GB', {
       timeZone: 'Asia/Jerusalem',year: 'numeric',month: '2-digit',day: '2-digit',
     }).formatToParts(new Date());
     const part = key => localParts.find(item => item.type === key).value;
     const postingDay = `${part('year')}-${part('month')}-${part('day')}`;
+    const eligible = (await db.query(`SELECT id FROM public.rivhit_daily_eligible_sources(
+      $1::date,501) WHERE id=$2`,[postingDay,sourceRow.id])).rows;
+    assert.equal(eligible.length,1,'database cutoff must include eligible finalized sources');
+    await db.query(`UPDATE public.rivhit_journal_sources SET captured_at=
+      (($1::date+TIME '00:01') AT TIME ZONE 'Asia/Jerusalem') WHERE id=$2`,
+    [postingDay,sourceRow.id]);
+    assert.equal((await db.query(`SELECT count(*)::int AS n
+      FROM public.rivhit_daily_eligible_sources($1::date,501) WHERE id=$2`,
+    [postingDay,sourceRow.id])).rows[0].n,0,
+    'documents after the exact daily cutoff must wait for the next window');
+    await db.query(`UPDATE public.rivhit_journal_sources SET captured_at=$1
+      WHERE id=$2`,[sourceRow.captured_at,sourceRow.id]);
+    const deferred = (await db.query(`SELECT public.defer_rivhit_daily_sources(
+      ARRAY[$1::uuid],'source_evidence_incomplete') AS n`,[sourceRow.id])).rows[0].n;
+    assert.equal(deferred,1);
+    assert.equal((await db.query(`SELECT defer_reason FROM public.rivhit_journal_sources
+      WHERE id=$1`,[sourceRow.id])).rows[0].defer_reason,'source_evidence_incomplete');
+    await db.query(`UPDATE public.rivhit_journal_sources
+      SET next_mapping_check_at=pg_catalog.clock_timestamp() WHERE id=$1`,[sourceRow.id]);
     const syntheticMapping = { version: 'synthetic',provider: 'manual_cash',site: 'עכו',
       sortCode: 901,debitAccount: 301,creditAccount: 201,
       vatRateBasisPoints: 1800,accountingDate: 'capture_israel_date' };

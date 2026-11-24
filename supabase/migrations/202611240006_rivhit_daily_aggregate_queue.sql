@@ -3,6 +3,40 @@
 -- belong to exactly one batch. Late documents enter a later posting window.
 BEGIN;
 
+ALTER TABLE public.rivhit_journal_sources
+  ADD COLUMN defer_reason text CHECK (defer_reason IN
+    ('site_mapping_unapproved','activity_site_unresolved','source_evidence_incomplete','daily_group_closed',
+     'daily_stage_failed','capacity_exceeded')),
+  ADD COLUMN deferred_at timestamptz;
+
+-- Every defer records a bounded operational reason. Late documents are not
+-- eligible for the closed day and are selected in the next daily window.
+CREATE FUNCTION public.defer_rivhit_daily_sources(p_source_ids uuid[],p_reason text)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE changed integer;
+BEGIN
+  IF coalesce(auth.role(),'')<>'service_role' THEN
+    RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
+  IF p_source_ids IS NULL OR pg_catalog.cardinality(p_source_ids) NOT BETWEEN 1 AND 501
+    OR p_reason NOT IN ('site_mapping_unapproved','activity_site_unresolved','source_evidence_incomplete',
+    'daily_group_closed','daily_stage_failed','capacity_exceeded') THEN
+    RAISE EXCEPTION 'daily_defer_reason_invalid' USING ERRCODE='22023'; END IF;
+  UPDATE public.rivhit_journal_sources SET defer_reason=p_reason,
+    deferred_at=pg_catalog.clock_timestamp(),
+    next_mapping_check_at=CASE WHEN p_reason='daily_group_closed' THEN
+      (((pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date+1)
+        + (SELECT posting_time_israel FROM public.rivhit_journal_control WHERE singleton))
+        AT TIME ZONE 'Asia/Jerusalem'
+      ELSE pg_catalog.clock_timestamp()+INTERVAL '15 minutes' END
+  WHERE id=ANY(p_source_ids) AND state='mapping_required';
+  GET DIAGNOSTICS changed=ROW_COUNT;
+  RETURN changed;
+END $$;
+REVOKE ALL ON FUNCTION public.defer_rivhit_daily_sources(uuid[],text)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.defer_rivhit_daily_sources(uuid[],text) TO service_role;
+REVOKE EXECUTE ON FUNCTION public.defer_rivhit_journal_source(uuid) FROM service_role;
+
 ALTER TABLE public.rivhit_journal_control
   ADD CONSTRAINT rivhit_daily_close_time CHECK (posting_cadence<>'daily'
     OR posting_time_israel BETWEEN TIME '23:00' AND TIME '23:30:00');
@@ -39,6 +73,101 @@ GRANT SELECT ON public.rivhit_daily_journal_members TO authenticated,service_rol
 CREATE POLICY rivhit_daily_members_admin_read ON public.rivhit_daily_journal_members
   FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles p
     WHERE p.id=auth.uid() AND p.role::text='admin'));
+
+-- Historical shared catalog activities are allowed through ordinary checkout,
+-- but their documents cannot be auto-classified until the activity's saved
+-- site matches the immutable payment site. Check both order and POS lines.
+CREATE FUNCTION public.rivhit_source_activity_site_resolved(
+  p_payment_id uuid,p_site text) RETURNS boolean
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE payment public.payment_transactions%ROWTYPE;
+  ord public.orders%ROWTYPE;
+  line jsonb;
+BEGIN
+  IF coalesce(auth.role(),'')<>'service_role' THEN
+    RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
+  SELECT * INTO payment FROM public.payment_transactions WHERE id=p_payment_id;
+  IF payment.id IS NULL OR p_site IS NULL THEN RETURN false; END IF;
+  IF payment.order_id IS NOT NULL THEN
+    SELECT * INTO ord FROM public.orders WHERE id=payment.order_id;
+    IF ord.id IS NULL THEN RETURN false; END IF;
+    IF ord.activity_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.activities a
+      WHERE a.id=ord.activity_id AND a.site=p_site) THEN RETURN false; END IF;
+    IF pg_catalog.jsonb_typeof(ord.quotation_snapshot->'selected_activities')='array' THEN
+      FOR line IN SELECT value FROM pg_catalog.jsonb_array_elements(
+        ord.quotation_snapshot->'selected_activities') LOOP
+        IF line->>'item_type'='activity' AND line->>'activity_id' IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM public.activities a
+            WHERE a.id::text=line->>'activity_id' AND a.site=p_site)
+        THEN RETURN false; END IF;
+      END LOOP;
+    END IF;
+  ELSIF EXISTS (SELECT 1 FROM pg_catalog.jsonb_array_elements(
+      CASE WHEN pg_catalog.jsonb_typeof(payment.checkout_snapshot->'items')='array'
+        THEN payment.checkout_snapshot->'items' ELSE '[]'::jsonb END) item
+      JOIN public.activities a ON a.id::text=item.value->>'id'
+      WHERE a.site IS DISTINCT FROM p_site) THEN RETURN false;
+  END IF;
+  RETURN true;
+END $$;
+REVOKE ALL ON FUNCTION public.rivhit_source_activity_site_resolved(uuid,text)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.rivhit_source_activity_site_resolved(uuid,text)
+  TO service_role;
+
+-- The database clock owns the closing cutoff, including DST transitions.
+-- Documents finalized after this cutoff remain visible as late work and enter
+-- the following day's batch; they cannot be added to an already posted group.
+CREATE FUNCTION public.rivhit_daily_eligible_sources(p_day date,p_limit integer)
+RETURNS TABLE (id uuid,payper_document_number text,source_facts jsonb,captured_at timestamptz)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  IF coalesce(auth.role(),'')<>'service_role' THEN
+    RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
+  IF p_day IS DISTINCT FROM
+    (pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date
+    OR p_limit NOT BETWEEN 1 AND 501 THEN
+    RAISE EXCEPTION 'daily_source_filter_invalid' USING ERRCODE='22023'; END IF;
+  RETURN QUERY SELECT s.id,s.payper_document_number,
+    pg_catalog.jsonb_set(s.source_facts,'{activitySiteResolved}',
+      pg_catalog.to_jsonb(public.rivhit_source_activity_site_resolved(
+        s.payment_id,s.source_facts->>'site')),true),s.captured_at
+    FROM public.rivhit_journal_sources s
+    JOIN public.rivhit_journal_control c ON c.singleton
+    WHERE c.capture_enabled AND c.posting_cadence='daily'
+      AND c.cutover_at IS NOT NULL AND s.captured_at>=c.cutover_at
+      AND s.state='mapping_required'
+      AND s.next_mapping_check_at<=pg_catalog.clock_timestamp()
+      AND s.captured_at AT TIME ZONE 'Asia/Jerusalem' <=
+        p_day+c.posting_time_israel
+    ORDER BY s.next_mapping_check_at,s.id LIMIT p_limit;
+END $$;
+REVOKE ALL ON FUNCTION public.rivhit_daily_eligible_sources(date,integer)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.rivhit_daily_eligible_sources(date,integer)
+  TO service_role;
+
+-- Resolve a lost staging HTTP response from durable membership before any
+-- defer or another provider operation. A partial membership is impossible
+-- because staging commits atomically, so it returns NULL on inconsistent data.
+CREATE FUNCTION public.rivhit_daily_batch_for_sources(p_source_ids uuid[])
+RETURNS uuid LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE batch_value uuid;
+BEGIN
+  IF coalesce(auth.role(),'')<>'service_role' THEN
+    RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
+  IF p_source_ids IS NULL OR pg_catalog.cardinality(p_source_ids) NOT BETWEEN 1 AND 500
+    THEN RAISE EXCEPTION 'daily_source_filter_invalid' USING ERRCODE='22023'; END IF;
+  SELECT min(m.batch_id::text)::uuid INTO batch_value
+    FROM public.rivhit_daily_journal_members m
+    WHERE m.source_id=ANY(p_source_ids)
+    HAVING count(DISTINCT m.source_id)=pg_catalog.cardinality(p_source_ids)
+      AND count(DISTINCT m.batch_id)=1;
+  RETURN batch_value;
+END $$;
+REVOKE ALL ON FUNCTION public.rivhit_daily_batch_for_sources(uuid[])
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.rivhit_daily_batch_for_sources(uuid[]) TO service_role;
 
 ALTER TABLE public.rivhit_journal_entries
   ADD COLUMN batch_id uuid UNIQUE REFERENCES public.rivhit_daily_journal_batches(id) ON DELETE RESTRICT;
@@ -125,7 +254,7 @@ DECLARE m public.rivhit_journal_approved_mappings%ROWTYPE;
   anchor uuid; source_count integer; total numeric; vat_total numeric;
   provider_value text; site_value text; result uuid;
 BEGIN
-  IF auth.role()<>'service_role' THEN
+  IF coalesce(auth.role(),'')<>'service_role' THEN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.rivhit_journal_control c
     WHERE c.singleton AND c.capture_enabled AND c.posting_cadence='daily'
@@ -165,7 +294,9 @@ BEGIN
   WHERE s.id=ANY(p_source_ids) AND s.state='mapping_required'
     AND NOT EXISTS (SELECT 1 FROM public.rivhit_daily_journal_members x
       WHERE x.source_id=s.id)
-    AND s.captured_at AT TIME ZONE 'Asia/Jerusalem' < (p_posting_day+1)::timestamp
+    AND s.captured_at AT TIME ZONE 'Asia/Jerusalem' <=
+      p_posting_day+(SELECT posting_time_israel
+        FROM public.rivhit_journal_control WHERE singleton)
     AND l.state='succeeded' AND l.document_origin='automatic'
     AND l.document_number=s.payper_document_number
     AND l.payment_id=s.payment_id AND l.sale_id=s.sale_id
@@ -183,6 +314,26 @@ BEGIN
       WHERE s.id=ANY(p_source_ids) AND (s.source_facts->>'provider' IS DISTINCT FROM provider_value
         OR s.source_facts->>'site' IS DISTINCT FROM site_value))
   THEN RAISE EXCEPTION 'rivhit_daily_source_not_ready' USING ERRCODE='42501'; END IF;
+  -- A legacy activity without a single saved site cannot be classified from
+  -- the order's chosen location alone. Leave its payment out of auto-posting.
+  IF EXISTS (SELECT 1 FROM public.rivhit_journal_sources src
+    WHERE src.id=ANY(p_source_ids)
+      AND NOT public.rivhit_source_activity_site_resolved(
+        src.payment_id,src.source_facts->>'site')) THEN
+    RAISE EXCEPTION 'rivhit_activity_site_unresolved' USING ERRCODE='42501'; END IF;
+  -- The worker fetches a bounded page. Before closing a group, ensure that
+  -- no eligible source for the same site/method was omitted from that page.
+  IF EXISTS (SELECT 1 FROM public.rivhit_journal_sources other
+    WHERE other.state='mapping_required'
+      AND other.source_facts->>'provider'=provider_value
+      AND other.source_facts->>'site'=site_value
+      AND other.captured_at AT TIME ZONE 'Asia/Jerusalem' <=
+        p_posting_day+(SELECT posting_time_israel
+          FROM public.rivhit_journal_control WHERE singleton)
+      AND (other.next_mapping_check_at<=pg_catalog.clock_timestamp()
+        OR other.defer_reason IN ('capacity_exceeded','daily_stage_failed'))
+      AND NOT other.id=ANY(p_source_ids)) THEN
+    RAISE EXCEPTION 'rivhit_daily_group_incomplete' USING ERRCODE='42501'; END IF;
   SELECT * INTO m FROM public.rivhit_journal_approved_mappings a
     WHERE a.provider=provider_value AND a.site=site_value
       AND a.mapping_version=p_mapping_version AND a.enabled;
@@ -206,7 +357,8 @@ BEGIN
   VALUES (anchor,p_batch_id,'daily',p_mapping_version,
     p_request_payload->>'request_reference',p_request_payload,p_payload_hash,p_expected_vat)
   RETURNING id INTO result;
-  UPDATE public.rivhit_journal_sources SET state='mapped'
+  UPDATE public.rivhit_journal_sources SET state='mapped',
+    defer_reason=NULL,deferred_at=NULL
     WHERE id=ANY(p_source_ids) AND state='mapping_required';
   IF NOT FOUND THEN RAISE EXCEPTION 'rivhit_daily_source_changed' USING ERRCODE='40001'; END IF;
   RETURN result;
