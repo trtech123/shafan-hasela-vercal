@@ -13,6 +13,7 @@ import moment from "moment";
 import { findConflictingBlocks, findConflictingOrders } from "@/lib/blocking";
 import { publishOrderChange } from "@/lib/orderEvents";
 import { changedOrderFields } from "@/lib/orderUpdate";
+import { signatureRequest } from "@/lib/orderSignatureClient";
 import OrderCollectionAction from './OrderCollectionAction';
 
 const timeSlots = [
@@ -178,7 +179,17 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
         : await supabase.from('orders').insert(update).select('id').single();
       if (result.error || !result.data?.id) throw result.error || new Error('No order row returned');
       publishOrderChange();
-      toast.success(order ? 'ההזמנה עודכנה בהצלחה' : 'ההזמנה נשמרה בהצלחה');
+      let prepared = true;
+      if (!order && !isTaskMode) {
+        try {
+          await signatureRequest({ action: 'create', orderId: result.data.id }, { staff: true });
+        } catch (prepareError) {
+          prepared = false;
+          console.error('prepare order confirmation error:', prepareError);
+        }
+      }
+      if (!prepared) toast.error('ההזמנה נשמרה, אך אישור החתימה טרם הוכן. פתחו את ההזמנה והכינו אישור לפני שליחה.');
+      else toast.success(order ? 'ההזמנה עודכנה בהצלחה' : 'ההזמנה נשמרה ואישור החתימה מוכן לשליחה');
       onSaved?.();
       onClose();
     } catch (err) {

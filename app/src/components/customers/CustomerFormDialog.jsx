@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { customerDraft, customerPayload, customerErrorMessage, isPossibleDuplicate, CUSTOMER_TYPES } from '@/lib/customers';
 import BillingAddressFields from './BillingAddressFields';
+import SignedContactHistory from './SignedContactHistory';
 
 const fields = [['display_name', 'שם לתצוגה'], ['contact_name', 'איש קשר'], ['phone', 'טלפון'], ['email', 'אימייל'], ['organization_name', 'שם ארגון'], ['billing_name', 'שם לחיוב'], ['billing_company_id', 'מספר זיהוי הלקוח לחיוב (ת״ז / ח״פ / ע״מ)'], ['billing_accounting_email', 'אימייל להנהלת חשבונות']];
 
@@ -72,6 +73,7 @@ export default function CustomerFormDialog({ customer = null, initialValues = {}
           <Input id={`${id}-${field}`} type={field === 'email' || field === 'billing_accounting_email' ? 'email' : 'text'} value={draft[field]} required={field === 'display_name'} onChange={(event) => change(field, event.target.value)} />
         </div>)}</div>
         <BillingAddressFields value={draft} onChange={change} />
+        {customer?.id&&<SignedContactHistory customerId={customer.id} />}
         <label className="block text-sm space-y-1">מדיניות מע״מ
           <select aria-label="מדיניות מע״מ" required className="block w-full rounded-md border p-2 bg-background" value={draft.vat_applicable === null ? '' : String(draft.vat_applicable)} onChange={(event) => change('vat_applicable', event.target.value === '' ? null : event.target.value === 'true')}>
             <option value="">יש לבחור במפורש</option><option value="true">חייב במע״מ</option><option value="false">לא חייב במע״מ</option>

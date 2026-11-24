@@ -4,7 +4,7 @@ import {confirmationHtml} from '../../server/order-confirmation/renderer.js';
 import {sha256,RENDER_VERSION,SignatureError} from '../../server/order-confirmation/contract.js';
 const token='a'.repeat(43), id='98000000-0000-4000-8000-000000000001';
 const request=(body,headers={})=>new Request('https://example.invalid/api/order-confirmation',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
-function deps(){return {authorize:vi.fn(async()=>id),rateLimit:vi.fn(async()=>true),action:vi.fn(async()=>({id,revision_number:1,status:'pending',snapshot:{data:{},text:{}},unsigned_path:id+'/unsigned.pdf',unsigned_hash:'hash'})),readPdf:vi.fn(async()=>Buffer.from('%PDF-test')),writePdf:vi.fn(),renderUnsigned:vi.fn(async()=>Buffer.from('%PDF-test')),renderSigned:vi.fn(async()=>Buffer.from('%PDF-signed')),origin:'https://example.invalid',days:7};}
+function deps(){return {authorize:vi.fn(async()=>id),rateLimit:vi.fn(async()=>true),action:vi.fn(async()=>({id,revision_number:1,status:'pending',snapshot:{data:{},text:{}},unsigned_path:id+'/unsigned.pdf',unsigned_hash:'hash'})),recordResponse:vi.fn(async()=>({ok:true})),readPdf:vi.fn(async()=>Buffer.from('%PDF-test')),writePdf:vi.fn(),renderUnsigned:vi.fn(async()=>Buffer.from('%PDF-test')),renderSigned:vi.fn(async()=>Buffer.from('%PDF-signed')),origin:'https://example.invalid',days:7};}
 describe('order signature HTTP boundary',()=>{
  it('renders a created snapshot using the current server render version',async()=>{
   const d=deps();
@@ -29,9 +29,22 @@ describe('order signature HTTP boundary',()=>{
   const r=await createSignatureHandler(d)(request({action:'view',token})),body=await r.json();
   expect(body.revision.snapshot).toEqual({acceptanceText:'Frozen acceptance',acceptanceVersion:'1'});expect(JSON.stringify(body)).not.toContain('private');
  });
+ it('exposes only whitelisted frozen order facts to the public browser',async()=>{
+  const d=deps();d.action.mockResolvedValue({id,status:'pending',snapshot:{acceptanceText:'Frozen',text:{ORDER_TERMS:['Frozen term']},data:{order_number:'ORD-TEST',activity_date:'2026-12-01',site:'עכו',client_name:'לקוח לדוגמה',client_phone:null,client_email:null,total_price:100,internal_notes:'secret',billing_signer_id:'123'}}});
+  const body=await (await createSignatureHandler(d)(request({action:'view',token}))).json();
+  expect(body.revision.summary).toMatchObject({orderNumber:'ORD-TEST',site:'עכו',clientName:'לקוח לדוגמה'});
+  expect(body.revision.summary.terms).toEqual(['Frozen term']);
+  expect(JSON.stringify(body)).not.toContain('secret');expect(JSON.stringify(body)).not.toContain('billing_signer_id');
+ });
  it('uses authoritative server revision and bundled text when creating',async()=>{const d=deps(),r=await createSignatureHandler(d)(request({action:'create',orderId:id}));expect(r.status).toBe(200);expect(d.authorize).toHaveBeenCalledOnce();expect(d.action.mock.calls[0][0]).toBe('create');expect(d.action.mock.calls[0][1].text.ORDER_TERMS).toBeDefined();expect(d.renderUnsigned.mock.calls[0][0]).toEqual({data:{},text:{}});expect((await r.json()).signingUrl).toMatch(/^https:\/\/example.invalid\/order-sign#[A-Za-z0-9_-]{43}$/);});
  it('rate limits before database token lookup',async()=>{const d=deps();d.rateLimit.mockResolvedValue(false);const r=await createSignatureHandler(d)(request({action:'view',token}));expect(r.status).toBe(429);expect(d.action).not.toHaveBeenCalled();});
  it('requires staff auth for revocation and history',async()=>{const d=deps();d.authorize.mockRejectedValue(Error('bad jwt'));expect((await createSignatureHandler(d)(request({action:'history',orderId:id}))).status).toBe(401);expect(d.action).not.toHaveBeenCalled();});
+ it('returns a signing link only after staff authorization and archive hash verification',async()=>{
+  const d=deps();d.action.mockResolvedValue({id,status:'pending',expires_at:'2099-01-01T00:00:00Z',unsigned_path:id+'/unsigned.pdf',unsigned_hash:sha256(Buffer.from('%PDF-test'))});d.extractLink=vi.fn(()=> 'https://example.invalid/order-sign#'+'a'.repeat(43));
+  const response=await createSignatureHandler(d)(request({action:'link',revisionId:id},{Authorization:'Bearer staff'}));
+  expect(response.status).toBe(200);expect((await response.json()).signingUrl).toContain('/order-sign#');
+  expect(d.action).toHaveBeenCalledWith('staff_read',{actorId:id,revisionId:id});
+ });
  it('allows an authorized staff member to reach the role-checked delivery action',async()=>{
   const d=deps();d.deliver=vi.fn(async()=>({ok:true}));
   const response=await createSignatureHandler(d)(request({action:'deliver',revisionId:id,requestId:id,channel:'email',recipient:'test@example.invalid'},{Authorization:'Bearer synthetic-user-jwt'}));
@@ -61,6 +74,22 @@ describe('order signature HTTP boundary',()=>{
   expect(r.status).toBe(200);expect(d.renderSigned.mock.calls[0][0]).toEqual(unsigned);expect(d.renderSigned.mock.calls[0][1].acceptanceText).toBe('Frozen text');
   expect(d.renderSigned.mock.calls[0][1].snapshot).toBe(row.snapshot);
   expect(d.renderSigned.mock.calls[0][1].signerId).toBe('012345674');expect(d.action.mock.calls[0][1].signerId).toBe('012345674');expect(d.writePdf.mock.calls[0][0]).toBe(id+'/'+id+'-signed.pdf');expect(d.action.mock.calls[1]).toEqual(['finish',expect.objectContaining({signedHash:sha256(signed)})]);
+ });
+ it('records validated contact completion once with the signed revision',async()=>{
+  const d=deps(),unsigned=Buffer.from('%PDF-test'),signed=Buffer.from('%PDF-signed');
+  const row={id,status:'signing',snapshot:{acceptanceText:'Frozen',acceptanceVersion:'1'},unsigned_path:id+'/unsigned.pdf',unsigned_hash:sha256(unsigned),revision_hash:'hash',full_name:'ישראל ישראלי',strokes:[[{x:0,y:0},{x:1,y:1}]],signed_at:'2026-10-11T10:00:00Z'};
+  d.action.mockResolvedValueOnce(row).mockResolvedValueOnce({...row,status:'signed'});d.writePdf.mockResolvedValue(signed);
+  const input={action:'sign',token,requestId:id,fullName:'ישראל ישראלי',phone:'0501234567',email:'qa@example.invalid',signerId:'012345674',strokes:row.strokes,accepted:true};
+  expect((await createSignatureHandler(d)(request(input))).status).toBe(200);
+  expect(d.recordResponse).toHaveBeenCalledWith({revisionId:id,requestId:id,details:{phone:'0501234567',email:'qa@example.invalid',signerId:'012345674'}});
+  expect(d.recordResponse).toHaveBeenCalledTimes(2);
+  expect(d.recordResponse.mock.invocationCallOrder[0]).toBeLessThan(d.renderSigned.mock.invocationCallOrder[0]);
+  expect(d.recordResponse.mock.invocationCallOrder[1]).toBeGreaterThan(d.action.mock.invocationCallOrder[1]);
+ });
+ it('does not render or finalize if contact evidence cannot be reserved',async()=>{
+  const d=deps();d.action.mockResolvedValue({id,status:'signing'});d.recordResponse.mockRejectedValue(new SignatureError('revision_conflict',409));
+  const response=await createSignatureHandler(d)(request({action:'sign',token,requestId:id,fullName:'ישראל ישראלי',strokes:[[{x:0,y:0},{x:1,y:1}]],accepted:true}));
+  expect(response.status).toBe(409);expect(d.renderSigned).not.toHaveBeenCalled();expect(d.action).toHaveBeenCalledTimes(1);
  });
  it('a failed upload never finalizes and a committed replay never renders again',async()=>{
   const d=deps(),input={action:'sign',token,requestId:id,fullName:'ישראל ישראלי',strokes:[[{x:.1,y:.1},{x:.5,y:.5}]],accepted:true};

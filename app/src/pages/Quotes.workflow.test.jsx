@@ -3,8 +3,9 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, test, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ rows: [], rpc: vi.fn(), from: vi.fn() }));
+const mocks = vi.hoisted(() => ({ rows: [], rpc: vi.fn(), from: vi.fn(), signatureRequest: vi.fn(async body => body.action === 'history' ? {revisions:[]} : {revision:{status:'pending'}}) }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { from: mocks.from, rpc: mocks.rpc } }));
+vi.mock('@/lib/orderSignatureClient', () => ({signatureRequest:mocks.signatureRequest}));
 vi.mock('../components/quotes/QuotePDFDocument', () => ({ default: ({ quote, mode }) =>
   <div role="dialog">{mode}: {quote.order_number}: {quote.selected_activities?.[0]?.activity_name}</div> }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));

@@ -27,15 +27,15 @@ it('shows old signed revision, difference warning, protected download and legacy
  expect(signatureRequest).toHaveBeenCalledWith({action:'pdf',revisionId:'signed',signed:true},{staff:true});
 });
 it('binds delivery to revision and never supplies browser PDF data',async()=>{
- render(<OrderSignaturePanel orderId="order" email="qa@example.test"/>);await screen.findByRole('button',{name:'שליחת האישור בוואטסאפ'});
- fireEvent.click(screen.getByRole('button',{name:'שליחת האישור בוואטסאפ'}));
+ render(<OrderSignaturePanel orderId="order" email="qa@example.test"/>);await screen.findByRole('button',{name:'שליחת האישור בוואטסאפ כ־PDF'});
+ fireEvent.click(screen.getByRole('button',{name:'שליחת האישור בוואטסאפ כ־PDF'}));
  await waitFor(()=>expect(signatureRequest).toHaveBeenCalledWith(expect.objectContaining({action:'deliver',revisionId:'pending',channel:'whatsapp'}),{staff:true}));
  const body=signatureRequest.mock.calls.map(([body])=>body).find(body=>body.action==='deliver');expect(body.pdfBase64).toBeUndefined();expect(body.token).toBeUndefined();
 });
 it('offers explicit recovery after an old dispatched attempt, never an automatic resend',async()=>{
  signatureRequest.mockResolvedValue({revisions:[{id:'pending',revision_number:2,status:'pending',expires_at:'2026-10-18'}],deliveries:[{id:'attempt',revision_id:'pending',channel:'whatsapp',state:'dispatched',created_at:new Date(Date.now()-180000).toISOString()}]});
  render(<OrderSignaturePanel orderId="order" email="qa@example.test"/>);
- const resend=await screen.findByRole('button',{name:'שליחה חוזרת בוואטסאפ'});expect(resend.disabled).toBe(false);
+ const resend=await screen.findByRole('button',{name:'שליחה חוזרת בוואטסאפ כ־PDF'});expect(resend.disabled).toBe(false);
  fireEvent.click(resend);expect(screen.getByRole('alertdialog')).toBeTruthy();
  expect(signatureRequest.mock.calls.some(([body])=>body.action==='deliver')).toBe(false);
  fireEvent.click(screen.getByRole('button',{name:'אישור',exact:true}));

@@ -203,14 +203,14 @@ describe("OrderConfirmationPDF WhatsApp Utility template", () => {
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
     expect(screen.getAllByRole("button", { name: /וואטסאפ|WA PDF/i })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "שלח PDF בוואטסאפ (מסלול ישן)" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /וואטסאפ/i })).not.toBeInTheDocument();
   });
 
   test("the single WhatsApp action sends the approved template contract with the order PDF", async () => {
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" }));
+    fireEvent.click(screen.getByRole("button", { name: "שלח PDF בוואטסאפ (מסלול ישן)" }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("send-whatsapp", expect.objectContaining({
@@ -246,7 +246,7 @@ describe("OrderConfirmationPDF WhatsApp Utility template", () => {
     });
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" }));
+    fireEvent.click(screen.getByRole("button", { name: "שלח PDF בוואטסאפ (מסלול ישן)" }));
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith("תבנית WhatsApp עדיין ממתינה לאישור Meta");
@@ -259,7 +259,7 @@ describe("OrderConfirmationPDF WhatsApp Utility template", () => {
     invokeMock.mockImplementationOnce(() => new Promise(() => {}));
     render(<OrderConfirmationPDF order={order} activity={activity} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "שלח אישור בוואטסאפ" }));
+    fireEvent.click(screen.getByRole("button", { name: "שלח PDF בוואטסאפ (מסלול ישן)" }));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
 
     await act(async () => {

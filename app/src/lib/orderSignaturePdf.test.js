@@ -52,6 +52,11 @@ describe('confirmation PDF security and frozen copy',()=>{
   expect(html.split(text.SAFETY_SIGNATURE)).toHaveLength(3);
   expect(()=>evidenceHtml({...boundEvidence(snapshot,Buffer.from('fixture')),strokes:[[{x:-1,y:0},{x:1,y:1}]]})).toThrow();
  });
+ it('includes completed browser contact details only in the new signed evidence',()=>{
+  const html=evidenceHtml({...boundEvidence(snapshot,Buffer.from('fixture')),contactDetails:{phone:'0501234567',email:'qa@example.invalid'}});
+  expect(html).toContain('0501234567');expect(html).toContain('qa@example.invalid');
+  expect(confirmationHtml(snapshot,url)).not.toContain('qa@example.invalid');
+ });
  it('binds the exact frozen snapshot, revision and acceptance before rendering',async()=>{
   const bytes=Buffer.from('fixture'),valid=boundEvidence(snapshot,bytes);
   for(const changed of [{snapshot:{...snapshot,data:{...snapshot.data,total_price:1}}},{revisionHash:'0'.repeat(64)},{revisionId:'00000000-0000-4000-8000-000000000002'},{acceptanceText:'different'},{acceptanceVersion:'different'},{snapshot:undefined}]) {

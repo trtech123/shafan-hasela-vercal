@@ -22,13 +22,25 @@ async function fill(pointerType='mouse'){
  fireEvent.click(screen.getByRole('checkbox'));
 }
 describe('public order confirmation signing',()=>{
- it('requires no signer ID to submit a complete signature',async()=>{
- render(<OrderSignature/>);await fill();expect(screen.queryByLabelText('תעודת זהות של החותם')).toBeNull();expect(screen.getByRole('button',{name:'אישור וחתימה'}).disabled).toBe(false);
+ it('shows frozen order facts and browser fields without requiring a PDF viewer',async()=>{
+  signatureRequest.mockImplementation(async body=>body.action==='view'?{revision:{...revision,summary:{orderNumber:'ORD-TEST',activityDate:'2026-12-01',site:'עכו',clientName:'לקוח לדוגמה',clientEmail:'',clientPhone:'',totalPrice:100}}}:body.action==='pdf'?new Blob(['pdf']):{ok:true});
+  render(<OrderSignature/>);
+  await screen.findByText(/ORD-TEST/);
+  expect(screen.getByText(/עכו/)).toBeTruthy();
+  expect(screen.getByLabelText('טלפון להשלמה')).toBeTruthy();
+  expect(screen.getByLabelText('אימייל להשלמה')).toBeTruthy();
+  expect(screen.getByLabelText('תעודת זהות של החותם (רשות)')).toBeTruthy();
+  expect(screen.getByRole('button',{name:'אישור וחתימה'})).toBeTruthy();
+ });
+ it('keeps signer ID optional for a complete signature',async()=>{
+  render(<OrderSignature/>);await fill();expect(screen.getByLabelText('תעודת זהות של החותם (רשות)')).toBeTruthy();expect(screen.getByRole('button',{name:'אישור וחתימה'}).disabled).toBe(false);
  });
  it('views server PDF without consuming authority and strips token fragment',async()=>{
   render(<OrderSignature/>);await screen.findByLabelText('שם מלא');
-  expect(window.location.hash).toBe('');expect(signatureRequest.mock.calls.map(([body])=>body.action)).toEqual(['view','pdf']);
+  expect(window.location.hash).toBe('');expect(signatureRequest.mock.calls.map(([body])=>body.action)).toEqual(['view']);
   expect(screen.getByRole('button',{name:'אישור וחתימה'}).disabled).toBe(false);
+  fireEvent.click(screen.getByRole('button',{name:'צפייה בקובץ האישור המלא (PDF)'}));
+  await screen.findByText('פתיחת האישור המלא / הורדת PDF');
   expect(screen.getByText(/פתיחת האישור המלא/).getAttribute('href')).toBe('blob:local-pdf');
  });
  it('requires explicit acceptance and submits only signature inputs with stable replay identity',async()=>{

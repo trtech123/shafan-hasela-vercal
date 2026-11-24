@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, test, vi } from 'vitest';
 
-const { from, rpc } = vi.hoisted(() => ({
+const { from, rpc, signatureRequest } = vi.hoisted(() => ({
+  signatureRequest: vi.fn(async body => body.action === 'history' ? {revisions:[]} : {revision:{status:'pending'}}),
   from: vi.fn(table => {
     if (table === 'quotes') return { select: () => ({ order: () => ({ limit: async () => ({ data: [{
       id: 'quote-1', quote_number: 'QUO-1', quotation_version: 1,
@@ -25,6 +26,7 @@ const { from, rpc } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/api/supabaseClient', () => ({ supabase: { from, rpc } }));
+vi.mock('@/lib/orderSignatureClient', () => ({signatureRequest}));
 vi.mock('../components/quotes/QuoteFormDialog', () => ({ default: () => null }));
 vi.mock('../components/quotes/QuotePDFDocument', () => ({ default: ({ quote }) =>
   <div role="dialog">{quote.selected_activities?.map(item => item.activity_name).join(', ')}</div> }));

@@ -12,6 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { signatureRequest } from "@/lib/orderSignatureClient";
 
 const STATUS_STYLES = {
   "טיוטה":           "bg-slate-100 text-slate-600 border-slate-200",
@@ -98,6 +99,15 @@ export default function Quotes() {
       if (error) throw error;
       if (!order?.id || order.quote_id !== quote.id) throw new Error('quotation_conversion_result_missing');
 
+      let confirmationReady = true;
+      try {
+        const history = await signatureRequest({action:'history',orderId:order.id},{staff:true});
+        if (!history.revisions?.length) await signatureRequest({action:'create',orderId:order.id},{staff:true});
+      } catch (prepareError) {
+        confirmationReady = false;
+        console.error('prepare converted order confirmation error:', prepareError);
+      }
+
       setQuotes(rows => rows.map(row => row.id === quote.id
         ? { ...row, converted_to_order_id: order.id, status: 'אושרה' }
         : row));
@@ -105,7 +115,7 @@ export default function Quotes() {
         setPdfQuote({ ...order.quotation_snapshot, order_number: order.order_number });
         setPdfMode('order');
       }
-      setSaveNotice('ההצעה הומרה להזמנה בהצלחה');
+      setSaveNotice(confirmationReady ? 'ההצעה הומרה להזמנה בהצלחה ואישור החתימה מוכן לשליחה' : 'ההצעה הומרה להזמנה, אך אישור החתימה טרם הוכן. פתחו את ההזמנה לפני שליחה.');
     } catch (err) {
       console.error('handleConvertToOrder error:', err);
       setConversionError(err.code === '42501'

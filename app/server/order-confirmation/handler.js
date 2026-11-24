@@ -1,9 +1,10 @@
 import * as documentText from '../../src/lib/orderDocText.js';
 import {ACCEPTANCE_TEXT,ACCEPTANCE_VERSION,RENDER_VERSION,SignatureError,canonicalJson,hashToken,secureToken,sha256,validId,validateSignature} from './contract.js';
+import {normalizeSignatureContact} from '../../src/lib/signatureContact.js';
 
 const headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'};
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{...headers,'Content-Type':'application/json'}});
-const fields={create:['orderId'],history:['orderId'],revoke:['revisionId'],view:['token'],pdf:['token','revisionId','signed'],sign:['token','requestId','fullName','signerId','strokes','accepted'],deliver:['revisionId','channel','requestId','recipient','resendOf','confirmed']};
+const fields={create:['orderId'],history:['orderId'],revoke:['revisionId'],link:['revisionId'],view:['token'],pdf:['token','revisionId','signed'],sign:['token','requestId','fullName','signerId','phone','email','organization','strokes','accepted'],deliver:['revisionId','channel','requestId','recipient','resendOf','confirmed']};
 async function readBody(request) {
   if(!request.headers.get('content-type')?.startsWith('application/json')) throw new SignatureError('invalid_request');
   const reader=request.body?.getReader(); if(!reader) throw new SignatureError('invalid_request');
@@ -13,7 +14,8 @@ async function readBody(request) {
 }
 // Customer review uses the protected archive; the JSON response needs only the
 // checkbox copy, never raw legacy order/customer records or fixed-text metadata.
-const publicRevision=r=>({id:r.id,revision_number:r.revision_number,status:r.status,snapshot:{acceptanceText:r.snapshot?.acceptanceText,acceptanceVersion:r.snapshot?.acceptanceVersion},expires_at:r.expires_at,revision_hash:r.revision_hash});
+const publicSummary=data=>({orderNumber:data?.order_number??null,activityDate:data?.activity_date??null,startTime:data?.start_time??null,endTime:data?.end_time??null,site:data?.site??null,activityName:data?.activity_snapshot?.name??null,participants:data?.num_participants??null,totalPrice:data?.total_price??null,clientName:data?.client_name??null,clientPhone:data?.client_phone??null,clientEmail:data?.client_email??null,organization:data?.organization??null});
+const publicRevision=r=>({id:r.id,revision_number:r.revision_number,status:r.status,snapshot:{acceptanceText:r.snapshot?.acceptanceText,acceptanceVersion:r.snapshot?.acceptanceVersion},summary:{...publicSummary(r.snapshot?.data),terms:Array.isArray(r.snapshot?.text?.ORDER_TERMS)?r.snapshot.text.ORDER_TERMS.filter(item=>typeof item==='string').slice(0,30):[]},expires_at:r.expires_at,revision_hash:r.revision_hash});
 const signedResult=r=>({ok:true,signedAt:r.signed_at,fullName:r.full_name});
 export function createSignatureHandler(deps) {
   return async request=>{
@@ -27,7 +29,7 @@ export function createSignatureHandler(deps) {
       if(!isPublic) {try{actorId=await deps.authorize(request);}catch{throw new SignatureError('authentication_required',401);} }
       for(const key of ['orderId','revisionId','requestId']) if(body[key]!==undefined&&!validId(body[key])) throw new SignatureError('invalid_request');
       if(['create','history'].includes(action)&&!validId(body.orderId)) throw new SignatureError('invalid_request');
-      if(['revoke','deliver'].includes(action)&&!validId(body.revisionId)) throw new SignatureError('invalid_request');
+      if(['revoke','deliver','link'].includes(action)&&!validId(body.revisionId)) throw new SignatureError('invalid_request');
       const tokenHash=isPublic?hashToken(body.token):undefined;
       if(action==='create') {
         const token=secureToken();
@@ -40,6 +42,13 @@ export function createSignatureHandler(deps) {
       }
       if(action==='history') return json(await deps.action('history',{actorId,orderId:body.orderId}));
       if(action==='revoke') {const r=await deps.action('revoke',{actorId,revisionId:body.revisionId});return json({revision:publicRevision(r)});}
+      if(action==='link') {
+        const r=await deps.action('staff_read',{actorId,revisionId:body.revisionId});
+        if(r.status!=='pending'||!r.expires_at||new Date(r.expires_at)<=new Date()) throw new SignatureError('link_unavailable',404);
+        const bytes=await deps.readPdf(r.unsigned_path);
+        if(sha256(bytes)!==r.unsigned_hash) throw new SignatureError('artifact_unavailable',503);
+        return json({signingUrl:await deps.extractLink(bytes)});
+      }
       if(action==='view') {const r=await deps.action('view',{tokenHash});return json({revision:publicRevision(r),signed:r.status==='signed'});}
       if(action==='pdf') {
         if(!isPublic&&!validId(body.revisionId)) throw new SignatureError('invalid_request');
@@ -54,15 +63,20 @@ export function createSignatureHandler(deps) {
       if(action==='sign') {
         if(!validId(body.requestId)) throw new SignatureError('invalid_signature');
         const signature=validateSignature(body);
+        let details;
+        try{details=normalizeSignatureContact({phone:body.phone,email:body.email,organization:body.organization,signerId:body.signerId});}
+        catch(error){throw new SignatureError(error.message==='invalid_signer_id'?'invalid_signer_id':'invalid_contact_details');}
         const r=await deps.action('claim',{tokenHash,requestId:body.requestId,...signature,accepted:true});
-        if(r.status==='signed') return json(signedResult(r));
+        if(r.status==='signed') {await deps.recordResponse({revisionId:r.id,requestId:body.requestId,details});return json(signedResult(r));}
+        await deps.recordResponse({revisionId:r.id,requestId:body.requestId,details});
         const unsigned=await deps.readPdf(r.unsigned_path);
         if(sha256(unsigned)!==r.unsigned_hash) throw new SignatureError('artifact_unavailable',503);
-        const evidence={snapshot:r.snapshot,fullName:r.full_name,signerId:r.signer_id,strokes:r.strokes,signedAt:r.signed_at,revisionHash:r.revision_hash,unsignedHash:r.unsigned_hash,acceptanceText:r.snapshot.acceptanceText,acceptanceVersion:r.snapshot.acceptanceVersion,revisionId:r.id};
+        const evidence={snapshot:r.snapshot,fullName:r.full_name,signerId:r.signer_id,contactDetails:details,strokes:r.strokes,signedAt:r.signed_at,revisionHash:r.revision_hash,unsignedHash:r.unsigned_hash,acceptanceText:r.snapshot.acceptanceText,acceptanceVersion:r.snapshot.acceptanceVersion,revisionId:r.id};
         // An immutable deterministic object key makes crash retries and competing
         // identical requests converge on exactly the same stored evidence PDF.
         const signed=await deps.writePdf(r.id+'/'+body.requestId+'-signed.pdf',await deps.renderSigned(unsigned,evidence));
         const finished=await deps.action('finish',{tokenHash,requestId:body.requestId,signedHash:sha256(signed)});
+        await deps.recordResponse({revisionId:r.id,requestId:body.requestId,details});
         return json(signedResult(finished));
       }
       if(action==='deliver') {

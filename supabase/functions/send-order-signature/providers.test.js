@@ -6,13 +6,13 @@ const pdf=Buffer.from('%PDF-synthetic-local-only');
 const message={destination:'test@example.invalid',pdfBytes:pdf,clientName:'Synthetic Customer',orderNumber:'QA-1',fileName:'order-QA-1.pdf'};
 const link='https://example.invalid/order-sign#'+'a'.repeat(43);
 describe('existing transport regression and revision links',()=>{
- it('keeps SMTP attachment/security settings and adds prominent escaped link',async()=>{
+ it('sends a link-first signing email without a confusing PDF attachment',async()=>{
   const transport={sendMail:vi.fn(async()=>({accepted:[message.destination],messageId:'synthetic-id'})),close:vi.fn()};
   const factory=vi.fn(()=>transport);
   const provider=createSignatureEmailProvider({user:'sender@example.invalid',password:'synthetic-only',createTransport:factory,signingUrl:link});
   await provider.send({...message,clientName:'<script>bad</script>'});
   const sent=transport.sendMail.mock.calls[0][0];
-  expect(sent.attachments[0].content.equals(pdf)).toBe(true);expect(sent.attachments[0].contentType).toBe('application/pdf');
+  expect(sent.attachments).toBeUndefined();
   expect(sent.text).toContain(link);expect(sent.html).toContain(`href="${link}"`);expect(sent.html).not.toContain('<script>');
   expect(sent.disableFileAccess).toBe(true);expect(sent.disableUrlAccess).toBe(true);
   expect(factory.mock.calls[0][0]).toMatchObject({port:465,secure:true,tls:{minVersion:'TLSv1.2',rejectUnauthorized:true}});expect(transport.close).toHaveBeenCalledOnce();

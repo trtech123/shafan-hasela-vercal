@@ -164,6 +164,43 @@ try {
   const initial = (await db.query('SELECT public.get_payper_order_collection($1,$2) AS value',
     [cashier, order])).rows[0].value;
   assert.equal(initial.balanceMinor, 100000);
+  current = 'signed contact completion remains private and idempotent';
+  const signatureRevision = '00000000-0000-4000-8000-000000000201';
+  const signatureRequest = '00000000-0000-4000-8000-000000000202';
+  const snapshotId = (await db.query('SELECT customer_snapshot_id FROM public.orders WHERE id=$1', [order])).rows[0].customer_snapshot_id;
+  await db.query(`INSERT INTO public.order_confirmation_revisions
+    (id,order_id,revision_number,snapshot,source_version,token_hash,status,created_by,expires_at,
+     revision_hash,unsigned_path,unsigned_hash,signed_path,signed_hash,request_id,full_name,strokes,signed_at)
+    VALUES($1,$2,1,$3::jsonb,'synthetic',$4,'signing',$5,now()+interval '7 days',
+     $6,$7,$8,$9,$10,$11,'Synthetic Signer','[[{"x":0,"y":0},{"x":1,"y":1}]]'::jsonb,now())`,
+    [signatureRevision,order,JSON.stringify({data:{customer_snapshot_id:snapshotId}}),
+      'a'.repeat(64),cashier,'b'.repeat(64),signatureRevision+'/unsigned.pdf',
+      'c'.repeat(64),signatureRevision+'/signed.pdf','d'.repeat(64),signatureRequest]);
+  const completion = {phone:'0501234567'};
+  const recorded = (await db.query('SELECT public.record_order_signature_response($1,$2,$3::jsonb) AS result',
+    [signatureRevision,signatureRequest,JSON.stringify(completion)])).rows[0].result;
+  assert.deepEqual(recorded, {recorded:true,leadLinkStatus:'unmatched'});
+  assert.equal((await db.query('SELECT completed_at FROM public.order_signature_responses WHERE revision_id=$1',
+    [signatureRevision])).rows[0].completed_at,null,'a claimed but unfinished signature stays hidden');
+  await db.query("UPDATE public.order_confirmation_revisions SET status='signed' WHERE id=$1",[signatureRevision]);
+  await db.query('SELECT public.record_order_signature_response($1,$2,$3::jsonb)',
+    [signatureRevision,signatureRequest,JSON.stringify(completion)]);
+  assert.ok((await db.query('SELECT completed_at FROM public.order_signature_responses WHERE revision_id=$1',
+    [signatureRevision])).rows[0].completed_at,'only the finished signature exposes contact evidence');
+  assert.deepEqual((await db.query('SELECT customer_id,lead_id,details FROM public.order_signature_responses WHERE revision_id=$1',
+    [signatureRevision])).rows[0],{customer_id:customer,lead_id:null,details:completion});
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM public.order_signature_responses WHERE revision_id=$1',
+    [signatureRevision])).rows[0].n,1);
+  let responseConflict = false;
+  try {await db.query('SELECT public.record_order_signature_response($1,$2,$3::jsonb)',
+    [signatureRevision,signatureRequest,JSON.stringify({phone:'0509999999'})]);}
+  catch(error){responseConflict=/revision_conflict/.test(error.message);}
+  assert.equal(responseConflict,true,'a replay cannot rewrite signed contact evidence');
+  const responsePrivileges=(await db.query(`SELECT
+    has_table_privilege('authenticated','public.order_signature_responses','INSERT') AS browser_insert,
+    has_function_privilege('authenticated','public.record_order_signature_response(uuid,uuid,jsonb)','EXECUTE') AS browser_rpc`)).rows[0];
+  assert.deepEqual(responsePrivileges,{browser_insert:false,browser_rpc:false});
+  current = 'order collection on full schema';
   const outsider = '00000000-0000-4000-8000-000000000008';
   let forbidden = false;
   try { await db.query('SELECT public.get_payper_order_collection($1,$2)', [outsider, order]); }

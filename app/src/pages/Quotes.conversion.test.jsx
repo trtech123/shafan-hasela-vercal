@@ -3,7 +3,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ rows: [], rpc: vi.fn(), from: vi.fn() }));
+const mocks = vi.hoisted(() => ({ rows: [], rpc: vi.fn(), from: vi.fn(), signatureRequest: vi.fn() }));
+vi.mock('@/lib/orderSignatureClient', () => ({signatureRequest: mocks.signatureRequest}));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { from: mocks.from, rpc: mocks.rpc } }));
 vi.mock('../components/quotes/QuoteFormDialog', () => ({ default: () => null }));
 vi.mock('../components/quotes/QuotePDFDocument', () => ({ default: ({ quote, mode }) =>
@@ -25,6 +26,7 @@ const sampleQuote = () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.signatureRequest.mockImplementation(async body => body.action === 'history' ? {revisions:[]} : {revision:{status:'pending'}});
   mocks.rows = [sampleQuote()];
   mocks.from.mockImplementation(table => {
     if (table === 'quotes') return { select: () => ({ order: () => ({ limit: async () => ({ data: mocks.rows, error: null }) }) }) };
@@ -47,6 +49,7 @@ test('converts a saved quotation atomically through the existing RPC and preview
   });
   expect(mocks.from).not.toHaveBeenCalledWith('orders');
   expect(await screen.findByRole('status')).toHaveTextContent('ההצעה הומרה להזמנה בהצלחה');
+  expect(mocks.signatureRequest).toHaveBeenCalledWith({action:'create',orderId:'order-1'},{staff:true});
   expect(screen.getByRole('dialog')).toHaveTextContent('Synthetic activity, Synthetic product');
   expect(screen.queryByRole('button', { name: 'עריכה' })).not.toBeInTheDocument();
 });

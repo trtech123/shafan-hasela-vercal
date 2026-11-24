@@ -7,7 +7,9 @@ const state = vi.hoisted(() => ({
   blocks: [], orders: [], sales: [], saveResult: { data: { id: 'order-1' }, error: null },
   instructors: [{ id: 'instructor-1', full_name: 'מדריך', phone: '0500000000', status: 'פעיל' }],
   writes: [], success: vi.fn(), error: vi.fn(), info: vi.fn(),
+  signatureRequest: vi.fn(),
 }));
+vi.mock('@/lib/orderSignatureClient', () => ({ signatureRequest: state.signatureRequest }));
 
 vi.mock('@/api/supabaseClient', () => ({
   supabase: { from: (table) => {
@@ -53,6 +55,7 @@ beforeEach(() => {
   state.writes = [];
   state.success.mockClear();
   state.error.mockClear();
+  state.signatureRequest.mockReset().mockResolvedValue({ revision: { status: 'pending' } });
 });
 afterEach(cleanup);
 
@@ -186,6 +189,26 @@ test('new order saves without customer details and preserves partial details', a
   fireEvent.submit(document.querySelector('form'));
   await waitFor(() => expect(state.writes).toHaveLength(1));
   expect(state.writes[0].data).toMatchObject({ client_name: 'נורית', client_phone: null, client_email: null });
+});
+
+test('new order prepares a private signature revision after insert without delivering it', async () => {
+  renderDialog(null);
+  fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.submit(document.querySelector('form'));
+  await waitFor(() => expect(state.signatureRequest).toHaveBeenCalledWith({ action: 'create', orderId: 'order-1' }, { staff: true }));
+  expect(state.signatureRequest.mock.calls.some(([body]) => body.action === 'deliver')).toBe(false);
+  expect(state.success).toHaveBeenCalledWith(expect.stringContaining('אישור'));
+});
+
+test('reports saved order without pretending the confirmation is ready when preparation fails', async () => {
+  state.signatureRequest.mockReset().mockRejectedValue(Error('signature_unavailable'));
+  const { onSaved } = renderDialog(null);
+  fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-11-06' } });
+  fireEvent.submit(document.querySelector('form'));
+  await waitFor(() => expect(state.signatureRequest).toHaveBeenCalledTimes(1));
+  expect(onSaved).toHaveBeenCalledTimes(1);
+  expect(state.error).toHaveBeenCalledWith(expect.stringContaining('נשמרה'));
+  expect(state.success).not.toHaveBeenCalled();
 });
 
 test('customer details can be added when editing a guest order', async () => {

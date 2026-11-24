@@ -375,7 +375,7 @@ export default function OrderConfirmationPDF({ order, activity, onClose }) {
                 ? "נשלח בוואטסאפ ✓"
                 : waResult?.type === "error"
                   ? "נסה לשלוח שוב בוואטסאפ"
-                  : "שלח אישור בוואטסאפ")}
+                  : "שלח PDF בוואטסאפ (מסלול ישן)")}
             </Button>}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>

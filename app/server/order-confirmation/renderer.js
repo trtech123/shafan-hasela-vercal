@@ -70,7 +70,8 @@ export function evidenceHtml(evidence) {
  if(evidence.snapshot.acceptanceText!==evidence.acceptanceText||evidence.snapshot.acceptanceVersion!==evidence.acceptanceVersion)throw new Error('snapshot_acceptance_mismatch');
  const signedAt=new Date(evidence.signedAt);
  if(!Number.isFinite(signedAt.getTime())||typeof evidence.fullName!=='string'||evidence.fullName.trim().length<2||evidence.fullName.length>120||!evidence.acceptanceText)throw new Error('invalid_signature_evidence');
- return confirmationDocument(evidence.snapshot,`${paragraph(`שם החותם: ${evidence.fullName}`)}${evidence.signerId?paragraph(`תעודת זהות: ${evidence.signerId}`):''}${paragraph('חתימה:')}${signatureSvg(evidence.strokes)}${paragraph(`נחתם בתאריך: ${signedAt.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'})} (שעון ישראל)`)}`);
+ const details=evidence.contactDetails||{};
+ return confirmationDocument(evidence.snapshot,`${paragraph(`שם החותם: ${evidence.fullName}`)}${evidence.signerId?paragraph(`תעודת זהות: ${evidence.signerId}`):''}${details.phone?paragraph(`טלפון שהושלם: ${details.phone}`):''}${details.email?paragraph(`אימייל שהושלם: ${details.email}`):''}${details.organization?paragraph(`ארגון שהושלם: ${details.organization}`):''}${paragraph('חתימה:')}${signatureSvg(evidence.strokes)}${paragraph(`נחתם בתאריך: ${signedAt.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'})} (שעון ישראל)`)}`);
 }
 
 async function launch() {

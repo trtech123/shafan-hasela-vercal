@@ -49,7 +49,9 @@ export function signatureRuntime(env=process.env) {
     },
     rateLimit:request=>result(db.rpc('order_signature_rate_limit',{p_bucket:sha256(key+':'+(request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim()||'unknown'))})),
     action:(action,input)=>result(db.rpc('order_signature_action',{p_action:action,p_input:input})),
+    recordResponse:({revisionId,requestId,details})=>result(db.rpc('record_order_signature_response',{p_revision_id:revisionId,p_request_id:requestId,p_details:details})),
     readPdf,
+    extractLink:async bytes=>signingLinkFromPdf(await PDFDocument.load(bytes),origin),
     writePdf:async(path,bytes)=>{
       const {error}=await db.storage.from(BUCKET).upload(path,bytes,{contentType:'application/pdf',upsert:false});
       if(!error) return bytes;
