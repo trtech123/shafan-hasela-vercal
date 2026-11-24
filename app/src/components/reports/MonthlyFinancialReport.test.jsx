@@ -8,7 +8,7 @@ const { rpc, auth } = vi.hoisted(() => ({
     ? { data: [{ identified_customers: 1, unidentified_payments: 0 }], error: null }
     : { data: [{ day: '2026-11-01', site: 'עכו',
       register_number: '004', payment_method: 'אשראי', completed_count: 1,
-      gross_amount: 15, refund_count: 0, refund_amount: 0 }], error: null }),
+      gross_amount: 15, refund_count: 0, refund_amount: 0, issued_document_count: 1 }], error: null }),
   auth: { user: { role: 'admin' } },
 }));
 vi.mock('@/api/supabaseClient', () => ({ supabase: { rpc } }));

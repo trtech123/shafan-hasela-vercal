@@ -61,6 +61,21 @@ test('two rapid confirmations of one cash checkout submit one idempotent collect
   expect(failure.insert).not.toHaveBeenCalled();
 });
 
+test('a rejected accounting site never shows a paid receipt', async () => {
+  failure.invoke.mockImplementation((_name, { body }) => Promise.resolve(body.action === 'capabilities'
+    ? { data: { collectionEnabled: { cash: true, check: false } }, error: null }
+    : { data: null, error: { context: { json: async () => ({ error: { code: 'accounting_site_mismatch' } }) } } }));
+  render(<CashRegister />);
+  fireEvent.click(await screen.findByText('מוצרים'));
+  fireEvent.click(await screen.findByText('add product'));
+  fireEvent.click(screen.getByText('checkout'));
+  fireEvent.click(screen.getByText('choose site'));
+  await waitFor(() => expect(screen.getByText('pay cash')).toHaveAttribute('data-ready', 'true'));
+  fireEvent.click(screen.getByText('pay cash'));
+  await waitFor(() => expect(failure.toast).toHaveBeenCalledWith(expect.stringContaining('אתר המכירה')));
+  expect(screen.queryByText('receipt shown')).not.toBeInTheDocument();
+});
+
 test('direct callback cannot create an unverified external credit sale', async () => {
   failure.invoke.mockResolvedValue({ data: { collectionEnabled: { cash: false, check: false } }, error: null });
   render(<CashRegister />);

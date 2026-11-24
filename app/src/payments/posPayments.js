@@ -7,7 +7,8 @@ export const posPendingKeyForActor = actorId => validOrderId(actorId)
 const safeCodes=new Set(['capability_disabled','pos_payment_in_progress','catalog_item_unavailable',
   'cart_invalid','cart_line_invalid','cart_amount_invalid','discount_invalid','request_key_conflict',
   'pos_payment_forbidden','invalid_input','payment_database_unavailable',
-  'billing_identity_required','billing_email_required','accounting_site_invalid']);
+  'billing_identity_required','billing_email_required','accounting_site_invalid',
+  'accounting_site_mismatch']);
 export function posPaymentErrorMessage(code){
   const messages={
     capability_disabled:'תשלום פלאקארד בקופה מושבת כעת. לא נשמר סל חדש; פנו למנהל לפני ניסיון נוסף.',
@@ -22,6 +23,7 @@ export function posPaymentErrorMessage(code){
     billing_identity_required:'יש להשלים שם לחיוב ומספר זהות או חברה תקין לפני תשלום דיגיטלי.',
     billing_email_required:'יש להשלים כתובת דוא״ל תקינה למסמך לפני תשלום דיגיטלי.',
     accounting_site_invalid:'יש לבחור אתר מכירה תקין לפני תחילת התשלום.',
+    accounting_site_mismatch:'אתר המכירה שונה מהאתר השמור לפריט. תקנו את הסל לפני התשלום.',
   };
   return messages[code]||'לא ניתן לאמת את שמירת הסל. בדקו את מצב הניסיון הקיים ופנו למנהל; אין להתחיל חיוב נוסף.';
 }

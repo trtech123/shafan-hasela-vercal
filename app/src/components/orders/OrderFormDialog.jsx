@@ -215,7 +215,7 @@ export default function OrderFormDialog({ open, onClose, order, financial, canCo
     const historicalSiteUnchanged = order && form.activity_id === (order.activity_id || '')
       && form.site === (order.site || '');
     if (!isTaskMode && !historicalSiteUnchanged && form.activity_id
-      && (!sourceActivity?.site || form.site !== sourceActivity.site)) {
+      && (!sourceActivity || (sourceActivity.site && form.site !== sourceActivity.site))) {
       toast.error('יש להגדיר אתר בפעילות ולהשתמש באותו אתר בהזמנה');
       return;
     }

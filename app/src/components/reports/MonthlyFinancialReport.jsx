@@ -72,9 +72,9 @@ export default function MonthlyFinancialReport() {
         <option value="">כל האתרים, כולל לא ידוע</option>
         {ACCOUNTING_SITES.map(value => <option key={value} value={value}>{value}</option>)}
       </select></label>
-      <label>מסוף <select aria-label="מסוף הדוח" value={register}
+      <label>מסוף פיזי <select aria-label="מסוף פיזי בדוח" value={register}
         onChange={event => setRegister(event.target.value)} className="rounded border p-2">
-        <option value="all">כל המסופים</option><option value="">ללא מסוף</option>
+        <option value="all">כל התנועות</option><option value="">ללא זיהוי מסוף פיזי</option>
         {registers.map(value => <option key={value} value={value}>{value}</option>)}
       </select></label>
     </div>
@@ -87,6 +87,7 @@ export default function MonthlyFinancialReport() {
         <p>החזרים: <strong>{summary.total.refunds} · {money(summary.total.refunded)}</strong></p>
         <p>נטו: <strong>{money(summary.total.net)}</strong></p>
       </div>
+      <p className="text-sm">מסמכי Payper שהונפקו: <strong>{summary.total.documents}</strong> מתוך {summary.total.payments} תשלומים שהושלמו.</p>
       <p className="text-sm text-muted-foreground">לקוחות משלמים מזוהים: {payers ? `${payers.identified_customers} (תשלומים ללא זיהוי שמור: ${payers.unidentified_payments})` : 'לא זמין'}.
         זיכויים רשמיים: אין במקורות הקיימים מספר וסכום מלאים ומהימנים; אינם נספרים כאפס.</p>
       <div className="overflow-x-auto"><table className="w-full text-sm">

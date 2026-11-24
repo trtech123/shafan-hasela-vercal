@@ -4,7 +4,8 @@ CREATE FUNCTION public.monthly_payment_report(
   p_year integer,p_month integer,p_site text DEFAULT NULL,p_register text DEFAULT NULL
 ) RETURNS TABLE (
   day date,site text,register_number text,payment_method text,
-  completed_count bigint,gross_amount numeric,refund_count bigint,refund_amount numeric
+  completed_count bigint,gross_amount numeric,refund_count bigint,refund_amount numeric,
+  issued_document_count bigint
 ) LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
 DECLARE month_start date; month_end date;
 BEGIN
@@ -39,9 +40,11 @@ BEGIN
       CASE f.provider WHEN 'pelecard' THEN 'אשראי'
         WHEN 'manual_cash' THEN 'מזומן' WHEN 'manual_check' THEN 'צ׳ק'
         ELSE 'אחר' END AS method,
-      f.operation,f.amount
+      f.operation,f.amount,l.id AS issued_document_id
     FROM facts f LEFT JOIN public.physical_payment_intents i
       ON i.payment_id=f.original_payment_id
+    LEFT JOIN public.payper_document_ledger l
+      ON l.payment_id=f.id AND l.state='succeeded' AND f.operation='payment'
     WHERE f.completed_at >= (month_start::timestamp AT TIME ZONE 'Asia/Jerusalem')
       AND f.completed_at < (month_end::timestamp AT TIME ZONE 'Asia/Jerusalem')
   )
@@ -49,7 +52,8 @@ BEGIN
     count(*) FILTER (WHERE s.operation='payment')::bigint,
     coalesce(sum(s.amount) FILTER (WHERE s.operation='payment'),0),
     count(*) FILTER (WHERE s.operation='refund')::bigint,
-    coalesce(sum(s.amount) FILTER (WHERE s.operation='refund'),0)
+    coalesce(sum(s.amount) FILTER (WHERE s.operation='refund'),0),
+    count(s.issued_document_id)::bigint
   FROM scoped s
   WHERE (p_site IS NULL OR s.saved_site=p_site)
     AND (p_register IS NULL OR s.register_id=p_register)
