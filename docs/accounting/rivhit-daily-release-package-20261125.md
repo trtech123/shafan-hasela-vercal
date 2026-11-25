@@ -55,7 +55,15 @@ exact Rivhit read-back row, VAT, batch membership and monthly register totals.
 An uncertain response is held for read-back and never sent again. Only after
 the live entry and the next automatic future-document cycle are verified may
 the minute cron and ongoing daily capture/posting be enabled. The configured
-daily close is 23:00–23:30 Asia/Jerusalem; an incomplete group raises an
-explicit alert, and documents after close enter the next day. Refunds,
+23:00–23:30 Asia/Jerusalem time starts the daily run, not the cutoff. Each
+minute through 23:59, newly finalized documents may form a separate batch for
+the same site, payment method and mapping; unique source membership and unique
+provider references prevent duplicates. A source not verified by local midnight
+is reported as overdue and requires manual investigation; it is not silently
+reclassified as on-time next-day posting. A document finalized after midnight
+belongs to the new day's capture date. Minute cron and provider latency cannot
+guarantee completion for a document finalized seconds before midnight, so the
+operational rule must stop finalization early enough or accept an explicit SLA
+exception. Refunds,
 credit notes, partial and split payments remain outside automatic journal
 posting until separately approved. Historical document 200002 stays excluded.

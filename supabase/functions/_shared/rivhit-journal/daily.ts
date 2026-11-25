@@ -44,8 +44,6 @@ interface DailyStore {
   listDailyEligible(limit: number, postingDay: string): Promise<JournalSourceRow[]>;
   deferMany(sourceIds: string[], reason: string): Promise<number>;
   batchForSources(sourceIds: string[]): Promise<string | null>;
-  dailyGroupExists(postingDay: string, mapping: JournalMapping,
-    mappingVersion: string): Promise<boolean>;
   stageDaily(sources: JournalSourceRow[], mapping: JournalMapping,
     batchId: string, postingDay: string): Promise<string>;
   listReady(limit: number): Promise<string[]>;
@@ -100,22 +98,18 @@ export async function runDailyRivhitBatch(dependencies: {
       result.blocked += await dependencies.store.deferMany(ids, reason);
     }
     for (const group of groups.values()) {
-      const ids = group.sources.map(source => source.id);
-      if (ids.length > 500) {
-        result.blocked += await dependencies.store.deferMany(ids, 'capacity_exceeded');
-        continue;
-      }
+      // One page can contain 501 sources. Commit the first 500 atomically and
+      // leave the remainder eligible for the next minute's catch-up run.
+      const sources = group.sources.slice(0, 500);
+      const ids = sources.map(source => source.id);
       try {
-        await dependencies.store.stageDaily(group.sources, group.mapping,
+        await dependencies.store.stageDaily(sources, group.mapping,
           (dependencies.uuid ?? crypto.randomUUID)(), postingDay);
         result.staged++;
       } catch {
         const committed = await dependencies.store.batchForSources(ids);
         if (committed) { result.staged++; continue; }
-        const closed = await dependencies.store.dailyGroupExists(postingDay,
-          group.mapping, group.mappingVersion);
-        result.blocked += await dependencies.store.deferMany(ids,
-          closed ? 'daily_group_closed' : 'daily_stage_failed');
+        result.blocked += await dependencies.store.deferMany(ids, 'daily_stage_failed');
       }
     }
   }

@@ -75,16 +75,6 @@ export class SupabaseRivhitJournalStore {
     return data;
   }
 
-  async dailyGroupExists(postingDay: string, mapping: JournalMapping,
-    mappingVersion: string): Promise<boolean> {
-    const { data, error } = await this.client.from('rivhit_daily_journal_batches')
-      .select('id').eq('posting_day', postingDay)
-      .eq('provider', mapping.provider).eq('site', mapping.site)
-      .eq('mapping_version', mappingVersion).limit(1);
-    if (error) throw new Error('journal_group_lookup_failed');
-    return (data ?? []).length > 0;
-  }
-
   async listUnmapped(limit: number): Promise<JournalSourceRow[]> {
     const { data, error } = await this.client.from('rivhit_journal_sources')
       .select('id,payper_document_number,source_facts,captured_at')
