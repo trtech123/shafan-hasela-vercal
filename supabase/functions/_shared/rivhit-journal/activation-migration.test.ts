@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 
-const sql = readFileSync(new URL('../../../migrations/202611230001_rivhit_journal_activation_guards.sql', import.meta.url), 'utf8');
+const sql = readFileSync(new URL('../../../migrations/202611250001_rivhit_journal_activation_guards.sql', import.meta.url), 'utf8');
 
 describe('prepared Rivhit activation guards', () => {
   test('requires disabled, empty journal state and leaves both gates unchanged', () => {

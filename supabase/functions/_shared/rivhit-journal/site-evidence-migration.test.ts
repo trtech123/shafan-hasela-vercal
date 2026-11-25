@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 
-const sql = readFileSync(new URL('../../../migrations/202611230002_rivhit_future_site_evidence.sql', import.meta.url), 'utf8');
+const sql = readFileSync(new URL('../../../migrations/202611250002_rivhit_future_site_evidence.sql', import.meta.url), 'utf8');
 
 describe('future accounting site migration safety', () => {
   test('keeps legacy checkout RPCs and all existing financial rows intact', () => {

@@ -2,21 +2,28 @@
 
 ## Verified baseline and hard gates
 
-Live alias `shafan-hasela-vercal.vercel.app` points to READY deployment
-`dpl_85q5oaUvY93f4UZD9WYeyHrEvq7B`, source
-`1beb28c03d8e686c411ebad61a89dced382773fe`. The candidate descends from
-that source. Production has zero journal sources and entries, and
+The verified integration baseline is READY deployment
+`dpl_BToJ7GsqKd7XiJtJmFjwHKN8oH4f`, source
+`b06551255aa99537ede32b567c68a1c79e43c3cd`. Recheck the live alias
+before deployment. The candidate descends from that source and preserves its
+order-signature changes. Production has zero journal sources and entries, and
 `capture_enabled=false`, `posting_enabled=false`, `cutover_at=NULL`.
 Production does not have the site-aware POS RPC or daily schedule column.
+The Production database has no `supabase_migrations.schema_migrations` table;
+the Supabase CLI therefore incorrectly lists every repository migration as
+pending. Do not use `supabase db push`. Verify the target objects and apply
+only the nine numbered SQL files individually, recording their exact checksums
+in the release evidence. The existing signature response table and RPC were
+confirmed present and are not part of this package.
 
 ## Inactive preparation, after separate release approval
 
 1. Recheck the live SHA, recent restorable backup, schema, quotas, and zero
    journal sources/entries. Stop on drift. Never restore the full financial DB
    as an application rollback.
-2. Apply `202611230001_rivhit_journal_activation_guards.sql`,
-   `202611230002_rivhit_future_site_evidence.sql`, then the
-   `202611240001` through `202611240007` migrations in order. Migration 004
+2. Apply `202611250001` through `202611250009` migrations in order. The
+   existing Production `202611240001_order_signature_browser_response.sql`
+   remains unchanged. Migration 006
    accepts legacy unsited activities only when a new order has an explicit
    site; new activities require a site and classified activities are matched
    exactly. Production currently has
@@ -27,14 +34,17 @@ Production does not have the site-aware POS RPC or daily schedule column.
    activity catalog records as single-site or enabling automatic posting for
    ambiguous activity lines. The worker records `activity_site_unresolved`
    for these sources and can stage other documents in the same site/method.
-3. Deploy only the matching `rivhit-journal-worker` Edge Function and Vercel
-   application candidate. Keep `RIVHIT_JOURNAL_INGESTION_ENABLED`,
+3. Deploy the matching `rivhit-journal-readonly`, `rivhit-journal-worker`,
+   `pelecard-pos-payment`, and `payper-noncard-collection` Edge Functions,
+   then the Vercel application candidate. The latter two accept explicit site
+   evidence while retaining their old request contracts for existing clients.
+   Keep `RIVHIT_JOURNAL_INGESTION_ENABLED`,
    `RIVHIT_JOURNAL_POSTING_ENABLED`, and `RIVHIT_JOURNAL_CRON_ENABLED` false or
    absent. Keep DB capture/posting false, no cutover, no approved mapping rows.
 4. Read back every control, role grant, admin report, and existing checkout
    method. Verify no new journal sources, entries, or provider calls. App
-   rollback: prior Vercel alias and prior Edge worker version. Leave additive
-   tables inert; do not apply a destructive database rollback.
+   rollback: prior Vercel alias and prior versions of the four Edge Functions.
+   Leave additive tables inert; do not apply a destructive database rollback.
 
 ## Accounting approval and financial activation (separate authorization)
 
