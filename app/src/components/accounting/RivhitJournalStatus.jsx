@@ -12,9 +12,7 @@ const LABELS = {
 const DEFER_REASONS = {
   site_mapping_unapproved: 'מיפוי האתר או אמצעי התשלום טרם אושר',
   activity_site_unresolved: 'אתר הפעילות ההיסטורית טרם אומת',
-  late_after_cutoff: 'המסמך הושלם לאחר סגירת היום; ייכלל בחלון הבא',
   source_evidence_incomplete: 'חסרה אסמכתה תקינה במסמך המקור',
-  daily_group_closed: 'האצווה היומית נסגרה; ייבדק בחלון הבא',
   daily_stage_failed: 'יצירת האצווה נכשלה; נדרשת בדיקה',
   capacity_exceeded: 'מגבלת גודל האצווה נחצתה; נדרשת בדיקה',
 };

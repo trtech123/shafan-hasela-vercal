@@ -1,41 +1,18 @@
 -- Future-only daily aggregate preparation. Capture and posting stay disabled.
 -- A batch may contain several finalized Payper documents, but each source may
--- belong to exactly one batch. Late documents enter a later posting window.
+-- belong to exactly one batch. Later finalized documents can form a separate
+-- batch for the same accounting group before midnight Israel time.
 BEGIN;
 
 ALTER TABLE public.rivhit_journal_sources
   ADD COLUMN defer_reason text CHECK (defer_reason IN
     ('site_mapping_unapproved','activity_site_unresolved','source_evidence_incomplete',
-     'late_after_cutoff','daily_group_closed',
      'daily_stage_failed','capacity_exceeded')),
   ADD COLUMN deferred_at timestamptz;
 
--- A finalized document captured after today's close is explicitly marked for
--- tomorrow, even though it never enters today's eligible source page.
-CREATE FUNCTION public.mark_rivhit_late_source() RETURNS trigger
-LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE close_time time;
-BEGIN
-  SELECT posting_time_israel INTO close_time FROM public.rivhit_journal_control
-    WHERE singleton AND capture_enabled AND posting_cadence='daily';
-  IF close_time IS NOT NULL AND
-    (NEW.captured_at AT TIME ZONE 'Asia/Jerusalem')::time > close_time THEN
-    NEW.defer_reason:='late_after_cutoff';
-    NEW.deferred_at:=NEW.captured_at;
-    NEW.next_mapping_check_at:=
-      (((NEW.captured_at AT TIME ZONE 'Asia/Jerusalem')::date+1)+close_time)
-        AT TIME ZONE 'Asia/Jerusalem';
-  END IF;
-  RETURN NEW;
-END $$;
-CREATE TRIGGER trg_mark_rivhit_late_source BEFORE INSERT
-  ON public.rivhit_journal_sources FOR EACH ROW
-  EXECUTE FUNCTION public.mark_rivhit_late_source();
-REVOKE ALL ON FUNCTION public.mark_rivhit_late_source()
-  FROM PUBLIC,anon,authenticated,service_role;
-
--- Every defer records a bounded operational reason. Late documents are not
--- eligible for the closed day and are selected in the next daily window.
+-- Every defer records a bounded operational reason. A failed staging RPC may
+-- be attempted again safely because it never calls Rivhit; posting uncertainty
+-- is handled separately by read-back, never by a second AddJournal call.
 CREATE FUNCTION public.defer_rivhit_daily_sources(p_source_ids uuid[],p_reason text)
 RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE changed integer;
@@ -44,15 +21,13 @@ BEGIN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
   IF p_source_ids IS NULL OR pg_catalog.cardinality(p_source_ids) NOT BETWEEN 1 AND 501
     OR p_reason NOT IN ('site_mapping_unapproved','activity_site_unresolved','source_evidence_incomplete',
-    'daily_group_closed','daily_stage_failed','capacity_exceeded') THEN
+    'daily_stage_failed','capacity_exceeded') THEN
     RAISE EXCEPTION 'daily_defer_reason_invalid' USING ERRCODE='22023'; END IF;
   UPDATE public.rivhit_journal_sources SET defer_reason=p_reason,
     deferred_at=pg_catalog.clock_timestamp(),
-    next_mapping_check_at=CASE WHEN p_reason='daily_group_closed' THEN
-      (((pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date+1)
-        + (SELECT posting_time_israel FROM public.rivhit_journal_control WHERE singleton))
-        AT TIME ZONE 'Asia/Jerusalem'
-      ELSE pg_catalog.clock_timestamp()+INTERVAL '15 minutes' END
+    next_mapping_check_at=pg_catalog.clock_timestamp()+
+      CASE WHEN p_reason='daily_stage_failed' THEN INTERVAL '1 minute'
+        ELSE INTERVAL '15 minutes' END
   WHERE id=ANY(p_source_ids) AND state='mapping_required';
   GET DIAGNOSTICS changed=ROW_COUNT;
   RETURN changed;
@@ -72,7 +47,6 @@ CREATE TABLE public.rivhit_daily_journal_batches (
   provider text NOT NULL CHECK (provider IN ('pelecard','manual_cash','manual_check')),
   site text NOT NULL,
   mapping_version text NOT NULL,
-  CONSTRAINT rivhit_one_daily_group UNIQUE (posting_day,provider,site,mapping_version),
   source_count integer NOT NULL CHECK (source_count BETWEEN 1 AND 500),
   gross_amount numeric(12,2) NOT NULL CHECK (gross_amount > 0),
   vat_amount numeric(12,2) NOT NULL CHECK (vat_amount >= 0),
@@ -140,9 +114,9 @@ REVOKE ALL ON FUNCTION public.rivhit_source_activity_site_resolved(uuid,text)
 GRANT EXECUTE ON FUNCTION public.rivhit_source_activity_site_resolved(uuid,text)
   TO service_role;
 
--- The database clock owns the closing cutoff, including DST transitions.
--- Documents finalized after this cutoff remain visible as late work and enter
--- the following day's batch; they cannot be added to an already posted group.
+-- The database clock owns the closing window, including DST transitions.
+-- The configured time starts the daily run; new same-day documents remain
+-- eligible until midnight. Unfinished prior-day work is explicitly overdue.
 CREATE FUNCTION public.rivhit_daily_eligible_sources(p_day date,p_limit integer)
 RETURNS TABLE (id uuid,payper_document_number text,source_facts jsonb,captured_at timestamptz)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
@@ -163,8 +137,7 @@ BEGIN
       AND c.cutover_at IS NOT NULL AND s.captured_at>=c.cutover_at
       AND s.state='mapping_required'
       AND s.next_mapping_check_at<=pg_catalog.clock_timestamp()
-      AND s.captured_at AT TIME ZONE 'Asia/Jerusalem' <=
-        p_day+c.posting_time_israel
+      AND (s.captured_at AT TIME ZONE 'Asia/Jerusalem')::date = p_day
     ORDER BY s.next_mapping_check_at,s.id LIMIT p_limit;
 END $$;
 REVOKE ALL ON FUNCTION public.rivhit_daily_eligible_sources(date,integer)
@@ -252,6 +225,9 @@ BEGIN
   IF NEW.batch_id IS NULL OR NEW.entry_key<>'daily' THEN
     RAISE EXCEPTION 'rivhit_daily_batch_required' USING ERRCODE='42501'; END IF;
   SELECT * INTO b FROM public.rivhit_daily_journal_batches WHERE id=NEW.batch_id;
+  IF TG_OP='UPDATE' AND b.posting_day IS DISTINCT FROM
+    (pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date THEN
+    RAISE EXCEPTION 'rivhit_daily_deadline_missed' USING ERRCODE='42501'; END IF;
   SELECT * INTO m FROM public.rivhit_journal_approved_mappings a
     WHERE a.provider=b.provider AND a.site=b.site
       AND a.mapping_version=b.mapping_version AND a.enabled;
@@ -319,9 +295,7 @@ BEGIN
   WHERE s.id=ANY(p_source_ids) AND s.state='mapping_required'
     AND NOT EXISTS (SELECT 1 FROM public.rivhit_daily_journal_members x
       WHERE x.source_id=s.id)
-    AND s.captured_at AT TIME ZONE 'Asia/Jerusalem' <=
-      p_posting_day+(SELECT posting_time_israel
-        FROM public.rivhit_journal_control WHERE singleton)
+    AND (s.captured_at AT TIME ZONE 'Asia/Jerusalem')::date = p_posting_day
     AND l.state='succeeded' AND l.document_origin='automatic'
     AND l.document_number=s.payper_document_number
     AND l.payment_id=s.payment_id AND l.sale_id=s.sale_id
@@ -346,19 +320,8 @@ BEGIN
       AND NOT public.rivhit_source_activity_site_resolved(
         src.payment_id,src.source_facts->>'site')) THEN
     RAISE EXCEPTION 'rivhit_activity_site_unresolved' USING ERRCODE='42501'; END IF;
-  -- The worker fetches a bounded page. Before closing a group, ensure that
-  -- no eligible source for the same site/method was omitted from that page.
-  IF EXISTS (SELECT 1 FROM public.rivhit_journal_sources other
-    WHERE other.state='mapping_required'
-      AND other.source_facts->>'provider'=provider_value
-      AND other.source_facts->>'site'=site_value
-      AND other.captured_at AT TIME ZONE 'Asia/Jerusalem' <=
-        p_posting_day+(SELECT posting_time_israel
-          FROM public.rivhit_journal_control WHERE singleton)
-      AND (other.next_mapping_check_at<=pg_catalog.clock_timestamp()
-        OR other.defer_reason IN ('capacity_exceeded','daily_stage_failed'))
-      AND NOT other.id=ANY(p_source_ids)) THEN
-    RAISE EXCEPTION 'rivhit_daily_group_incomplete' USING ERRCODE='42501'; END IF;
+  -- Source membership is unique. A bounded page can be posted now; later
+  -- finalized sources form a separate batch with a distinct provider reference.
   SELECT * INTO m FROM public.rivhit_journal_approved_mappings a
     WHERE a.provider=provider_value AND a.site=site_value
       AND a.mapping_version=p_mapping_version AND a.enabled;

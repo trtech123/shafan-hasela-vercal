@@ -776,8 +776,7 @@ try {
         jsonb_build_object('provider',p.provider,'site',p.checkout_snapshot->>'site',
           'amount',p.amount,'currency',p.currency,'vatApplicable',true,
           'receiptNumber',s.receipt_number),
-        (((pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Jerusalem')::date-1)
-          + TIME '23:00') AT TIME ZONE 'Asia/Jerusalem'
+        pg_catalog.clock_timestamp()
       FROM public.payper_document_ledger l
       JOIN public.payment_transactions p ON p.id=l.payment_id
       JOIN public.sales s ON s.id=p.sale_id WHERE p.id=$1
@@ -785,8 +784,8 @@ try {
     [collected.paymentId])).rows[0];
     assert.equal(sourceRow.source_facts.site, 'עכו');
     assert.equal((await db.query(`SELECT defer_reason FROM public.rivhit_journal_sources
-      WHERE id=$1`,[sourceRow.id])).rows[0].defer_reason,'late_after_cutoff',
-    'a document finalized after the closing time must record its carry-forward reason');
+      WHERE id=$1`,[sourceRow.id])).rows[0].defer_reason,null,
+    'a document finalized after the run starts must remain eligible today');
     assert.equal((await db.query(`SELECT public.rivhit_source_activity_site_resolved(
       $1::uuid,'עכו') AS resolved`,[collected.paymentId])).rows[0].resolved,true);
     await db.query(`UPDATE public.activities SET site='טבריה' WHERE id=$1`,[activity]);
@@ -803,12 +802,12 @@ try {
       $1::date,501) WHERE id=$2`,[postingDay,sourceRow.id])).rows;
     assert.equal(eligible.length,1,'database cutoff must include eligible finalized sources');
     await db.query(`UPDATE public.rivhit_journal_sources SET captured_at=
-      (($1::date+TIME '00:01') AT TIME ZONE 'Asia/Jerusalem') WHERE id=$2`,
+      (($1::date+TIME '23:59') AT TIME ZONE 'Asia/Jerusalem') WHERE id=$2`,
     [postingDay,sourceRow.id]);
     assert.equal((await db.query(`SELECT count(*)::int AS n
       FROM public.rivhit_daily_eligible_sources($1::date,501) WHERE id=$2`,
-    [postingDay,sourceRow.id])).rows[0].n,0,
-    'documents after the exact daily cutoff must wait for the next window');
+    [postingDay,sourceRow.id])).rows[0].n,1,
+    'documents finalized at 23:59 must remain eligible for same-day catch-up');
     await db.query(`UPDATE public.rivhit_journal_sources SET captured_at=$1
       WHERE id=$2`,[sourceRow.captured_at,sourceRow.id]);
     const deferred = (await db.query(`SELECT public.defer_rivhit_daily_sources(
@@ -837,15 +836,12 @@ try {
     assert.ok(staged);
     assert.equal((await db.query(`SELECT count(*)::int AS n FROM public.rivhit_daily_journal_members
       WHERE batch_id=$1`,[batch.batchId])).rows[0].n,1);
-    await db.exec('SAVEPOINT duplicate_daily_group');
-    let duplicateGroupDenied = false;
-    try { await db.query(`INSERT INTO public.rivhit_daily_journal_batches
+    await db.exec('SAVEPOINT additional_daily_group');
+    await db.query(`INSERT INTO public.rivhit_daily_journal_batches
       (id,posting_day,provider,site,mapping_version,source_count,gross_amount,vat_amount)
       VALUES ('00000000-0000-4000-8000-000000009998',$1,'manual_cash','עכו',$2,1,1,0)`,
-    [postingDay,batch.mappingVersion]); }
-    catch (error) { duplicateGroupDenied = /rivhit_one_daily_group/.test(error.message); }
-    assert.equal(duplicateGroupDenied,true,'daily site and method group must be unique');
-    await db.exec('ROLLBACK TO SAVEPOINT duplicate_daily_group');
+    [postingDay,batch.mappingVersion]);
+    await db.exec('ROLLBACK TO SAVEPOINT additional_daily_group');
     await db.exec('SAVEPOINT duplicate_daily');
     let duplicateStageDenied = false;
     try { await db.query(`SELECT public.stage_rivhit_daily_batch(
@@ -856,6 +852,17 @@ try {
     assert.equal(duplicateStageDenied,true);
     await db.exec('ROLLBACK TO SAVEPOINT duplicate_daily');
     await db.exec(`UPDATE public.rivhit_journal_control SET posting_enabled=true WHERE singleton`);
+    await db.exec('SAVEPOINT missed_daily_deadline');
+    await db.exec('ALTER TABLE public.rivhit_daily_journal_batches DISABLE TRIGGER trg_protect_rivhit_daily_batches');
+    await db.query(`UPDATE public.rivhit_daily_journal_batches SET posting_day=$1::date-1
+      WHERE id=$2`,[postingDay,batch.batchId]);
+    await db.exec('ALTER TABLE public.rivhit_daily_journal_batches ENABLE TRIGGER trg_protect_rivhit_daily_batches');
+    let lateReservationDenied = false;
+    try { await db.query(`SELECT public.reserve_rivhit_journal_entry($1::uuid)`,[staged]); }
+    catch (error) { lateReservationDenied = /rivhit_daily_deadline_missed/.test(error.message); }
+    assert.equal(lateReservationDenied,true,
+      'a previous-day batch must remain blocked rather than silently post late');
+    await db.exec('ROLLBACK TO SAVEPOINT missed_daily_deadline');
     const claim = (await db.query(`SELECT public.reserve_rivhit_journal_entry($1::uuid) AS value`,
       [staged])).rows[0].value;
     assert.equal(claim.id,staged);

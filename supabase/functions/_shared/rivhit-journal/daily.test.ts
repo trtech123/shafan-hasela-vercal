@@ -161,10 +161,10 @@ describe('daily aggregated Rivhit posting', () => {
     expect(store.deferMany).not.toHaveBeenCalled();
   });
 
-  test('records why documents arriving after a group closes await the next day', async () => {
+  test('a staging failure is retried safely without treating the group as closed', async () => {
     const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
       listDailyEligible: vi.fn().mockResolvedValue([source(1, 118)]),
-      stageDaily: vi.fn().mockRejectedValue(new Error('daily_group_unique')),
+      stageDaily: vi.fn().mockRejectedValue(new Error('database_unavailable')),
       deferMany: vi.fn().mockResolvedValue(1),
       batchForSources: vi.fn().mockResolvedValue(null),
       dailyGroupExists: vi.fn().mockResolvedValue(true),
@@ -173,22 +173,22 @@ describe('daily aggregated Rivhit posting', () => {
       reconcile: vi.fn(), mappings: [mapping], ingestionEnabled: true,
       postingEnabled: false });
     expect(result.blocked).toBe(1);
-    expect(store.deferMany).toHaveBeenCalledWith([source(1, 118).id], 'daily_group_closed');
+    expect(store.deferMany).toHaveBeenCalledWith([source(1, 118).id], 'daily_stage_failed');
   });
 
-  test('reports an oversized daily group rather than posting only its first sources', async () => {
-    const many = Array.from({ length: 501 }, (_, index) => source(index + 1, 1));
+  test('stages a bounded group and leaves the next source for the same-day catch-up', async () => {
+    const many = Array.from({ length: 501 }, (_, index) => source(index + 1, 118));
     const store = { closingWindowOpen: vi.fn().mockResolvedValue('2026-11-24'),
       listDailyEligible: vi.fn().mockResolvedValue(many),
-      stageDaily: vi.fn(), deferMany: vi.fn().mockResolvedValue(501),
+      stageDaily: vi.fn().mockResolvedValue('entry'), deferMany: vi.fn(),
       batchForSources: vi.fn(), dailyGroupExists: vi.fn(),
       listReady: vi.fn().mockResolvedValue([]), listPending: vi.fn().mockResolvedValue([]) };
     const result = await runDailyRivhitBatch({ store, process: vi.fn(),
       reconcile: vi.fn(), mappings: [mapping], ingestionEnabled: true,
-      postingEnabled: false });
-    expect(result.blocked).toBe(501);
-    expect(store.deferMany).toHaveBeenCalledWith(many.map(item => item.id),
-      'capacity_exceeded');
-    expect(store.stageDaily).not.toHaveBeenCalled();
+      postingEnabled: false, uuid: () => batchId });
+    expect(result).toMatchObject({ staged: 1, blocked: 0 });
+    expect(store.stageDaily.mock.calls[0][0]).toHaveLength(500);
+    expect(store.stageDaily.mock.calls[0][0]).not.toContainEqual(source(501, 118));
+    expect(store.deferMany).not.toHaveBeenCalled();
   });
 });
