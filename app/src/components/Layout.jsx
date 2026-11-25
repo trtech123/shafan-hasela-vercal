@@ -25,6 +25,7 @@ const allNavItems = [
 { path: "/cashregister", label: "קופה", icon: MonitorSmartphone, roles: ["admin", "אחמ\"ש", "קופאי"] },
 { path: "/physical-terminal-settings", label: "הגדרות מסופונים", icon: MonitorSmartphone, roles: ["admin"] },
 { path: "/sales-report", label: "דוח קופה", icon: BarChart2, roles: ["admin"] },
+{ path: "/revenue-report", label: "דוח הכנסות", icon: BarChart2, roles: ["admin"] },
 { path: "/pricing", label: "תמחור", icon: Calculator, roles: ["admin"] },
 { path: "/tasks", label: "משימות", icon: ListTodo, roles: ["admin"] },
 { path: "/maintenance", label: "תחזוקה", icon: Wrench, roles: ["admin", "אחמ\"ש"] },

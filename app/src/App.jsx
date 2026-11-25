@@ -22,6 +22,7 @@ import Quotes from './pages/Quotes';
 import Leads from './pages/Leads';
 import CashRegister from './pages/CashRegister';
 import DailySalesReport from './pages/DailySalesReport';
+import RevenueReport from './pages/RevenueReport';
 import Pricing from './pages/Pricing';
 import Users from './pages/Users';
 import Products from './pages/Products';
@@ -84,6 +85,7 @@ const AuthenticatedApp = () => {
         <Route path="/payment/physical" element={<PhysicalPayment />} />
         <Route path="/payment/return" element={<PaymentReturnRoute />} />
         <Route path="/sales-report" element={<DailySalesReport />} />
+        <Route path="/revenue-report" element={<RevenueReport />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/users" element={<Users />} />
         <Route path="/products" element={<Products />} />
